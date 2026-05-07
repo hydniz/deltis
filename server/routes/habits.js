@@ -5,6 +5,17 @@ const HabitDefinition = require('../models/HabitDefinition');
 const HabitLog = require('../models/HabitLog');
 const User = require('../models/User');
 
+function enrichLog(logObj) {
+  const habit = logObj.habitId;
+  const version = logObj.habitVersion;
+  if (habit && version && habit.version !== version) {
+    const historical = (habit.nameHistory || []).find(h => h.version === version);
+    if (historical) logObj.historicalLabel = historical.name;
+  }
+  if (habit) delete habit.nameHistory;
+  return logObj;
+}
+
 // Definitions – liefert alle Habits mit `selected`-Flag
 router.get('/definitions', auth, async (req, res) => {
   try {
@@ -13,7 +24,6 @@ router.get('/definitions', auth, async (req, res) => {
     }).sort({ isPredefined: -1, name: 1 });
 
     const selectedIds = (req.user.selectedHabitIds || []).map(id => id.toString());
-    // Wenn noch keine Auswahl getroffen wurde, gelten alle als ausgewählt
     const noneSelected = selectedIds.length === 0;
 
     const result = definitions.map(d => ({
@@ -46,9 +56,49 @@ router.post('/definitions', auth, async (req, res) => {
       name,
       unitSymbol,
       type: type || 'amount',
-      isPredefined: false
+      isPredefined: false,
+      version: 1,
+      nameHistory: [],
     });
     res.status(201).json(def);
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+// Name/Eigenschaften einer eigenen Gewohnheit ändern (mit Versionsverfolgung)
+router.put('/definitions/:id', auth, async (req, res) => {
+  try {
+    const current = await HabitDefinition.findOne({ _id: req.params.id, userId: req.user._id });
+    if (!current) return res.status(404).json({ error: 'Nicht gefunden oder vordefiniert' });
+
+    const { nameHistory: _nh, version: _v, _id: _i, createdAt: _c, userId: _u, __v: _vv, ...safeBody } = req.body;
+
+    if (safeBody.name && safeBody.name !== current.name) {
+      const validFrom = current.nameHistory?.length > 0
+        ? current.nameHistory[current.nameHistory.length - 1].validUntil
+        : current.createdAt;
+
+      await HabitDefinition.updateOne(
+        { _id: current._id },
+        {
+          $set: { ...safeBody, version: (current.version || 1) + 1 },
+          $push: {
+            nameHistory: {
+              name: current.name,
+              version: current.version || 1,
+              validFrom,
+              validUntil: new Date(),
+            },
+          },
+        }
+      );
+    } else {
+      await HabitDefinition.updateOne({ _id: current._id }, { $set: safeBody });
+    }
+
+    const def = await HabitDefinition.findById(current._id);
+    res.json(def);
   } catch (err) {
     res.status(400).json({ error: err.message });
   }
@@ -77,8 +127,11 @@ router.get('/logs', auth, async (req, res) => {
     }
     if (habitId) query.habitId = habitId;
 
-    const logs = await HabitLog.find(query).populate('habitId').sort({ date: -1 });
-    res.json(logs);
+    const logs = await HabitLog.find(query)
+      .populate('habitId', 'name version nameHistory unitSymbol type')
+      .sort({ date: -1 });
+
+    res.json(logs.map(l => enrichLog(l.toObject())));
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -91,9 +144,12 @@ router.post('/logs', auth, async (req, res) => {
     const startOfDay = new Date(d.getFullYear(), d.getMonth(), d.getDate());
     const endOfDay = new Date(d.getFullYear(), d.getMonth(), d.getDate(), 23, 59, 59, 999);
 
+    const habitDef = await HabitDefinition.findById(habitId).select('version');
+    const habitVersion = habitDef?.version;
+
     const log = await HabitLog.findOneAndUpdate(
       { userId: req.user._id, habitId, date: { $gte: startOfDay, $lte: endOfDay } },
-      { userId: req.user._id, habitId, date: startOfDay, value },
+      { userId: req.user._id, habitId, date: startOfDay, value, habitVersion },
       { upsert: true, new: true }
     );
 

@@ -31,7 +31,14 @@
       "Bash(./run.sh restart *)",
       "Bash(./run.sh stop *)",
       "Bash(./run.sh start *)",
-      "Bash(curl -s -w '\\\\n%{http_code}' -X PUT http://localhost:3001/api/habits/selection -H 'Content-Type: application/json' -H 'Authorization: Bearer f47ac10b-58cc-4372-a567-0e02b2c3d479' -d '{\"selectedIds\":[]}')"
+      "Bash(curl -s -w '\\\\n%{http_code}' -X PUT http://localhost:3001/api/habits/selection -H 'Content-Type: application/json' -H 'Authorization: Bearer f47ac10b-58cc-4372-a567-0e02b2c3d479' -d '{\"selectedIds\":[]}')",
+      "Bash(curl -s http://localhost:3001/api/goals -H 'Authorization: Bearer f47ac10b-58cc-4372-a567-0e02b2c3d479')",
+      "Bash(npm run *)",
+      "Bash(chmod +x /home/nonnenmann/workspace/habit_tracker/backup.sh /home/nonnenmann/workspace/habit_tracker/restore.sh)",
+      "Bash(podman build *)",
+      "Bash(podman rmi *)",
+      "Bash(./backup.sh)",
+      "Bash(node scripts/migrate-versioned-refs.js)"
     ]
   }
 }

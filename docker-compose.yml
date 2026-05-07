@@ -1,0 +1,39 @@
+services:
+
+  # ── MongoDB ────────────────────────────────────────────────────────────────
+  mongo:
+    image: mongo:7
+    container_name: habit-tracker-mongo
+    volumes:
+      - mongo_data:/data/db
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.runCommand('ping').ok"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+
+  # ── App (Express + gebautes React-Frontend) ───────────────────────────────
+  app:
+    build: .
+    container_name: habit-tracker-app
+    ports:
+      - "3001:3001"
+    env_file:
+      - .env.production
+    environment:
+      NODE_ENV: production
+      # Überschreibt MONGODB_URI aus .env.production – im Container ist
+      # MongoDB über den Service-Namen 'mongo' erreichbar, nicht localhost.
+      MONGODB_URI: mongodb://mongo:27017/habit_tracker
+    depends_on:
+      mongo:
+        condition: service_healthy
+    restart: unless-stopped
+
+volumes:
+  mongo_data:
+    # Selber Name wie im Dev-Setup → bestehende Daten werden wiederverwendet.
+    # Für eine saubere Production-DB den Namen ändern, z.B. habit-tracker-mongo-prod
+    name: habit-tracker-mongo-data
