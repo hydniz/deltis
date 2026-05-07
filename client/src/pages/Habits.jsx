@@ -2,10 +2,102 @@ import { useState, useEffect, useCallback } from 'react';
 import api from '../utils/api';
 import { format, subDays, parseISO, startOfDay } from 'date-fns';
 import { de } from 'date-fns/locale';
-import { Plus, Trash2, TrendingUp, Sparkles, X, Settings2, Check } from 'lucide-react';
+import { Plus, Trash2, TrendingUp, Sparkles, X, Settings2, Check, Pencil, ChevronUp } from 'lucide-react';
 import {
   ResponsiveContainer, LineChart, Line, XAxis, YAxis, Tooltip, CartesianGrid
 } from 'recharts';
+
+// ─── Bearbeitbarer Eintrag für eigene Gewohnheiten ───────────────────────────
+
+function CustomHabitRow({ def, selected, onToggle, onDelete, onUpdate }) {
+  const [editing, setEditing] = useState(false);
+  const [form, setForm] = useState({ name: def.name, unitSymbol: def.unitSymbol, type: def.type });
+  const [saving, setSaving] = useState(false);
+
+  const handleSave = async () => {
+    setSaving(true);
+    try {
+      const res = await api.put(`/habits/definitions/${def._id}`, form);
+      onUpdate(res.data);
+      setEditing(false);
+    } catch (err) {
+      alert('Fehler: ' + err.message);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleCancel = () => {
+    setForm({ name: def.name, unitSymbol: def.unitSymbol, type: def.type });
+    setEditing(false);
+  };
+
+  return (
+    <div className="rounded-xl hover:bg-slate-800 transition-colors">
+      <div className="flex items-center gap-3 p-3">
+        <label className="flex items-center gap-3 flex-1 cursor-pointer">
+          <div className={`w-5 h-5 rounded-md border-2 flex items-center justify-center flex-shrink-0 transition-colors ${
+            selected ? 'bg-brand-600 border-brand-600' : 'border-slate-600'
+          }`}>
+            {selected && <Check size={12} className="text-white" strokeWidth={3} />}
+          </div>
+          <input type="checkbox" checked={selected} onChange={onToggle} className="sr-only" />
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-medium text-slate-200">{def.name}</p>
+            <p className="text-xs text-slate-500">{def.unitSymbol}</p>
+          </div>
+        </label>
+        <button
+          onClick={() => setEditing(v => !v)}
+          className="text-slate-500 hover:text-brand-400 transition-colors flex-shrink-0 p-1"
+        >
+          {editing ? <ChevronUp size={15} /> : <Pencil size={14} />}
+        </button>
+        <button onClick={onDelete} className="text-slate-600 hover:text-red-400 transition-colors flex-shrink-0">
+          <Trash2 size={15} />
+        </button>
+      </div>
+
+      {editing && (
+        <div className="px-3 pb-3 space-y-2 border-t border-slate-700 pt-3 mx-1">
+          <div>
+            <label className="label text-xs">Name</label>
+            <input
+              className="input text-sm"
+              value={form.name}
+              onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
+              autoFocus
+            />
+          </div>
+          <div className="grid grid-cols-2 gap-2">
+            <div>
+              <label className="label text-xs">Einheit</label>
+              <input
+                className="input text-sm"
+                value={form.unitSymbol}
+                onChange={e => setForm(f => ({ ...f, unitSymbol: e.target.value }))}
+                placeholder="z.B. min, ml"
+              />
+            </div>
+            <div>
+              <label className="label text-xs">Typ</label>
+              <select className="input text-sm" value={form.type} onChange={e => setForm(f => ({ ...f, type: e.target.value }))}>
+                <option value="amount">Menge</option>
+                <option value="duration">Dauer</option>
+              </select>
+            </div>
+          </div>
+          <div className="flex gap-2 pt-1">
+            <button onClick={handleCancel} className="btn-secondary flex-1 text-sm py-1.5">Abbrechen</button>
+            <button onClick={handleSave} disabled={saving} className="btn-primary flex-1 text-sm py-1.5">
+              {saving ? 'Speichern...' : 'Speichern'}
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
 
 // ─── Verwaltungs-Modal ───────────────────────────────────────────────────────
 
@@ -68,6 +160,10 @@ function ManageHabitsModal({ definitions, onSave, onClose }) {
     }
   };
 
+  const handleUpdate = (updated) => {
+    setLocalDefs(d => d.map(def => def._id === updated._id ? { ...def, ...updated } : def));
+  };
+
   const predefined = localDefs.filter(d => d.isPredefined);
   const custom = localDefs.filter(d => !d.isPredefined);
 
@@ -117,25 +213,14 @@ function ManageHabitsModal({ definitions, onSave, onClose }) {
               <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">Eigene</p>
               <div className="space-y-1.5">
                 {custom.map(d => (
-                  <div key={d._id} className="flex items-center gap-3 p-3 rounded-xl hover:bg-slate-800 transition-colors">
-                    <label className="flex items-center gap-3 flex-1 cursor-pointer">
-                      <div className={`w-5 h-5 rounded-md border-2 flex items-center justify-center flex-shrink-0 transition-colors ${
-                        selected.has(d._id)
-                          ? 'bg-brand-600 border-brand-600'
-                          : 'border-slate-600'
-                      }`}>
-                        {selected.has(d._id) && <Check size={12} className="text-white" strokeWidth={3} />}
-                      </div>
-                      <input type="checkbox" checked={selected.has(d._id)} onChange={() => toggle(d._id)} className="sr-only" />
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm font-medium text-slate-200">{d.name}</p>
-                        <p className="text-xs text-slate-500">{d.unitSymbol}</p>
-                      </div>
-                    </label>
-                    <button onClick={() => handleDelete(d._id)} className="text-slate-600 hover:text-red-400 transition-colors flex-shrink-0">
-                      <Trash2 size={15} />
-                    </button>
-                  </div>
+                  <CustomHabitRow
+                    key={d._id}
+                    def={d}
+                    selected={selected.has(d._id)}
+                    onToggle={() => toggle(d._id)}
+                    onDelete={() => handleDelete(d._id)}
+                    onUpdate={handleUpdate}
+                  />
                 ))}
               </div>
             </div>
@@ -211,10 +296,46 @@ function ManageHabitsModal({ definitions, onSave, onClose }) {
 // ─── Habit-Karte ─────────────────────────────────────────────────────────────
 
 function HabitCard({ habit, todayLog, onLog }) {
+  const todayStr = format(new Date(), 'yyyy-MM-dd');
+  const [selectedDate, setSelectedDate] = useState(todayStr);
+  const isToday = selectedDate === todayStr;
+
+  // currentLog: today → vom Parent; anderer Tag → eigener Fetch
+  const [currentLog, setCurrentLog] = useState(todayLog ?? null);
   const [value, setValue] = useState(todayLog?.value ?? '');
+  const [loadingLog, setLoadingLog] = useState(false);
   const [saving, setSaving] = useState(false);
   const [showChart, setShowChart] = useState(false);
   const [chartData, setChartData] = useState([]);
+
+  // Heute-Log vom Parent übernehmen wenn Parent neu lädt
+  useEffect(() => {
+    if (isToday) {
+      setCurrentLog(todayLog ?? null);
+      setValue(todayLog?.value ?? '');
+    }
+  }, [todayLog, isToday]);
+
+  // Bei Datumswechsel auf anderen Tag: Log nachladen
+  useEffect(() => {
+    if (isToday) return;
+    setLoadingLog(true);
+    const d = new Date(selectedDate + 'T00:00:00');
+    const end = new Date(d.getFullYear(), d.getMonth(), d.getDate(), 23, 59, 59, 999);
+    api.get('/habits/logs', {
+      params: { habitId: habit._id, startDate: d.toISOString(), endDate: end.toISOString() }
+    }).then(res => {
+      const log = res.data[0] ?? null;
+      setCurrentLog(log);
+      setValue(log?.value ?? '');
+    }).catch(console.error).finally(() => setLoadingLog(false));
+  }, [selectedDate, isToday, habit._id]);
+
+  const handleDateChange = (newDate) => {
+    setSelectedDate(newDate);
+    setCurrentLog(null);
+    setValue('');
+  };
 
   const handleLog = async () => {
     if (value === '') return;
@@ -222,10 +343,20 @@ function HabitCard({ habit, todayLog, onLog }) {
     try {
       await api.post('/habits/logs', {
         habitId: habit._id,
-        date: new Date().toISOString(),
-        value: +value
+        date: new Date(selectedDate + 'T12:00:00').toISOString(),
+        value: +value,
       });
-      onLog();
+      if (isToday) {
+        onLog();
+      } else {
+        // Eintrag für anderen Tag direkt nachladen
+        const d = new Date(selectedDate + 'T00:00:00');
+        const end = new Date(d.getFullYear(), d.getMonth(), d.getDate(), 23, 59, 59, 999);
+        const res = await api.get('/habits/logs', {
+          params: { habitId: habit._id, startDate: d.toISOString(), endDate: end.toISOString() }
+        });
+        setCurrentLog(res.data[0] ?? null);
+      }
     } catch (err) {
       alert('Fehler: ' + err.message);
     } finally {
@@ -266,29 +397,61 @@ function HabitCard({ habit, todayLog, onLog }) {
         </button>
       </div>
 
-      <div className="flex gap-2">
+      {/* Datumszeile – nur sichtbar wenn nicht heute */}
+      <div className="flex items-center gap-2 mb-3">
         <input
-          type="number"
-          value={value}
-          onChange={e => setValue(e.target.value)}
-          className="input flex-1"
-          placeholder={`Heute in ${habit.unitSymbol}`}
-          min="0"
-          step="0.1"
+          type="date"
+          value={selectedDate}
+          max={todayStr}
+          onChange={e => handleDateChange(e.target.value)}
+          className={`text-xs rounded-lg px-2 py-1 border transition-colors bg-slate-800 ${
+            isToday
+              ? 'border-slate-700 text-slate-500 w-auto'
+              : 'border-brand-600 text-slate-200 flex-1'
+          }`}
         />
-        <button
-          onClick={handleLog}
-          disabled={saving || value === ''}
-          className="btn-primary px-4 whitespace-nowrap"
-        >
-          {saving ? '...' : todayLog ? 'Aktualisieren' : 'Eintragen'}
-        </button>
+        {!isToday && (
+          <button
+            onClick={() => handleDateChange(todayStr)}
+            className="text-xs text-brand-400 hover:text-brand-300 whitespace-nowrap"
+          >
+            Heute
+          </button>
+        )}
       </div>
 
-      {todayLog && (
+      {loadingLog ? (
+        <div className="flex items-center justify-center py-3">
+          <div className="w-4 h-4 border-2 border-brand-500 border-t-transparent rounded-full animate-spin" />
+        </div>
+      ) : (
+        <div className="flex gap-2">
+          <input
+            type="number"
+            value={value}
+            onChange={e => setValue(e.target.value)}
+            className="input flex-1"
+            placeholder={`${isToday ? 'Heute' : 'Wert'} in ${habit.unitSymbol}`}
+            min="0"
+            step="0.1"
+          />
+          <button
+            onClick={handleLog}
+            disabled={saving || value === ''}
+            className="btn-primary px-4 whitespace-nowrap"
+          >
+            {saving ? '...' : currentLog ? 'Aktualisieren' : 'Eintragen'}
+          </button>
+        </div>
+      )}
+
+      {currentLog && (
         <p className="text-xs text-emerald-400 mt-2 flex items-center gap-1">
           <Check size={12} strokeWidth={3} />
-          Heute: {todayLog.value} {habit.unitSymbol}
+          {isToday
+            ? `Heute: ${currentLog.value} ${habit.unitSymbol}`
+            : `${format(parseISO(selectedDate), 'd. MMM', { locale: de })}: ${currentLog.value} ${habit.unitSymbol}`
+          }
         </p>
       )}
 

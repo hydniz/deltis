@@ -3,6 +3,9 @@ const express = require('express');
 const mongoose = require('mongoose');
 const cors = require('cors');
 const path = require('path');
+const fs = require('fs');
+
+const BACKUP_LOCK = path.join(__dirname, '..', '.backup.lock');
 
 const app = express();
 
@@ -11,6 +14,16 @@ app.use(cors({
   credentials: true
 }));
 app.use(express.json());
+
+// Schreibzugriffe während Backup-Modus blockieren
+app.use((req, res, next) => {
+  if (fs.existsSync(BACKUP_LOCK) && ['POST', 'PUT', 'PATCH', 'DELETE'].includes(req.method)) {
+    return res.status(503).json({
+      error: 'Backup läuft – Schreibzugriffe vorübergehend gesperrt. Bitte in Kürze erneut versuchen.'
+    });
+  }
+  next();
+});
 
 app.use('/api/auth', require('./routes/auth'));
 app.use('/api/activities', require('./routes/activities'));
