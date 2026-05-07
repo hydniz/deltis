@@ -3,14 +3,36 @@ const router = express.Router();
 const auth = require('../middleware/auth');
 const HabitDefinition = require('../models/HabitDefinition');
 const HabitLog = require('../models/HabitLog');
+const User = require('../models/User');
 
-// Definitions
+// Definitions – liefert alle Habits mit `selected`-Flag
 router.get('/definitions', auth, async (req, res) => {
   try {
     const definitions = await HabitDefinition.find({
       $or: [{ userId: null }, { userId: req.user._id }]
     }).sort({ isPredefined: -1, name: 1 });
-    res.json(definitions);
+
+    const selectedIds = (req.user.selectedHabitIds || []).map(id => id.toString());
+    // Wenn noch keine Auswahl getroffen wurde, gelten alle als ausgewählt
+    const noneSelected = selectedIds.length === 0;
+
+    const result = definitions.map(d => ({
+      ...d.toObject(),
+      selected: noneSelected || selectedIds.includes(d._id.toString())
+    }));
+
+    res.json(result);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Auswahl der aktiven Habits speichern
+router.put('/selection', auth, async (req, res) => {
+  try {
+    const { selectedIds } = req.body;
+    await User.findByIdAndUpdate(req.user._id, { selectedHabitIds: selectedIds });
+    res.json({ success: true });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

@@ -7,6 +7,7 @@ const activityLogSchema = new mongoose.Schema({
   duration: { type: Number },
   distance: { type: Number },
   notes: { type: String },
+  customValues: { type: mongoose.Schema.Types.Mixed, default: {} },
   createdAt: { type: Date, default: Date.now }
 });
 

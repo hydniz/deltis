@@ -22,7 +22,16 @@
       "Bash(podman exec *)",
       "Bash(break)",
       "Bash(./run.sh status *)",
-      "Bash(./run.sh help *)"
+      "Bash(./run.sh help *)",
+      "Bash(node server/index.js)",
+      "Bash(kill %1)",
+      "Bash(fuser -k 3001/tcp)",
+      "Bash(fuser 3001/tcp)",
+      "Bash(curl -s -o /dev/null -w '%{http_code}' -X PUT http://localhost:3001/api/habits/selection -H 'Content-Type: application/json' -H 'Authorization: Bearer f47ac10b-58cc-4372-a567-0e02b2c3d479' -d '{\"selectedIds\":[]}')",
+      "Bash(./run.sh restart *)",
+      "Bash(./run.sh stop *)",
+      "Bash(./run.sh start *)",
+      "Bash(curl -s -w '\\\\n%{http_code}' -X PUT http://localhost:3001/api/habits/selection -H 'Content-Type: application/json' -H 'Authorization: Bearer f47ac10b-58cc-4372-a567-0e02b2c3d479' -d '{\"selectedIds\":[]}')"
     ]
   }
 }

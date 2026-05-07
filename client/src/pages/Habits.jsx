@@ -1,22 +1,36 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import api from '../utils/api';
 import { format, subDays, parseISO, startOfDay } from 'date-fns';
 import { de } from 'date-fns/locale';
-import { Plus, Trash2, TrendingUp, Sparkles, X, ChevronDown, ChevronUp } from 'lucide-react';
+import { Plus, Trash2, TrendingUp, Sparkles, X, Settings2, Check } from 'lucide-react';
 import {
   ResponsiveContainer, LineChart, Line, XAxis, YAxis, Tooltip, CartesianGrid
 } from 'recharts';
 
-function AddHabitModal({ onSave, onClose }) {
-  const [form, setForm] = useState({ name: '', unitSymbol: '', type: 'amount' });
-  const [saving, setSaving] = useState(false);
-  const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
+// ─── Verwaltungs-Modal ───────────────────────────────────────────────────────
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
+function ManageHabitsModal({ definitions, onSave, onClose }) {
+  const [selected, setSelected] = useState(
+    new Set(definitions.filter(d => d.selected).map(d => d._id))
+  );
+  const [newHabit, setNewHabit] = useState({ name: '', unitSymbol: '', type: 'amount' });
+  const [showAddForm, setShowAddForm] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [addingSaving, setAddingSaving] = useState(false);
+  const [localDefs, setLocalDefs] = useState(definitions);
+
+  const toggle = (id) => {
+    setSelected(prev => {
+      const next = new Set(prev);
+      next.has(id) ? next.delete(id) : next.add(id);
+      return next;
+    });
+  };
+
+  const handleSave = async () => {
     setSaving(true);
     try {
-      await api.post('/habits/definitions', form);
+      await api.put('/habits/selection', { selectedIds: [...selected] });
       onSave();
     } catch (err) {
       alert('Fehler: ' + err.message);
@@ -25,40 +39,176 @@ function AddHabitModal({ onSave, onClose }) {
     }
   };
 
+  const handleAddHabit = async (e) => {
+    e.preventDefault();
+    if (!newHabit.name.trim() || !newHabit.unitSymbol.trim()) return;
+    setAddingSaving(true);
+    try {
+      const res = await api.post('/habits/definitions', newHabit);
+      const created = { ...res.data, selected: true };
+      setLocalDefs(d => [...d, created]);
+      setSelected(prev => new Set([...prev, created._id]));
+      setNewHabit({ name: '', unitSymbol: '', type: 'amount' });
+      setShowAddForm(false);
+    } catch (err) {
+      alert('Fehler: ' + err.message);
+    } finally {
+      setAddingSaving(false);
+    }
+  };
+
+  const handleDelete = async (id) => {
+    if (!confirm('Gewohnheit löschen? Bestehende Einträge bleiben erhalten.')) return;
+    try {
+      await api.delete(`/habits/definitions/${id}`);
+      setLocalDefs(d => d.filter(def => def._id !== id));
+      setSelected(prev => { const next = new Set(prev); next.delete(id); return next; });
+    } catch {
+      alert('Vordefinierte Gewohnheiten können nicht gelöscht werden.');
+    }
+  };
+
+  const predefined = localDefs.filter(d => d.isPredefined);
+  const custom = localDefs.filter(d => !d.isPredefined);
+
   return (
     <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-end sm:items-center justify-center z-50 p-4">
-      <div className="card w-full max-w-sm p-6">
-        <div className="flex items-center justify-between mb-5">
-          <h2 className="text-lg font-semibold text-white">Neue Gewohnheit</h2>
+      <div className="card w-full max-w-md flex flex-col max-h-[90vh]">
+        {/* Header */}
+        <div className="flex items-center justify-between p-5 border-b border-slate-800">
+          <h2 className="text-lg font-semibold text-white">Gewohnheiten verwalten</h2>
           <button onClick={onClose} className="text-slate-400 hover:text-slate-200"><X size={20} /></button>
         </div>
-        <form onSubmit={handleSubmit} className="space-y-4">
+
+        {/* Liste */}
+        <div className="flex-1 overflow-y-auto p-5 space-y-5">
+
+          {/* Vordefinierte */}
           <div>
-            <label className="label">Name</label>
-            <input className="input" value={form.name} onChange={e => set('name', e.target.value)} placeholder="z.B. Vitamine" required />
+            <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">Voreingestellt</p>
+            <div className="space-y-1.5">
+              {predefined.map(d => (
+                <label key={d._id} className="flex items-center gap-3 p-3 rounded-xl cursor-pointer hover:bg-slate-800 transition-colors">
+                  <div className={`w-5 h-5 rounded-md border-2 flex items-center justify-center flex-shrink-0 transition-colors ${
+                    selected.has(d._id)
+                      ? 'bg-brand-600 border-brand-600'
+                      : 'border-slate-600'
+                  }`}>
+                    {selected.has(d._id) && <Check size={12} className="text-white" strokeWidth={3} />}
+                  </div>
+                  <input
+                    type="checkbox"
+                    checked={selected.has(d._id)}
+                    onChange={() => toggle(d._id)}
+                    className="sr-only"
+                  />
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium text-slate-200">{d.name}</p>
+                    <p className="text-xs text-slate-500">{d.unitSymbol}</p>
+                  </div>
+                </label>
+              ))}
+            </div>
           </div>
-          <div>
-            <label className="label">Einheit</label>
-            <input className="input" value={form.unitSymbol} onChange={e => set('unitSymbol', e.target.value)} placeholder="z.B. Tabletten, ml, min" required />
-          </div>
-          <div>
-            <label className="label">Typ</label>
-            <select className="input" value={form.type} onChange={e => set('type', e.target.value)}>
-              <option value="amount">Menge</option>
-              <option value="duration">Dauer</option>
-            </select>
-          </div>
-          <div className="flex gap-3 pt-1">
-            <button type="button" onClick={onClose} className="btn-secondary flex-1">Abbrechen</button>
-            <button type="submit" disabled={saving} className="btn-primary flex-1">
-              {saving ? 'Speichern...' : 'Erstellen'}
+
+          {/* Eigene */}
+          {(custom.length > 0 || showAddForm) && (
+            <div>
+              <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">Eigene</p>
+              <div className="space-y-1.5">
+                {custom.map(d => (
+                  <div key={d._id} className="flex items-center gap-3 p-3 rounded-xl hover:bg-slate-800 transition-colors">
+                    <label className="flex items-center gap-3 flex-1 cursor-pointer">
+                      <div className={`w-5 h-5 rounded-md border-2 flex items-center justify-center flex-shrink-0 transition-colors ${
+                        selected.has(d._id)
+                          ? 'bg-brand-600 border-brand-600'
+                          : 'border-slate-600'
+                      }`}>
+                        {selected.has(d._id) && <Check size={12} className="text-white" strokeWidth={3} />}
+                      </div>
+                      <input type="checkbox" checked={selected.has(d._id)} onChange={() => toggle(d._id)} className="sr-only" />
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium text-slate-200">{d.name}</p>
+                        <p className="text-xs text-slate-500">{d.unitSymbol}</p>
+                      </div>
+                    </label>
+                    <button onClick={() => handleDelete(d._id)} className="text-slate-600 hover:text-red-400 transition-colors flex-shrink-0">
+                      <Trash2 size={15} />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Neue Gewohnheit hinzufügen */}
+          {showAddForm ? (
+            <form onSubmit={handleAddHabit} className="bg-slate-800/80 border border-brand-700/40 rounded-xl p-4 space-y-3">
+              <p className="text-sm font-semibold text-white">Neue Gewohnheit</p>
+              <div>
+                <label className="label text-xs">Name</label>
+                <input
+                  className="input text-sm"
+                  value={newHabit.name}
+                  onChange={e => setNewHabit(h => ({ ...h, name: e.target.value }))}
+                  placeholder="z.B. Vitamine, Stretching …"
+                  autoFocus
+                  required
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="label text-xs">Einheit</label>
+                  <input
+                    className="input text-sm"
+                    value={newHabit.unitSymbol}
+                    onChange={e => setNewHabit(h => ({ ...h, unitSymbol: e.target.value }))}
+                    placeholder="z.B. min, ml, Stück"
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="label text-xs">Typ</label>
+                  <select className="input text-sm" value={newHabit.type} onChange={e => setNewHabit(h => ({ ...h, type: e.target.value }))}>
+                    <option value="amount">Menge</option>
+                    <option value="duration">Dauer</option>
+                  </select>
+                </div>
+              </div>
+              <div className="flex gap-2">
+                <button type="button" onClick={() => setShowAddForm(false)} className="btn-secondary flex-1 text-sm py-1.5">Abbrechen</button>
+                <button type="submit" disabled={addingSaving} className="btn-primary flex-1 text-sm py-1.5">
+                  {addingSaving ? 'Hinzufügen...' : 'Hinzufügen'}
+                </button>
+              </div>
+            </form>
+          ) : (
+            <button
+              onClick={() => setShowAddForm(true)}
+              className="flex items-center gap-2 text-sm text-brand-400 hover:text-brand-300 transition-colors py-1"
+            >
+              <Plus size={16} />
+              Eigene Gewohnheit hinzufügen
             </button>
-          </div>
-        </form>
+          )}
+        </div>
+
+        {/* Footer */}
+        <div className="p-5 border-t border-slate-800 flex gap-3">
+          <button onClick={onClose} className="btn-secondary flex-1">Abbrechen</button>
+          <button onClick={handleSave} disabled={saving} className="btn-primary flex-1 flex items-center justify-center gap-2">
+            {saving ? (
+              <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+            ) : <Check size={16} />}
+            {saving ? 'Speichern...' : `${selected.size} aktiv – Speichern`}
+          </button>
+        </div>
       </div>
     </div>
   );
 }
+
+// ─── Habit-Karte ─────────────────────────────────────────────────────────────
 
 function HabitCard({ habit, todayLog, onLog }) {
   const [value, setValue] = useState(todayLog?.value ?? '');
@@ -87,17 +237,21 @@ function HabitCard({ habit, todayLog, onLog }) {
     if (chartData.length > 0) { setShowChart(v => !v); return; }
     const end = new Date();
     const start = subDays(end, 29);
-    const res = await api.get('/habits/logs', {
-      params: { habitId: habit._id, startDate: start.toISOString(), endDate: end.toISOString() }
-    });
-    const data = Array.from({ length: 30 }, (_, i) => {
-      const d = subDays(end, 29 - i);
-      const dayKey = format(d, 'yyyy-MM-dd');
-      const log = res.data.find(l => format(parseISO(l.date), 'yyyy-MM-dd') === dayKey);
-      return { date: format(d, 'd. MMM', { locale: de }), value: log?.value ?? null };
-    }).filter(d => d.value !== null);
-    setChartData(data);
-    setShowChart(true);
+    try {
+      const res = await api.get('/habits/logs', {
+        params: { habitId: habit._id, startDate: start.toISOString(), endDate: end.toISOString() }
+      });
+      const data = Array.from({ length: 30 }, (_, i) => {
+        const d = subDays(end, 29 - i);
+        const dayKey = format(d, 'yyyy-MM-dd');
+        const log = res.data.find(l => format(parseISO(l.date), 'yyyy-MM-dd') === dayKey);
+        return { date: format(d, 'd. MMM', { locale: de }), value: log?.value ?? null };
+      }).filter(d => d.value !== null);
+      setChartData(data);
+      setShowChart(true);
+    } catch (err) {
+      console.error(err);
+    }
   };
 
   return (
@@ -105,14 +259,9 @@ function HabitCard({ habit, todayLog, onLog }) {
       <div className="flex items-start justify-between mb-4">
         <div>
           <h3 className="font-semibold text-white">{habit.name}</h3>
-          <p className="text-xs text-slate-500 mt-0.5">
-            {habit.isPredefined ? 'Vordefiniert' : 'Benutzerdefiniert'} · {habit.unitSymbol}
-          </p>
+          <p className="text-xs text-slate-500 mt-0.5">in {habit.unitSymbol}</p>
         </div>
-        <button
-          onClick={loadChart}
-          className="text-slate-500 hover:text-brand-400 transition-colors"
-        >
+        <button onClick={loadChart} className="text-slate-500 hover:text-brand-400 transition-colors" title="Verlauf anzeigen">
           <TrendingUp size={18} />
         </button>
       </div>
@@ -137,7 +286,8 @@ function HabitCard({ habit, todayLog, onLog }) {
       </div>
 
       {todayLog && (
-        <p className="text-xs text-emerald-400 mt-2">
+        <p className="text-xs text-emerald-400 mt-2 flex items-center gap-1">
+          <Check size={12} strokeWidth={3} />
           Heute: {todayLog.value} {habit.unitSymbol}
         </p>
       )}
@@ -162,23 +312,22 @@ function HabitCard({ habit, todayLog, onLog }) {
   );
 }
 
+// ─── Hauptseite ─────────────────────────────────────────────────────────────
+
 export default function Habits() {
   const [definitions, setDefinitions] = useState([]);
   const [todayLogs, setTodayLogs] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [showAdd, setShowAdd] = useState(false);
+  const [showManage, setShowManage] = useState(false);
 
-  const load = async () => {
+  const load = useCallback(async () => {
     setLoading(true);
     try {
       const todayStart = startOfDay(new Date());
       const [defsRes, logsRes] = await Promise.all([
         api.get('/habits/definitions'),
         api.get('/habits/logs', {
-          params: {
-            startDate: todayStart.toISOString(),
-            endDate: new Date().toISOString()
-          }
+          params: { startDate: todayStart.toISOString(), endDate: new Date().toISOString() }
         })
       ]);
       setDefinitions(defsRes.data);
@@ -188,19 +337,14 @@ export default function Habits() {
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
-  useEffect(() => { load(); }, []);
+  useEffect(() => { load(); }, [load]);
 
-  const deleteHabit = async (id) => {
-    if (!confirm('Gewohnheit löschen?')) return;
-    try {
-      await api.delete(`/habits/definitions/${id}`);
-      load();
-    } catch {
-      alert('Vordefinierte Gewohnheiten können nicht gelöscht werden.');
-    }
-  };
+  const activeHabits = definitions.filter(d => d.selected);
+
+  const getTodayLog = (habitId) =>
+    todayLogs.find(l => l.habitId?._id === habitId || l.habitId === habitId);
 
   if (loading) return (
     <div className="flex items-center justify-center py-20">
@@ -208,71 +352,59 @@ export default function Habits() {
     </div>
   );
 
-  const predefined = definitions.filter(d => d.isPredefined);
-  const custom = definitions.filter(d => !d.isPredefined);
+  const loggedCount = activeHabits.filter(h => getTodayLog(h._id)).length;
 
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-white">Gewohnheiten</h1>
-          <p className="text-slate-400 text-sm mt-0.5">{format(new Date(), 'EEEE, d. MMMM', { locale: de })}</p>
+          <p className="text-slate-400 text-sm mt-0.5">
+            {format(new Date(), 'EEEE, d. MMMM', { locale: de })}
+            {activeHabits.length > 0 && (
+              <span className="ml-2 text-slate-500">· {loggedCount}/{activeHabits.length} eingetragen</span>
+            )}
+          </p>
         </div>
-        <button onClick={() => setShowAdd(true)} className="btn-primary flex items-center gap-2">
-          <Plus size={18} />
-          <span className="hidden sm:inline">Neue Gewohnheit</span>
+        <button
+          onClick={() => setShowManage(true)}
+          className="btn-secondary flex items-center gap-2 text-sm"
+        >
+          <Settings2 size={16} />
+          <span className="hidden sm:inline">Verwalten</span>
         </button>
       </div>
 
-      {definitions.length === 0 ? (
+      {activeHabits.length === 0 ? (
         <div className="card p-12 text-center">
           <Sparkles size={36} className="text-slate-600 mx-auto mb-3" />
-          <p className="text-slate-400">Keine Gewohnheiten gefunden</p>
+          <p className="text-slate-300 font-medium">Keine Gewohnheiten ausgewählt</p>
+          <p className="text-slate-500 text-sm mt-1 mb-4">Wähle aus, welche Gewohnheiten du täglich tracken möchtest.</p>
+          <button onClick={() => setShowManage(true)} className="btn-primary inline-flex items-center gap-2">
+            <Settings2 size={16} />
+            Gewohnheiten auswählen
+          </button>
         </div>
       ) : (
-        <>
-          {predefined.length > 0 && (
-            <div>
-              <h2 className="text-sm font-semibold text-slate-500 uppercase tracking-wide mb-3">Voreingestellt</h2>
-              <div className="grid sm:grid-cols-2 gap-4">
-                {predefined.map(habit => (
-                  <HabitCard
-                    key={habit._id}
-                    habit={habit}
-                    todayLog={todayLogs.find(l => l.habitId?._id === habit._id || l.habitId === habit._id)}
-                    onLog={load}
-                  />
-                ))}
-              </div>
-            </div>
-          )}
-
-          {custom.length > 0 && (
-            <div>
-              <h2 className="text-sm font-semibold text-slate-500 uppercase tracking-wide mb-3">Eigene Gewohnheiten</h2>
-              <div className="grid sm:grid-cols-2 gap-4">
-                {custom.map(habit => (
-                  <div key={habit._id} className="relative">
-                    <HabitCard
-                      habit={habit}
-                      todayLog={todayLogs.find(l => l.habitId?._id === habit._id || l.habitId === habit._id)}
-                      onLog={load}
-                    />
-                    <button
-                      onClick={() => deleteHabit(habit._id)}
-                      className="absolute top-3 right-3 text-slate-600 hover:text-red-400 transition-colors"
-                    >
-                      <Trash2 size={15} />
-                    </button>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-        </>
+        <div className="grid sm:grid-cols-2 gap-4">
+          {activeHabits.map(habit => (
+            <HabitCard
+              key={habit._id}
+              habit={habit}
+              todayLog={getTodayLog(habit._id)}
+              onLog={load}
+            />
+          ))}
+        </div>
       )}
 
-      {showAdd && <AddHabitModal onSave={() => { setShowAdd(false); load(); }} onClose={() => setShowAdd(false)} />}
+      {showManage && (
+        <ManageHabitsModal
+          definitions={definitions}
+          onSave={() => { setShowManage(false); load(); }}
+          onClose={() => setShowManage(false)}
+        />
+      )}
     </div>
   );
 }
