@@ -18,6 +18,7 @@ app.use('/api/planner', require('./routes/planner'));
 app.use('/api/habits', require('./routes/habits'));
 app.use('/api/weight', require('./routes/weight'));
 app.use('/api/goals', require('./routes/goals'));
+app.use('/api/activity-types', require('./routes/activityTypes'));
 
 if (process.env.NODE_ENV === 'production') {
   app.use(express.static(path.join(__dirname, '../client/dist')));
