@@ -4,8 +4,8 @@ client/dist/
 .env
 .env.production
 .env.*.local
-*.log
+.backup.lock
+backups/
 .run.pid
 .run.log
-backups/
-.backup.lock
+*.log

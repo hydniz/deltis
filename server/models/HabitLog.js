@@ -3,6 +3,8 @@ const mongoose = require('mongoose');
 const habitLogSchema = new mongoose.Schema({
   userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
   habitId: { type: mongoose.Schema.Types.ObjectId, ref: 'HabitDefinition', required: true },
+  // Version der HabitDefinition zum Zeitpunkt der Erfassung
+  habitVersion: { type: Number },
   date: { type: Date, required: true },
   value: { type: Number, required: true },
   createdAt: { type: Date, default: Date.now }

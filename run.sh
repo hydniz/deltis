@@ -103,6 +103,55 @@ stop_server() {
   ok "Server gestoppt"
 }
 
+# ─── Docker/Podman Compose ──────────────────────────────────────────────────
+
+get_compose() {
+  if command -v podman-compose &>/dev/null; then echo "podman-compose"
+  elif command -v docker-compose &>/dev/null; then echo "docker-compose"
+  elif docker compose version &>/dev/null 2>&1; then echo "docker compose"
+  else err "Weder podman-compose noch docker-compose gefunden."; exit 1; fi
+}
+
+cmd_compose_up() {
+  echo -e "\n${BOLD}Habit Tracker – Production (Compose)${NC}\n"
+  if [ ! -f "$SCRIPT_DIR/.env.production" ]; then
+    err ".env.production nicht gefunden!"
+    echo "  Vorlage kopieren und ausfüllen:"
+    echo -e "  ${BOLD}cp .env.production.example .env.production${NC}"
+    exit 1
+  fi
+  cd "$SCRIPT_DIR"
+  COMPOSE=$(get_compose)
+  info "Image bauen und Container starten..."
+  $COMPOSE up -d --build
+  echo -e "\n${GREEN}${BOLD}✓ Production läuft!${NC}"
+  echo -e "  ${CYAN}App:${NC}  http://localhost:3001\n"
+}
+
+cmd_compose_down() {
+  echo -e "\n${BOLD}Habit Tracker – Production stoppen${NC}\n"
+  cd "$SCRIPT_DIR"
+  COMPOSE=$(get_compose)
+  $COMPOSE down
+  echo -e "\n${GREEN}Gestoppt.${NC}\n"
+}
+
+cmd_compose_logs() {
+  cd "$SCRIPT_DIR"
+  COMPOSE=$(get_compose)
+  info "Logs (Strg+C zum Beenden):"
+  $COMPOSE logs -f
+}
+
+cmd_compose_rebuild() {
+  echo -e "\n${BOLD}Habit Tracker – Image neu bauen${NC}\n"
+  cd "$SCRIPT_DIR"
+  COMPOSE=$(get_compose)
+  $COMPOSE build --no-cache
+  ok "Build abgeschlossen – starte mit: ${BOLD}./run.sh compose:up${NC}"
+  echo ""
+}
+
 # ─── Befehle ────────────────────────────────────────────────────────────────
 
 cmd_start() {
@@ -212,21 +261,36 @@ cmd_prod() {
 # ─── Einstiegspunkt ─────────────────────────────────────────────────────────
 
 case "${1:-help}" in
-  start)   cmd_start ;;
-  stop)    cmd_stop ;;
-  restart) cmd_restart ;;
-  status)  cmd_status ;;
-  logs)    cmd_logs ;;
-  prod)    cmd_prod ;;
+  start)          cmd_start ;;
+  stop)           cmd_stop ;;
+  restart)        cmd_restart ;;
+  status)         cmd_status ;;
+  logs)           cmd_logs ;;
+  prod)           cmd_prod ;;
+  compose:up)     cmd_compose_up ;;
+  compose:down)   cmd_compose_down ;;
+  compose:logs)   cmd_compose_logs ;;
+  compose:build)  cmd_compose_rebuild ;;
   *)
     echo -e "\n${BOLD}Habit Tracker – Steuerung${NC}"
     echo ""
-    echo -e "  ${BOLD}./run.sh start${NC}    Dev-Modus starten (MongoDB + Server + Frontend)"
-    echo -e "  ${BOLD}./run.sh stop${NC}     Alles stoppen"
-    echo -e "  ${BOLD}./run.sh restart${NC}  Neu starten"
-    echo -e "  ${BOLD}./run.sh status${NC}   Status anzeigen"
-    echo -e "  ${BOLD}./run.sh logs${NC}     Logs live verfolgen (Strg+C zum Beenden)"
-    echo -e "  ${BOLD}./run.sh prod${NC}     Production-Build erstellen und starten"
+    echo -e "  ${CYAN}── Entwicklung ──────────────────────────────────────${NC}"
+    echo -e "  ${BOLD}./run.sh start${NC}          Dev-Modus (MongoDB + Server + Frontend)"
+    echo -e "  ${BOLD}./run.sh stop${NC}           Alles stoppen"
+    echo -e "  ${BOLD}./run.sh restart${NC}        Neu starten"
+    echo -e "  ${BOLD}./run.sh status${NC}         Status anzeigen"
+    echo -e "  ${BOLD}./run.sh logs${NC}           Logs verfolgen"
+    echo ""
+    echo -e "  ${CYAN}── Production (Docker/Podman Compose) ───────────────${NC}"
+    echo -e "  ${BOLD}./run.sh compose:up${NC}     Container bauen & starten"
+    echo -e "  ${BOLD}./run.sh compose:down${NC}   Container stoppen"
+    echo -e "  ${BOLD}./run.sh compose:logs${NC}   Container-Logs verfolgen"
+    echo -e "  ${BOLD}./run.sh compose:build${NC}  Image neu bauen (ohne Cache)"
+    echo ""
+    echo -e "  ${CYAN}── Backup & Restore ─────────────────────────────────${NC}"
+    echo -e "  ${BOLD}./backup.sh${NC}             Datenbank sichern"
+    echo -e "  ${BOLD}./restore.sh${NC}            Verfügbare Backups auflisten"
+    echo -e "  ${BOLD}./restore.sh <datei>${NC}    Backup einspielen"
     echo ""
     ;;
 esac

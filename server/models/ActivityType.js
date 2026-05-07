@@ -8,9 +8,18 @@ const customFieldSchema = new mongoose.Schema({
   options: [{ type: String }],
 }, { _id: false });
 
+const nameHistorySchema = new mongoose.Schema({
+  name: { type: String, required: true },
+  version: { type: Number, required: true },
+  validFrom: { type: Date, required: true },
+  validUntil: { type: Date, required: true },
+}, { _id: false });
+
 const activityTypeSchema = new mongoose.Schema({
   userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
   label: { type: String, required: true },
+  version: { type: Number, default: 1 },
+  nameHistory: [nameHistorySchema],
   showDistance: { type: Boolean, default: false },
   showDuration: { type: Boolean, default: true },
   customFields: [customFieldSchema],
