@@ -1,0 +1,28 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm install *)",
+      "Bash(node -e \"require\\('./server/routes/auth'\\)\")",
+      "Bash(npx vite *)",
+      "Bash(timeout 5 node server/index.js)",
+      "Bash(timeout 8 node server/index.js)",
+      "Bash(echo \"Exit: $?\")",
+      "Bash(cat /tmp/server.log 2>/dev/null || echo \"Log leer\")",
+      "Read(//tmp/**)",
+      "Bash(node -e ' *)",
+      "Bash(mongod --version)",
+      "Bash(systemctl status *)",
+      "Bash(service mongod *)",
+      "Bash(docker --version)",
+      "Bash(chmod +x /home/nonnenmann/workspace/habit_tracker/run.sh)",
+      "Bash(bash -n /home/nonnenmann/workspace/habit_tracker/run.sh)",
+      "Bash(podman --version)",
+      "Bash(podman pull *)",
+      "Bash(podman run *)",
+      "Bash(podman exec *)",
+      "Bash(break)",
+      "Bash(./run.sh status *)",
+      "Bash(./run.sh help *)"
+    ]
+  }
+}
