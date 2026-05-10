@@ -1,12 +1,12 @@
 #!/bin/bash
-# Habit Tracker – Datenbank wiederherstellen
+# Habit Tracker – Database Restore
 #
-# Stoppt den Server, spielt das Backup ein, startet den Server neu.
-# MongoDB bleibt während der gesamten Wiederherstellung aktiv.
+# Stops the app, restores a backup, then restarts the app.
+# MongoDB stays running throughout.
 #
-# Verwendung:
-#   ./restore.sh                    – verfügbare Backups auflisten
-#   ./restore.sh backups/<datei>    – Backup einspielen
+# Usage:
+#   ./restore.sh                      – list available backups
+#   ./restore.sh backups/<file>       – restore from backup
 
 set -euo pipefail
 
@@ -17,16 +17,6 @@ PID_FILE="$SCRIPT_DIR/.run.pid"
 LOG_FILE="$SCRIPT_DIR/.run.log"
 LOCK_FILE="$BACKUP_DIR/.backup.lock"
 
-# docker oder $RUNTIME verwenden (was verfügbar ist)
-if command -v $RUNTIME &>/dev/null; then
-  RUNTIME="$RUNTIME"
-elif command -v docker &>/dev/null; then
-  RUNTIME="docker"
-else
-  echo "Fehler: Weder docker noch $RUNTIME gefunden." >&2
-  exit 1
-fi
-
 GREEN='\033[0;32m'; RED='\033[0;31m'; YELLOW='\033[1;33m'
 CYAN='\033[0;36m'; BOLD='\033[1m'; NC='\033[0m'
 ok()   { echo -e "${GREEN}✓${NC} $*"; }
@@ -34,21 +24,31 @@ err()  { echo -e "${RED}✗${NC} $*" >&2; }
 info() { echo -e "${CYAN}→${NC} $*"; }
 warn() { echo -e "${YELLOW}!${NC} $*"; }
 
-# Lock + temporäre Containerdatei bei Fehler aufräumen
+# Use podman if available, fall back to docker
+if command -v podman &>/dev/null; then
+  RUNTIME="podman"
+elif command -v docker &>/dev/null; then
+  RUNTIME="docker"
+else
+  err "Neither docker nor podman found."
+  exit 1
+fi
+
+# Remove lock file and temp archive on exit or error
 cleanup() {
   rm -f "$LOCK_FILE"
   $RUNTIME exec "$CONTAINER_NAME" rm -f /tmp/restore.archive 2>/dev/null || true
 }
 trap cleanup EXIT
 
-# ─── Kein Argument → Backups auflisten ──────────────────────────────────────
+# ── No argument → list backups ───────────────────────────────────────────────
 
 if [ -z "${1:-}" ]; then
   echo ""
-  echo -e "${BOLD}=== Verfügbare Backups ===${NC}"
+  echo -e "${BOLD}=== Available Backups ===${NC}"
   echo ""
   if ls "$BACKUP_DIR"/*.archive.gz 2>/dev/null | head -1 > /dev/null 2>&1; then
-    echo -e "  ${CYAN}Größe   Datei${NC}"
+    echo -e "  ${CYAN}Size    File${NC}"
     echo -e "  ──────────────────────────────────────────────────────"
     while IFS= read -r f; do
       SIZE=$(du -sh "$f" | cut -f1)
@@ -56,10 +56,10 @@ if [ -z "${1:-}" ]; then
       echo -e "  ${SIZE}\t${NAME}"
     done < <(ls -1t "$BACKUP_DIR"/*.archive.gz)
     echo ""
-    echo -e "  Verwendung: ${BOLD}./restore.sh backups/<dateiname>${NC}"
+    echo -e "  Usage: ${BOLD}./restore.sh backups/<filename>${NC}"
   else
-    warn "Keine Backups in ./backups/ gefunden."
-    echo -e "  Erstelle zuerst ein Backup mit: ${BOLD}./backup.sh${NC}"
+    warn "No backups found in ./backups/"
+    echo -e "  Create one first with: ${BOLD}./backup.sh${NC}"
   fi
   echo ""
   exit 0
@@ -67,54 +67,54 @@ fi
 
 BACKUP_FILE="$1"
 
-# ─── Voraussetzungen prüfen ──────────────────────────────────────────────────
+# ── Prerequisites ────────────────────────────────────────────────────────────
 
 if [ ! -f "$BACKUP_FILE" ]; then
-  err "Backup-Datei nicht gefunden: $BACKUP_FILE"
+  err "Backup file not found: $BACKUP_FILE"
   exit 1
 fi
 
 if ! $RUNTIME container inspect "$CONTAINER_NAME" --format '{{.State.Running}}' 2>/dev/null | grep -q true; then
-  err "MongoDB-Container '$CONTAINER_NAME' läuft nicht."
-  echo -e "  Starte zuerst mit: ${BOLD}./run.sh start${NC}"
+  err "MongoDB container '$CONTAINER_NAME' is not running."
+  echo -e "  Start it first with: ${BOLD}./run.sh start${NC}"
   exit 1
 fi
 
 SIZE=$(du -sh "$BACKUP_FILE" | cut -f1)
 
-# ─── Bestätigung ─────────────────────────────────────────────────────────────
+# ── Confirmation ─────────────────────────────────────────────────────────────
 
 echo ""
-echo -e "${BOLD}=== Habit Tracker – Daten wiederherstellen ===${NC}"
+echo -e "${BOLD}=== Habit Tracker – Restore Database ===${NC}"
 echo ""
-echo -e "  ${CYAN}Backup-Datei:${NC}  $BACKUP_FILE"
-echo -e "  ${CYAN}Größe:${NC}         $SIZE"
+echo -e "  ${CYAN}Backup file:${NC}  $BACKUP_FILE"
+echo -e "  ${CYAN}Size:${NC}         $SIZE"
 echo ""
-warn "WARNUNG: Alle aktuellen Daten werden unwiderruflich überschrieben!"
+warn "WARNING: All current data will be permanently overwritten!"
 echo ""
-read -rp "  Zum Fortfahren 'ja' eingeben: " CONFIRM
+read -rp "  Type 'yes' to continue: " CONFIRM
 
-if [ "$CONFIRM" != "ja" ]; then
+if [ "$CONFIRM" != "yes" ]; then
   echo ""
-  echo "  Abgebrochen."
+  echo "  Aborted."
   echo ""
   exit 0
 fi
 
 echo ""
 
-# ─── Server stoppen (MongoDB bleibt aktiv) ───────────────────────────────────
+# ── Stop app (keep MongoDB running) ──────────────────────────────────────────
 
-# Compose-Modus erkennen: App-Container vorhanden?
+# Detect compose mode: is the app container present?
 COMPOSE_MODE=false
 if $RUNTIME container inspect habit-tracker-app >/dev/null 2>&1; then
   COMPOSE_MODE=true
 fi
 
-info "App stoppen, MongoDB bleibt aktiv..."
+info "Stopping app (MongoDB stays active)..."
 if $COMPOSE_MODE; then
   $RUNTIME stop habit-tracker-app 2>/dev/null || true
-  ok "App-Container gestoppt"
+  ok "App container stopped"
 elif [ -f "$PID_FILE" ]; then
   PID=$(cat "$PID_FILE")
   if kill -0 "$PID" 2>/dev/null; then
@@ -128,18 +128,18 @@ elif [ -f "$PID_FILE" ]; then
     kill -KILL "$PID" 2>/dev/null || true
   fi
   rm -f "$PID_FILE"
-  ok "Server gestoppt"
+  ok "Server stopped"
 else
-  info "App lief bereits nicht"
+  info "App was not running"
 fi
 
-# ─── Daten einspielen ────────────────────────────────────────────────────────
+# ── Restore data ─────────────────────────────────────────────────────────────
 
-info "Backup-Datei in Container kopieren..."
+info "Copying backup into container..."
 touch "$LOCK_FILE"
 $RUNTIME cp "$BACKUP_FILE" "${CONTAINER_NAME}:/tmp/restore.archive"
 
-info "Datenbank wiederherstellen (bestehende Daten werden gelöscht)..."
+info "Restoring database (existing data will be dropped)..."
 $RUNTIME exec "$CONTAINER_NAME" mongorestore \
   --db habit_tracker \
   --archive=/tmp/restore.archive \
@@ -147,20 +147,20 @@ $RUNTIME exec "$CONTAINER_NAME" mongorestore \
   --drop \
   --quiet
 
-ok "Daten erfolgreich wiederhergestellt"
+ok "Data restored successfully"
 rm -f "$LOCK_FILE"
 
-# ─── Server neu starten ──────────────────────────────────────────────────────
+# ── Restart app ───────────────────────────────────────────────────────────────
 
-info "App neu starten..."
+info "Restarting app..."
 if $COMPOSE_MODE; then
   $RUNTIME start habit-tracker-app 2>/dev/null
   sleep 2
   if $RUNTIME container inspect habit-tracker-app --format '{{.State.Running}}' 2>/dev/null | grep -q true; then
-    ok "App-Container läuft wieder"
+    ok "App container is running again"
   else
-    warn "Container konnte nicht gestartet werden."
-    echo -e "  Manuell starten mit: ${BOLD}./run.sh compose:up${NC}"
+    warn "Container could not be started automatically."
+    echo -e "  Start manually with: ${BOLD}./run.sh compose:up${NC}"
   fi
 else
   cd "$SCRIPT_DIR"
@@ -168,15 +168,15 @@ else
   echo $! > "$PID_FILE"
   sleep 2
   if [ -f "$PID_FILE" ] && kill -0 "$(cat "$PID_FILE")" 2>/dev/null; then
-    ok "Server läuft wieder"
+    ok "Server is running again"
   else
-    warn "Server konnte nicht automatisch gestartet werden."
-    echo -e "  Manuell starten mit: ${BOLD}./run.sh start${NC}"
+    warn "Server could not be started automatically."
+    echo -e "  Start manually with: ${BOLD}./run.sh start${NC}"
   fi
 fi
 
-# ─── Ergebnis ────────────────────────────────────────────────────────────────
+# ── Done ─────────────────────────────────────────────────────────────────────
 
 echo ""
-ok "Wiederherstellung abgeschlossen!"
+ok "Restore complete!"
 echo ""

@@ -1,6 +1,6 @@
 #!/bin/bash
-# Habit Tracker – Start/Stop Skript
-# Verwendung: ./run.sh [start|stop|restart|status|logs|prod]
+# Habit Tracker – Start/Stop Script
+# Usage: ./run.sh [start|stop|restart|status|logs|prod|compose:up|compose:down]
 
 set -euo pipefail
 
@@ -22,7 +22,7 @@ err()  { echo -e "${RED}✗${NC} $*"; }
 info() { echo -e "${CYAN}→${NC} $*"; }
 warn() { echo -e "${YELLOW}!${NC} $*"; }
 
-# ─── MongoDB ────────────────────────────────────────────────────────────────
+# ── MongoDB ──────────────────────────────────────────────────────────────────
 
 mongo_running() {
   podman ps --format '{{.Names}}' 2>/dev/null | grep -q "^${CONTAINER_NAME}$"
@@ -34,16 +34,15 @@ mongo_exists() {
 
 start_mongo() {
   if mongo_running; then
-    ok "MongoDB läuft bereits"
+    ok "MongoDB already running"
     return
   fi
 
   if mongo_exists; then
-    info "MongoDB Container starten..."
+    info "Starting MongoDB container..."
     podman start "$CONTAINER_NAME" >/dev/null
   else
-    info "MongoDB Container erstellen (einmalig)..."
-    # Mapping von 0.0.0.0 ermöglicht Zugriff über die Netzwerk-IP
+    info "Creating MongoDB container (first time)..."
     podman run -d \
       --name "$CONTAINER_NAME" \
       -p 0.0.0.0:27017:27017 \
@@ -52,7 +51,7 @@ start_mongo() {
       mongo:7 >/dev/null
   fi
 
-  echo -n "  Warte auf MongoDB"
+  echo -n "  Waiting for MongoDB"
   for i in $(seq 1 20); do
     if podman exec "$CONTAINER_NAME" mongosh --quiet --eval "db.runCommand('ping').ok" >/dev/null 2>&1; then
       echo -e " ${GREEN}✓${NC}"
@@ -62,18 +61,18 @@ start_mongo() {
     sleep 1
   done
   echo ""
-  warn "MongoDB Timeout – starte trotzdem weiter"
+  warn "MongoDB timeout – continuing anyway"
 }
 
 stop_mongo() {
   if mongo_running; then
-    info "MongoDB stoppen..."
+    info "Stopping MongoDB..."
     podman stop "$CONTAINER_NAME" >/dev/null
-    ok "MongoDB gestoppt"
+    ok "MongoDB stopped"
   fi
 }
 
-# ─── Prozess-Verwaltung ─────────────────────────────────────────────────────
+# ── Process management ───────────────────────────────────────────────────────
 
 server_running() {
   [ -f "$PID_FILE" ] && kill -0 "$(cat "$PID_FILE")" 2>/dev/null
@@ -85,7 +84,7 @@ stop_server() {
   fi
 
   PID=$(cat "$PID_FILE")
-  info "Server stoppen (PID $PID)..."
+  info "Stopping server (PID $PID)..."
 
   if PGID=$(ps -o pgid= -p "$PID" 2>/dev/null | tr -d ' ') && [ -n "$PGID" ] && [ "$PGID" != "0" ]; then
     kill -TERM "-${PGID}" 2>/dev/null || true
@@ -99,37 +98,37 @@ stop_server() {
   kill -KILL "$PID" 2>/dev/null || true
 
   rm -f "$PID_FILE"
-  ok "Server gestoppt"
+  ok "Server stopped"
 }
 
-# ─── Docker/Podman Compose ──────────────────────────────────────────────────
+# ── Docker/Podman Compose ────────────────────────────────────────────────────
 
 get_compose() {
   if command -v podman-compose &>/dev/null; then echo "podman-compose"
   elif command -v docker-compose &>/dev/null; then echo "docker-compose"
   elif docker compose version &>/dev/null 2>&1; then echo "docker compose"
-  else err "Weder podman-compose noch docker-compose gefunden."; exit 1; fi
+  else err "Neither podman-compose nor docker-compose found."; exit 1; fi
 }
 
 cmd_compose_up() {
   echo -e "\n${BOLD}Habit Tracker – Production (Compose)${NC}\n"
   if [ ! -f "$SCRIPT_DIR/.env.production" ]; then
-    err ".env.production nicht gefunden!"
+    err ".env.production not found!"
     exit 1
   fi
   cd "$SCRIPT_DIR"
   COMPOSE=$(get_compose)
-  info "Image bauen und Container starten..."
+  info "Building image and starting containers..."
   $COMPOSE up -d --build
-  echo -e "\n${GREEN}${BOLD}✓ Production läuft!${NC}"
+  echo -e "\n${GREEN}${BOLD}✓ Production is running!${NC}"
 }
 
 cmd_compose_down() {
-  echo -e "\n${BOLD}Habit Tracker – Production stoppen${NC}\n"
+  echo -e "\n${BOLD}Habit Tracker – Stop Production${NC}\n"
   cd "$SCRIPT_DIR"
   COMPOSE=$(get_compose)
   $COMPOSE down
-  echo -e "\n${GREEN}Gestoppt.${NC}\n"
+  echo -e "\n${GREEN}Stopped.${NC}\n"
 }
 
 cmd_compose_logs() {
@@ -144,42 +143,41 @@ cmd_compose_rebuild() {
   $COMPOSE build --no-cache
 }
 
-# ─── Befehle ────────────────────────────────────────────────────────────────
+# ── Commands ─────────────────────────────────────────────────────────────────
 
 cmd_start() {
-  echo -e "\n${BOLD}Habit Tracker – Entwicklungsmodus${NC}\n"
+  echo -e "\n${BOLD}Habit Tracker – Development Mode${NC}\n"
 
   if server_running; then
-    err "App läuft bereits (PID: $(cat "$PID_FILE"))"
+    err "App is already running (PID: $(cat "$PID_FILE"))"
     exit 1
   fi
 
   cd "$SCRIPT_DIR"
   start_mongo
 
-  info "Dev-Server starten (Host: 0.0.0.0)..."
-  # --host 0.0.0.0 bündelt Vite an alle Schnittstellen
+  info "Starting dev server (host: 0.0.0.0)..."
   setsid npm run dev -- --host 0.0.0.0 > "$LOG_FILE" 2>&1 &
   echo $! > "$PID_FILE"
 
   sleep 2
   if ! server_running; then
-    err "Server konnte nicht gestartet werden. Logs:"
+    err "Server failed to start. Logs:"
     tail -20 "$LOG_FILE"
     exit 1
   fi
 
-  echo -e "\n${GREEN}${BOLD}✓ Habit Tracker läuft!${NC}"
-  echo -e "  ${CYAN}Netzwerk:${NC}  http://192.168.80.57:5173"
-  echo -e "  ${CYAN}Lokal:${NC}     http://localhost:5173"
+  echo -e "\n${GREEN}${BOLD}✓ Habit Tracker is running!${NC}"
+  echo -e "  ${CYAN}Network:${NC}  http://192.168.80.57:5173"
+  echo -e "  ${CYAN}Local:${NC}    http://localhost:5173"
   echo -e ""
 }
 
 cmd_stop() {
-  echo -e "\n${BOLD}Habit Tracker – Stoppen${NC}\n"
+  echo -e "\n${BOLD}Habit Tracker – Stopping${NC}\n"
   stop_server
   stop_mongo
-  echo -e "\n${GREEN}Alles gestoppt.${NC}\n"
+  echo -e "\n${GREEN}All stopped.${NC}\n"
 }
 
 cmd_restart() {
@@ -190,8 +188,8 @@ cmd_restart() {
 
 cmd_status() {
   echo -e "\n${BOLD}=== Habit Tracker Status ===${NC}\n"
-  mongo_running && echo -e "  MongoDB:   ${GREEN}● läuft${NC}" || echo -e "  MongoDB:   ${RED}● gestoppt${NC}"
-  server_running && echo -e "  Server:    ${GREEN}● läuft${NC}" || echo -e "  Server:    ${RED}● gestoppt${NC}"
+  mongo_running && echo -e "  MongoDB:  ${GREEN}● running${NC}" || echo -e "  MongoDB:  ${RED}● stopped${NC}"
+  server_running && echo -e "  Server:   ${GREEN}● running${NC}" || echo -e "  Server:   ${RED}● stopped${NC}"
   echo ""
 }
 
@@ -201,23 +199,22 @@ cmd_logs() {
 
 cmd_prod() {
   echo -e "\n${BOLD}Habit Tracker – Production${NC}\n"
-  if server_running; then err "App läuft bereits."; exit 1; fi
+  if server_running; then err "App is already running."; exit 1; fi
 
   cd "$SCRIPT_DIR"
   start_mongo
-  info "Frontend bauen..."
+  info "Building frontend..."
   npm run build
 
-  info "Production-Server starten..."
-  # HOST Umgebungsvariable für Node-Backend
+  info "Starting production server..."
   setsid env NODE_ENV=production HOST=0.0.0.0 node server/index.js > "$LOG_FILE" 2>&1 &
   echo $! > "$PID_FILE"
 
   sleep 2
-  server_running && ok "Production-Server läuft!" || err "Start fehlgeschlagen."
+  server_running && ok "Production server is running!" || err "Startup failed."
 }
 
-# ─── Einstiegspunkt ─────────────────────────────────────────────────────────
+# ── Entry point ───────────────────────────────────────────────────────────────
 
 case "${1:-help}" in
   start)          cmd_start ;;
@@ -231,6 +228,6 @@ case "${1:-help}" in
   compose:logs)   cmd_compose_logs ;;
   compose:build)  cmd_compose_rebuild ;;
   *)
-    echo "Verwendung: ./run.sh [start|stop|restart|status|logs|prod|compose:up|compose:down]"
+    echo "Usage: ./run.sh [start|stop|restart|status|logs|prod|compose:up|compose:down]"
     ;;
 esac

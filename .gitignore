@@ -9,3 +9,6 @@ client/dist/
 .run.log
 backups/
 .backup.lock
+habit-tracker-*.tar.gz
+.claude/
+TODO.md
