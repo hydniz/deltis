@@ -28,6 +28,7 @@ app.use((req, res, next) => {
 
 app.use('/api/auth', require('./routes/auth'));
 app.use('/api/admin', require('./routes/admin'));
+app.use('/api/data', require('./routes/data'));
 app.use('/api/activities', require('./routes/activities'));
 app.use('/api/planner', require('./routes/planner'));
 app.use('/api/habits', require('./routes/habits'));
