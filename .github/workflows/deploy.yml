@@ -1,0 +1,60 @@
+name: Deploy Habit Tracker
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Repository auschecken
+        uses: actions/checkout@v4
+
+      - name: Docker Image bauen
+        run: |
+          docker build -t habit-tracker:latest .
+          
+      - name: Image als Tar-Archiv exportieren
+        run: |
+          docker save habit-tracker:latest | gzip > habit-tracker-deploy.tar.gz
+
+      - name: Dateien auf den Server kopieren (SCP)
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.SERVER_HOST }}
+          username: ${{ secrets.SERVER_USER }}
+          key: ${{ secrets.SERVER_SSH_KEY }}
+          # backup.sh zur Liste der zu kopierenden Dateien hinzugefügt
+          source: "habit-tracker-deploy.tar.gz,docker-compose.yml,backup.sh"
+          target: ${{ secrets.TARGET_DIR }}
+          overwrite: true
+
+      - name: Backup ausführen und neu starten (SSH)
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.SERVER_HOST }}
+          username: ${{ secrets.SERVER_USER }}
+          key: ${{ secrets.SERVER_SSH_KEY }}
+          script: |
+            cd ${{ secrets.TARGET_DIR }}
+            
+            # 1. Sicherstellen, dass das Skript ausführbar ist
+            if [ -f "./backup.sh" ]; then
+              chmod +x ./backup.sh
+              echo "Führe Backup-Skript aus..."
+              ./backup.sh
+            else
+              echo "FEHLER: backup.sh wurde nicht übertragen!"
+              exit 1
+            fi
+            
+            # 2. Altes Image entfernen und neues laden
+            docker load < habit-tracker-deploy.tar.gz
+            
+            # 3. Container mit neuem Image starten
+            docker compose up -d
+            
+            # 4. Tar-Archiv aufräumen
+            rm habit-tracker-deploy.tar.gz
