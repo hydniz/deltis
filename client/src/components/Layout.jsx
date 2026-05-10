@@ -14,14 +14,14 @@ const mobileNav = [
   { to: '/goals', icon: Target, label: 'Ziele' },
 ];
 
-export default function Layout() {
+export default function Layout({ children }) {
   return (
     <div className="min-h-screen bg-slate-950">
       <Sidebar />
 
       <main className="lg:pl-60 pb-20 lg:pb-0 min-h-screen">
         <div className="max-w-5xl mx-auto p-4 lg:p-8">
-          <Outlet />
+          {children ?? <Outlet />}
         </div>
       </main>
 
