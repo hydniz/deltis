@@ -44,7 +44,9 @@
       "Bash(node --input-type=module --eval ' *)",
       "Bash(node -e \"require\\('./server/models/HabitPlan'\\)\" --require dotenv/config)",
       "Bash(xargs ls -la)",
-      "Bash(chmod +x /home/nonnenmann/workspace/habit_tracker/build-nas.sh)"
+      "Bash(chmod +x /home/nonnenmann/workspace/habit_tracker/build-nas.sh)",
+      "Bash(node -e \"const a = require\\('./node_modules/archiver'\\); console.log\\(typeof a\\)\")",
+      "Bash(node -e \"const a = require\\('./node_modules/archiver'\\); console.log\\(Object.keys\\(a\\)\\)\")"
     ]
   }
 }
