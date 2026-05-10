@@ -59,7 +59,7 @@ function CustomHabitRow({ def, selected, onToggle, onDelete, onUpdate }) {
       </div>
 
       {editing && (
-        <div className="px-3 pb-3 space-y-2 border-t border-slate-700 pt-3 mx-1">
+        <form onSubmit={e => { e.preventDefault(); handleSave(); }} className="px-3 pb-3 space-y-2 border-t border-slate-700 pt-3 mx-1">
           <div>
             <label className="label text-xs">Name</label>
             <input
@@ -88,12 +88,12 @@ function CustomHabitRow({ def, selected, onToggle, onDelete, onUpdate }) {
             </div>
           </div>
           <div className="flex gap-2 pt-1">
-            <button onClick={handleCancel} className="btn-secondary flex-1 text-sm py-1.5">Abbrechen</button>
-            <button onClick={handleSave} disabled={saving} className="btn-primary flex-1 text-sm py-1.5">
+            <button type="button" onClick={handleCancel} className="btn-secondary flex-1 text-sm py-1.5">Abbrechen</button>
+            <button type="submit" disabled={saving} className="btn-primary flex-1 text-sm py-1.5">
               {saving ? 'Speichern...' : 'Speichern'}
             </button>
           </div>
-        </div>
+        </form>
       )}
     </div>
   );
@@ -184,7 +184,7 @@ function ManageHabitsModal({ definitions, onSave, onClose }) {
             <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">Voreingestellt</p>
             <div className="space-y-1.5">
               {predefined.map(d => (
-                <label key={d._id} className="flex items-center gap-3 p-3 rounded-xl cursor-pointer hover:bg-slate-800 transition-colors">
+                <label key={d._id} className="flex items-center gap-3 p-3 rounded-xl cursor-pointer hover:bg-slate-800 focus-within:ring-1 focus-within:ring-brand-500 transition-colors">
                   <div className={`w-5 h-5 rounded-md border-2 flex items-center justify-center flex-shrink-0 transition-colors ${
                     selected.has(d._id)
                       ? 'bg-brand-600 border-brand-600'
@@ -308,6 +308,12 @@ function HabitCard({ habit, todayLog, onLog }) {
   const [showChart, setShowChart] = useState(false);
   const [chartData, setChartData] = useState([]);
 
+  // Einstellungen für fehlende Tage
+  const [showSettings, setShowSettings] = useState(false);
+  const [settingsMode, setSettingsMode] = useState(habit.missingDayMode ?? 'none');
+  const [settingsDefaultVal, setSettingsDefaultVal] = useState(habit.defaultValue ?? 0);
+  const [savingSettings, setSavingSettings] = useState(false);
+
   // Heute-Log vom Parent übernehmen wenn Parent neu lädt
   useEffect(() => {
     if (isToday) {
@@ -364,6 +370,20 @@ function HabitCard({ habit, todayLog, onLog }) {
     }
   };
 
+  const handleSaveSettings = async () => {
+    setSavingSettings(true);
+    try {
+      await api.put(`/habits/settings/${habit._id}`, { missingDayMode: settingsMode, defaultValue: +settingsDefaultVal });
+      setChartData([]);
+      setShowChart(false);
+      setShowSettings(false);
+    } catch (err) {
+      alert('Fehler: ' + err.message);
+    } finally {
+      setSavingSettings(false);
+    }
+  };
+
   const loadChart = async () => {
     if (chartData.length > 0) { setShowChart(v => !v); return; }
     const end = new Date();
@@ -376,7 +396,9 @@ function HabitCard({ habit, todayLog, onLog }) {
         const d = subDays(end, 29 - i);
         const dayKey = format(d, 'yyyy-MM-dd');
         const log = res.data.find(l => format(parseISO(l.date), 'yyyy-MM-dd') === dayKey);
-        return { date: format(d, 'd. MMM', { locale: de }), value: log?.value ?? null };
+        const realValue = log?.value ?? null;
+        const value = realValue !== null ? realValue : (settingsMode === 'default' ? +settingsDefaultVal : null);
+        return { date: format(d, 'd. MMM', { locale: de }), value, isDefault: realValue === null && value !== null };
       }).filter(d => d.value !== null);
       setChartData(data);
       setShowChart(true);
@@ -392,19 +414,63 @@ function HabitCard({ habit, todayLog, onLog }) {
           <h3 className="font-semibold text-white">{habit.name}</h3>
           <p className="text-xs text-slate-500 mt-0.5">in {habit.unitSymbol}</p>
         </div>
-        <button onClick={loadChart} className="text-slate-500 hover:text-brand-400 transition-colors" title="Verlauf anzeigen">
-          <TrendingUp size={18} />
-        </button>
+        <div className="flex items-center gap-1">
+          <button
+            onClick={() => setShowSettings(v => !v)}
+            className={`transition-colors p-1 ${showSettings ? 'text-brand-400' : 'text-slate-500 hover:text-brand-400'}`}
+            title="Einstellungen"
+          >
+            <Settings2 size={16} />
+          </button>
+          <button onClick={loadChart} className="text-slate-500 hover:text-brand-400 transition-colors p-1 -mr-1" title="Verlauf anzeigen">
+            <TrendingUp size={18} />
+          </button>
+        </div>
       </div>
 
-      {/* Datumszeile – nur sichtbar wenn nicht heute */}
+      {showSettings && (
+        <div className="mb-4 p-3 bg-slate-800/60 rounded-xl border border-slate-700 space-y-2">
+          <p className="text-xs font-semibold text-slate-400">Fehlende Tage in Statistik</p>
+          <select
+            className="input text-sm w-full"
+            value={settingsMode}
+            onChange={e => setSettingsMode(e.target.value)}
+          >
+            <option value="none">Nicht eingetragen = kein Wert</option>
+            <option value="default">Standardwert für fehlende Tage</option>
+          </select>
+          {settingsMode === 'default' && (
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-slate-400 whitespace-nowrap">Standardwert:</span>
+              <input
+                type="number"
+                className="input text-sm flex-1"
+                value={settingsDefaultVal}
+                onChange={e => setSettingsDefaultVal(e.target.value)}
+                min="0"
+                step="0.1"
+                placeholder={`in ${habit.unitSymbol}`}
+              />
+            </div>
+          )}
+          <button
+            onClick={handleSaveSettings}
+            disabled={savingSettings}
+            className="btn-primary w-full text-sm py-1.5"
+          >
+            {savingSettings ? 'Speichern...' : 'Übernehmen'}
+          </button>
+        </div>
+      )}
+
+      {/* Datumszeile */}
       <div className="flex items-center gap-2 mb-3">
         <input
           type="date"
           value={selectedDate}
           max={todayStr}
           onChange={e => handleDateChange(e.target.value)}
-          className={`text-xs rounded-lg px-2 py-1 border transition-colors bg-slate-800 ${
+          className={`text-sm rounded-lg px-2 py-2 border transition-colors bg-slate-800 ${
             isToday
               ? 'border-slate-700 text-slate-500 w-auto'
               : 'border-brand-600 text-slate-200 flex-1'
@@ -412,8 +478,9 @@ function HabitCard({ habit, todayLog, onLog }) {
         />
         {!isToday && (
           <button
+            type="button"
             onClick={() => handleDateChange(todayStr)}
-            className="text-xs text-brand-400 hover:text-brand-300 whitespace-nowrap"
+            className="text-xs text-brand-400 hover:text-brand-300 whitespace-nowrap px-2 py-2"
           >
             Heute
           </button>
@@ -425,7 +492,7 @@ function HabitCard({ habit, todayLog, onLog }) {
           <div className="w-4 h-4 border-2 border-brand-500 border-t-transparent rounded-full animate-spin" />
         </div>
       ) : (
-        <div className="flex gap-2">
+        <form onSubmit={e => { e.preventDefault(); handleLog(); }} className="flex gap-2">
           <input
             type="number"
             value={value}
@@ -436,22 +503,24 @@ function HabitCard({ habit, todayLog, onLog }) {
             step="0.1"
           />
           <button
-            onClick={handleLog}
+            type="submit"
             disabled={saving || value === ''}
             className="btn-primary px-4 whitespace-nowrap"
           >
             {saving ? '...' : currentLog ? 'Aktualisieren' : 'Eintragen'}
           </button>
-        </div>
+        </form>
       )}
 
       {currentLog && (
         <p className="text-xs text-emerald-400 mt-2 flex items-center gap-1">
           <Check size={12} strokeWidth={3} />
-          {isToday
-            ? `Heute: ${currentLog.value} ${habit.unitSymbol}`
-            : `${format(parseISO(selectedDate), 'd. MMM', { locale: de })}: ${currentLog.value} ${habit.unitSymbol}`
-          }
+          {(() => {
+            const unit = currentLog.historicalUnit || habit.unitSymbol;
+            const suffix = currentLog.historicalUnit ? ` ${currentLog.historicalUnit} (jetzt: ${habit.unitSymbol})` : ` ${unit}`;
+            const datePrefix = isToday ? 'Heute' : format(parseISO(selectedDate), 'd. MMM', { locale: de });
+            return `${datePrefix}: ${currentLog.value}${suffix}`;
+          })()}
         </p>
       )}
 
@@ -464,11 +533,30 @@ function HabitCard({ habit, todayLog, onLog }) {
               <YAxis tick={{ fill: '#64748b', fontSize: 10 }} tickLine={false} axisLine={false} width={30} />
               <Tooltip
                 contentStyle={{ background: '#1e293b', border: '1px solid #334155', borderRadius: 8, color: '#f1f5f9' }}
-                formatter={(v) => [`${v} ${habit.unitSymbol}`, habit.name]}
+                formatter={(v, _name, props) => [
+                  `${v} ${habit.unitSymbol}${props.payload?.isDefault ? ' (Standard)' : ''}`,
+                  habit.name
+                ]}
               />
-              <Line type="monotone" dataKey="value" stroke="#8b5cf6" strokeWidth={2} dot={{ fill: '#8b5cf6', r: 3 }} connectNulls />
+              <Line
+                type="monotone"
+                dataKey="value"
+                stroke="#8b5cf6"
+                strokeWidth={2}
+                dot={(props) => {
+                  const { cx, cy, payload } = props;
+                  return <circle key={`dot-${cx}-${cy}`} cx={cx} cy={cy} r={3} fill={payload.isDefault ? '#475569' : '#8b5cf6'} />;
+                }}
+                connectNulls
+              />
             </LineChart>
           </ResponsiveContainer>
+          {settingsMode === 'default' && chartData.some(d => d.isDefault) && (
+            <p className="text-xs text-slate-600 mt-1 flex items-center gap-1.5">
+              <span className="inline-block w-2 h-2 rounded-full bg-slate-600" />
+              Grau = Standardwert (nicht eingetragen)
+            </p>
+          )}
         </div>
       )}
     </div>

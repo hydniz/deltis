@@ -17,6 +17,7 @@ const activityPlanSchema = new mongoose.Schema({
   distance: { type: Number },   // geplante Kilometer
   completed: { type: Boolean, default: false },
   notes: { type: String },
+  customValues: { type: mongoose.Schema.Types.Mixed, default: {} },
   createdAt: { type: Date, default: Date.now }
 });
 
