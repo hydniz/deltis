@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import api from '../utils/api';
 import { format, parseISO, subWeeks, startOfWeek, endOfWeek } from 'date-fns';
 import { de } from 'date-fns/locale';
@@ -7,6 +7,30 @@ import {
   ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid
 } from 'recharts';
 
+// ─── OptionsInput ─────────────────────────────────────────────────────────────
+// Hält den Rohtext lokal – parst erst beim Verlassen des Feldes (onBlur).
+// Verhindert das Cursor-Springen bei gesteuertem Input mit Split/Join-Transformation.
+
+function OptionsInput({ options, onChange }) {
+  const [raw, setRaw] = useState((options || []).join(', '));
+
+  const handleBlur = () => {
+    const parsed = raw.split(',').map(s => s.trim()).filter(Boolean);
+    onChange(parsed);
+    setRaw(parsed.join(', '));
+  };
+
+  return (
+    <input
+      className="input text-sm py-1.5"
+      value={raw}
+      onChange={e => setRaw(e.target.value)}
+      onBlur={handleBlur}
+      placeholder="z.B. Push, Pull, Legs"
+    />
+  );
+}
+
 // ─── CustomFieldEditor ──────────────────────────────────────────────────────
 
 function CustomFieldEditor({ field, onChange, onRemove }) {
@@ -14,7 +38,7 @@ function CustomFieldEditor({ field, onChange, onRemove }) {
     <div className="bg-slate-800 rounded-xl p-3 space-y-2">
       <div className="flex items-center justify-between">
         <span className="text-xs font-semibold text-slate-400 uppercase tracking-wide">Feld</span>
-        <button onClick={onRemove} className="text-slate-600 hover:text-red-400 transition-colors">
+        <button type="button" onClick={onRemove} className="text-slate-600 hover:text-red-400 transition-colors">
           <X size={14} />
         </button>
       </div>
@@ -36,7 +60,8 @@ function CustomFieldEditor({ field, onChange, onRemove }) {
             onChange={e => onChange({ ...field, type: e.target.value, options: [], unit: '' })}
           >
             <option value="number">Zahl</option>
-            <option value="select">Auswahl</option>
+            <option value="select">Auswahl (einzeln)</option>
+            <option value="multiselect">Auswahl (mehrfach)</option>
           </select>
         </div>
       </div>
@@ -51,20 +76,24 @@ function CustomFieldEditor({ field, onChange, onRemove }) {
           />
         </div>
       )}
-      {field.type === 'select' && (
+      {(field.type === 'select' || field.type === 'multiselect') && (
         <div>
           <label className="label text-xs">Optionen (kommagetrennt)</label>
-          <input
-            className="input text-sm py-1.5"
-            value={(field.options || []).join(', ')}
-            onChange={e => onChange({
-              ...field,
-              options: e.target.value.split(',').map(s => s.trim()).filter(Boolean)
-            })}
-            placeholder="z.B. Push, Pull, Legs"
+          <OptionsInput
+            options={field.options}
+            onChange={parsed => onChange({ ...field, options: parsed })}
           />
         </div>
       )}
+      <label className="flex items-center gap-2 cursor-pointer pt-0.5">
+        <input
+          type="checkbox"
+          checked={field.showInPreview !== false}
+          onChange={e => onChange({ ...field, showInPreview: e.target.checked })}
+          className="w-4 h-4 accent-violet-600"
+        />
+        <span className="text-xs text-slate-400">In Aktivitätenvorschau anzeigen</span>
+      </label>
     </div>
   );
 }
@@ -75,6 +104,8 @@ function ActivityTypeCard({ type, onSave, onDelete }) {
   const [editing, setEditing] = useState(false);
   const [form, setForm] = useState({ ...type });
   const [saving, setSaving] = useState(false);
+  // Anzahl der Felder bei Beginn der Bearbeitung – bestehende Felder behalten ihren key
+  const originalFieldCount = useRef((type.customFields || []).length);
 
   const setField = (k, v) => setForm(f => ({ ...f, [k]: v }));
 
@@ -88,7 +119,12 @@ function ActivityTypeCard({ type, onSave, onDelete }) {
   const updateCustomField = (i, updatedField) => {
     setForm(f => ({
       ...f,
-      customFields: f.customFields.map((cf, idx) => idx === i ? updatedField : cf)
+      customFields: f.customFields.map((cf, idx) => {
+        if (idx !== i) return cf;
+        // Bestehende Felder: key unveränderlich lassen
+        if (idx < originalFieldCount.current) return { ...updatedField, key: cf.key };
+        return updatedField;
+      })
     }));
   };
 
@@ -142,10 +178,10 @@ function ActivityTypeCard({ type, onSave, onDelete }) {
       </div>
 
       {editing && (
-        <div className="px-4 pb-4 space-y-3 border-t border-slate-700 pt-3">
+        <form onSubmit={e => { e.preventDefault(); handleSave(); }} className="px-4 pb-4 space-y-3 border-t border-slate-700 pt-3">
           <div>
             <label className="label text-xs">Name des Aktivitätstyps</label>
-            <input className="input text-sm" value={form.label} onChange={e => setField('label', e.target.value)} />
+            <input className="input text-sm" value={form.label} onChange={e => setField('label', e.target.value)} autoFocus />
           </div>
 
           <div className="flex gap-4">
@@ -196,12 +232,12 @@ function ActivityTypeCard({ type, onSave, onDelete }) {
           </div>
 
           <div className="flex gap-2 pt-1">
-            <button onClick={handleCancel} className="btn-secondary flex-1 text-sm py-1.5">Abbrechen</button>
-            <button onClick={handleSave} disabled={saving} className="btn-primary flex-1 text-sm py-1.5">
+            <button type="button" onClick={handleCancel} className="btn-secondary flex-1 text-sm py-1.5">Abbrechen</button>
+            <button type="submit" disabled={saving} className="btn-primary flex-1 text-sm py-1.5">
               {saving ? 'Speichern...' : 'Speichern'}
             </button>
           </div>
-        </div>
+        </form>
       )}
     </div>
   );
@@ -463,6 +499,23 @@ function ActivityForm({ activityTypes, onSave, onClose }) {
                     <option key={opt} value={opt}>{opt}</option>
                   ))}
                 </select>
+              ) : field.type === 'multiselect' ? (
+                <div className="flex flex-wrap gap-x-4 gap-y-2 px-1">
+                  {field.options.map(opt => (
+                    <label key={opt} className="flex items-center gap-2 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={(customValues[field.key] || []).includes(opt)}
+                        onChange={e => {
+                          const cur = customValues[field.key] || [];
+                          setCustomField(field.key, e.target.checked ? [...cur, opt] : cur.filter(v => v !== opt));
+                        }}
+                        className="w-4 h-4 accent-violet-600"
+                      />
+                      <span className="text-sm text-slate-300">{opt}</span>
+                    </label>
+                  ))}
+                </div>
               ) : (
                 <div className="flex gap-2">
                   <input
@@ -565,68 +618,230 @@ function ActivityChart({ typeId, typeLabel, onClose }) {
   );
 }
 
+// ─── Aktivität bearbeiten ────────────────────────────────────────────────────
+
+function EditActivityModal({ activity, onSave, onClose }) {
+  // Aktuelle Felddefinitionen verwenden (nicht historische), damit neue Felder erscheinen
+  const typeConfig = activity.activityTypeRef || {};
+  const currentFields = typeConfig.customFields || [];
+
+  const [form, setForm] = useState({
+    date: activity.date?.slice(0, 10) || format(new Date(), 'yyyy-MM-dd'),
+    duration: activity.duration ?? '',
+    distance: activity.distance ?? '',
+    notes: activity.notes ?? '',
+  });
+  const [customValues, setCustomValues] = useState({ ...(activity.customValues || {}) });
+  const [saving, setSaving] = useState(false);
+  const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
+  const setCustomField = (k, v) => setCustomValues(cv => ({ ...cv, [k]: v }));
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setSaving(true);
+    try {
+      await api.put(`/activities/${activity._id}`, {
+        date: new Date(form.date + 'T12:00:00').toISOString(),
+        duration: form.duration !== '' ? +form.duration : null,
+        distance: form.distance !== '' ? +form.distance : null,
+        notes: form.notes || undefined,
+        customValues,
+      });
+      onSave();
+    } catch (err) {
+      alert('Fehler: ' + err.message);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-end sm:items-center justify-center z-50 p-4">
+      <div className="card w-full max-w-md p-6 max-h-[90vh] overflow-y-auto">
+        <div className="flex items-center justify-between mb-1">
+          <h2 className="text-lg font-semibold text-white">Aktivität bearbeiten</h2>
+          <button type="button" onClick={onClose} className="text-slate-400 hover:text-slate-200"><X size={20} /></button>
+        </div>
+        <p className="text-sm text-slate-400 mb-5">
+          {typeConfig.label || activity.activityType}
+        </p>
+
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div>
+            <label className="label">Datum</label>
+            <input type="date" className="input" value={form.date} onChange={e => set('date', e.target.value)} required />
+          </div>
+
+          {typeConfig.showDuration !== false && (
+            <div>
+              <label className="label">Dauer (min)</label>
+              <input type="number" className="input" value={form.duration} onChange={e => set('duration', e.target.value)} min="1" placeholder="z.B. 60" />
+            </div>
+          )}
+
+          {typeConfig.showDistance && (
+            <div>
+              <label className="label">Distanz (km)</label>
+              <input type="number" className="input" value={form.distance} onChange={e => set('distance', e.target.value)} min="0" step="0.1" placeholder="z.B. 5.5" />
+            </div>
+          )}
+
+          {/* Aktuelle Felddefinitionen – inkl. neu hinzugefügter Felder */}
+          {currentFields.map(field => (
+            <div key={field.key}>
+              <label className="label">
+                {field.label}
+                {field.unit && <span className="text-slate-500 ml-1">({field.unit})</span>}
+              </label>
+              {field.type === 'select' ? (
+                <select className="input" value={customValues[field.key] || ''} onChange={e => setCustomField(field.key, e.target.value)}>
+                  <option value="">– Keine Auswahl –</option>
+                  {field.options.map(opt => <option key={opt} value={opt}>{opt}</option>)}
+                </select>
+              ) : field.type === 'multiselect' ? (
+                <div className="flex flex-wrap gap-x-4 gap-y-2 px-1">
+                  {field.options.map(opt => (
+                    <label key={opt} className="flex items-center gap-2 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={(customValues[field.key] || []).includes(opt)}
+                        onChange={e => {
+                          const cur = customValues[field.key] || [];
+                          setCustomField(field.key, e.target.checked ? [...cur, opt] : cur.filter(v => v !== opt));
+                        }}
+                        className="w-4 h-4 accent-violet-600"
+                      />
+                      <span className="text-sm text-slate-300">{opt}</span>
+                    </label>
+                  ))}
+                </div>
+              ) : (
+                <div className="flex gap-2">
+                  <input
+                    type="number" className="input flex-1"
+                    value={customValues[field.key] ?? ''}
+                    onChange={e => setCustomField(field.key, e.target.value)}
+                    min="0" step="0.01"
+                    placeholder={field.unit ? `in ${field.unit}` : ''}
+                  />
+                  {field.unit && (
+                    <span className="flex items-center px-3 bg-slate-700 rounded-xl text-slate-400 text-sm whitespace-nowrap">
+                      {field.unit}
+                    </span>
+                  )}
+                </div>
+              )}
+            </div>
+          ))}
+
+          <div>
+            <label className="label">Notizen</label>
+            <textarea className="input resize-none" rows={2} value={form.notes} onChange={e => set('notes', e.target.value)} placeholder="Optional..." />
+          </div>
+
+          <div className="flex gap-3 pt-1">
+            <button type="button" onClick={onClose} className="btn-secondary flex-1">Abbrechen</button>
+            <button type="submit" disabled={saving} className="btn-primary flex-1">
+              {saving ? 'Speichern...' : 'Speichern'}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
 // ─── Aktivitätskarte ────────────────────────────────────────────────────────
 
-function ActivityCard({ activity, onDelete }) {
-  // activityTypeRef ist vom Backend populiert und enthält customFields
-  const typeConfig = activity.activityTypeRef;
+function ActivityCard({ activity, onDelete, onEdit }) {
+  const [editing, setEditing] = useState(false);
+
+  // showInPreview kommt immer aus den AKTUELLEN Feldern (Anzeigepräferenz)
+  // Label/Einheit kommen aus den HISTORISCHEN Feldern, falls der Name sich geändert hat
+  const currentFields = activity.activityTypeRef?.customFields || [];
+  const historicalFields = activity.historicalCustomFields;
+  const histMap = Object.fromEntries((historicalFields || []).map(f => [f.key, f]));
+
   const currentLabel = activity.activityTypeRef?.label || activity.activityType;
   const displayLabel = activity.historicalLabel
     ? `${currentLabel} (${activity.historicalLabel})`
     : currentLabel;
 
   return (
-    <div className="card p-4 flex items-start gap-4 hover:border-slate-700 transition-colors">
-      <div className="flex-shrink-0 mt-0.5">
-        <span className="badge bg-brand-900/40 text-brand-400 py-1 px-2.5 whitespace-nowrap">
-          {displayLabel}
-        </span>
-      </div>
-
-      <div className="flex-1 min-w-0">
-        <p className="text-sm font-medium text-slate-200">
-          {format(parseISO(activity.date.slice(0, 10)), 'EEEE, d. MMMM yyyy', { locale: de })}
-        </p>
-
-        <div className="flex flex-wrap gap-x-3 gap-y-0.5 mt-1">
-          {activity.duration && (
-            <span className="text-xs text-slate-400">{activity.duration} min</span>
-          )}
-          {activity.distance && (
-            <span className="text-xs text-slate-400">{activity.distance} km</span>
-          )}
-          {/* Custom values */}
-          {typeConfig?.customFields?.map(field => {
-            const val = activity.customValues?.[field.key];
-            if (!val && val !== 0) return null;
-            return (
-              <span key={field.key} className="text-xs text-slate-400">
-                {field.label}: <span className="text-slate-300 font-medium">
-                  {val}{field.unit ? ` ${field.unit}` : ''}
-                </span>
-              </span>
-            );
-          })}
-          {/* Fallback for old logs without type config */}
-          {!typeConfig && activity.customValues && Object.entries(activity.customValues).map(([k, v]) => (
-            <span key={k} className="text-xs text-slate-400">
-              {k}: <span className="text-slate-300 font-medium">{v}</span>
-            </span>
-          ))}
+    <>
+      <div className="card p-4 flex items-start gap-4 hover:border-slate-700 transition-colors">
+        <div className="flex-shrink-0 mt-0.5">
+          <span className="badge bg-brand-900/40 text-brand-400 py-1 px-2.5 whitespace-nowrap">
+            {displayLabel}
+          </span>
         </div>
 
-        {activity.notes && (
-          <p className="text-xs text-slate-500 mt-1 truncate">{activity.notes}</p>
-        )}
+        <div className="flex-1 min-w-0">
+          <p className="text-sm font-medium text-slate-200">
+            {format(parseISO(activity.date.slice(0, 10)), 'EEEE, d. MMMM yyyy', { locale: de })}
+          </p>
+
+          <div className="flex flex-wrap gap-x-3 gap-y-0.5 mt-1">
+            {activity.duration && (
+              <span className="text-xs text-slate-400">{activity.duration} min</span>
+            )}
+            {activity.distance && (
+              <span className="text-xs text-slate-400">{activity.distance} km</span>
+            )}
+            {currentFields.filter(f => f.showInPreview !== false).map(field => {
+              const val = activity.customValues?.[field.key];
+              if (!val && val !== 0) return null;
+              // Historisches Label/Einheit verwenden falls Feld umbenannt wurde
+              const hist = histMap[field.key];
+              const label = hist && historicalFields ? hist.label : field.label;
+              const unit  = hist && historicalFields ? hist.unit  : field.unit;
+              const display = Array.isArray(val) ? val.join(', ') : val;
+              return (
+                <span key={field.key} className="text-xs text-slate-400">
+                  {label}: <span className="text-slate-300 font-medium">
+                    {display}{unit && !Array.isArray(val) ? ` ${unit}` : ''}
+                  </span>
+                </span>
+              );
+            })}
+            {!currentFields.length && activity.customValues && Object.entries(activity.customValues).map(([k, v]) => (
+              <span key={k} className="text-xs text-slate-400">
+                {k}: <span className="text-slate-300 font-medium">{Array.isArray(v) ? v.join(', ') : v}</span>
+              </span>
+            ))}
+          </div>
+
+          {activity.notes && (
+            <p className="text-xs text-slate-500 mt-1 truncate">{activity.notes}</p>
+          )}
+        </div>
+
+        <div className="flex items-center gap-0.5 flex-shrink-0">
+          <button
+            onClick={() => setEditing(true)}
+            className="text-slate-600 hover:text-brand-400 transition-colors p-1"
+            title="Bearbeiten"
+          >
+            <Pencil size={14} />
+          </button>
+          <button
+            onClick={() => onDelete(activity._id)}
+            className="text-slate-600 hover:text-red-400 transition-colors p-1 -mr-1"
+            title="Löschen"
+          >
+            <Trash2 size={16} />
+          </button>
+        </div>
       </div>
 
-      <button
-        onClick={() => onDelete(activity._id)}
-        className="flex-shrink-0 text-slate-600 hover:text-red-400 transition-colors mt-0.5"
-      >
-        <Trash2 size={16} />
-      </button>
-    </div>
+      {editing && (
+        <EditActivityModal
+          activity={activity}
+          onSave={() => { setEditing(false); onEdit(); }}
+          onClose={() => setEditing(false)}
+        />
+      )}
+    </>
   );
 }
 
@@ -719,7 +934,7 @@ export default function Activities() {
             <button
               onClick={() => toggleChart({ _id: t._id, label: t.label })}
               title="Verlauf anzeigen"
-              className={`p-1.5 rounded-r-lg text-sm transition-colors border-l border-slate-700 ${
+              className={`p-2 rounded-r-lg text-sm transition-colors border-l border-slate-700 ${
                 chartType?._id === t._id
                   ? 'bg-brand-600 text-white'
                   : 'bg-slate-800 text-slate-500 hover:text-brand-400'
@@ -764,6 +979,7 @@ export default function Activities() {
               key={a._id}
               activity={a}
               onDelete={handleDelete}
+              onEdit={loadActivities}
             />
           ))}
         </div>

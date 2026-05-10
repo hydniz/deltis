@@ -9,7 +9,17 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 CONTAINER_NAME="habit-tracker-mongo"
 BACKUP_DIR="$SCRIPT_DIR/backups"
-LOCK_FILE="$SCRIPT_DIR/.backup.lock"
+LOCK_FILE="$BACKUP_DIR/.backup.lock"
+
+# docker oder $RUNTIME verwenden (was verfügbar ist)
+if command -v $RUNTIME &>/dev/null; then
+  RUNTIME="$RUNTIME"
+elif command -v docker &>/dev/null; then
+  RUNTIME="docker"
+else
+  echo "Fehler: Weder docker noch $RUNTIME gefunden." >&2
+  exit 1
+fi
 TIMESTAMP=$(date +%Y%m%d_%H%M%S)
 BACKUP_FILE="$BACKUP_DIR/habit_tracker_${TIMESTAMP}.archive.gz"
 
@@ -23,13 +33,14 @@ warn() { echo -e "${YELLOW}!${NC} $*"; }
 # Lock + temporäre Containerdatei bei Fehler oder Abbruch aufräumen
 cleanup() {
   rm -f "$LOCK_FILE"
-  podman exec "$CONTAINER_NAME" rm -f /tmp/backup.archive 2>/dev/null || true
+  $RUNTIME exec "$CONTAINER_NAME" rm -f /tmp/backup.archive 2>/dev/null || true
 }
 trap cleanup EXIT
 
 # ─── Voraussetzungen prüfen ──────────────────────────────────────────────────
 
-if ! podman container inspect "$CONTAINER_NAME" --format '{{.State.Running}}' 2>/dev/null | grep -q true; then
+if ! $RUNTIME container inspect "$CONTAINER_NAME" >/dev/null 2>&1 || \
+   ! $RUNTIME container inspect "$CONTAINER_NAME" --format '{{.State.Running}}' 2>/dev/null | grep -q true; then
   err "MongoDB-Container '$CONTAINER_NAME' läuft nicht."
   echo -e "  Starte zuerst mit: ${BOLD}./run.sh start${NC}"
   exit 1
@@ -50,14 +61,14 @@ info "Warte 2 Sekunden auf laufende Requests..."
 sleep 2
 
 info "Datenbank sichern (habit_tracker → ${BACKUP_FILE##*/})..."
-podman exec "$CONTAINER_NAME" mongodump \
+$RUNTIME exec "$CONTAINER_NAME" mongodump \
   --db habit_tracker \
   --archive=/tmp/backup.archive \
   --gzip \
   --quiet
 
 info "Backup-Datei aus Container kopieren..."
-podman cp "${CONTAINER_NAME}:/tmp/backup.archive" "$BACKUP_FILE"
+$RUNTIME cp "${CONTAINER_NAME}:/tmp/backup.archive" "$BACKUP_FILE"
 
 info "Schreibzugriffe freigeben..."
 rm -f "$LOCK_FILE"

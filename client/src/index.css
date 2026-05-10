@@ -7,6 +7,23 @@
     @apply bg-slate-950 text-slate-100 font-sans antialiased;
   }
 
+  /* Sichtbarer Fokusring für Tastaturnavigation (alle interaktiven Elemente) */
+  button:focus-visible,
+  [role="button"]:focus-visible,
+  a:focus-visible,
+  input:focus-visible,
+  select:focus-visible,
+  textarea:focus-visible {
+    outline: 2px solid theme('colors.violet.400');
+    outline-offset: 2px;
+  }
+  /* Inputs nutzen bereits ring via .input – kein doppelter Rand */
+  input.input:focus-visible,
+  select.input:focus-visible,
+  textarea.input:focus-visible {
+    outline: none;
+  }
+
   ::-webkit-scrollbar {
     width: 4px;
     height: 4px;

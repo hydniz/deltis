@@ -10,7 +10,6 @@ const HabitDefinition = require('../models/HabitDefinition');
 
 // ─── Hilfsfunktionen ─────────────────────────────────────────────────────────
 
-// Berechnet den Zeitraum für ein Intervallziel (endet heute)
 function getIntervalBounds(intervalValue = 1, intervalUnit = 'week') {
   const end = new Date();
   end.setHours(23, 59, 59, 999);
@@ -20,11 +19,9 @@ function getIntervalBounds(intervalValue = 1, intervalUnit = 'week') {
   if (intervalUnit === 'day') {
     start.setDate(start.getDate() - (intervalValue - 1));
   } else if (intervalUnit === 'week') {
-    // Auf Montag der aktuellen Woche ausrichten, dann (n-1) weitere Wochen zurück
     const day = start.getDay();
     start.setDate(start.getDate() - (day === 0 ? 6 : day - 1) - (intervalValue - 1) * 7);
   } else if (intervalUnit === 'month') {
-    // 1. des aktuellen Monats, dann (n-1) Monate zurück
     start.setDate(1);
     start.setMonth(start.getMonth() - (intervalValue - 1));
   }
@@ -32,7 +29,6 @@ function getIntervalBounds(intervalValue = 1, intervalUnit = 'week') {
   return { start, end };
 }
 
-// Wochengrenzen für einen bestimmten Startpunkt (für Langzeit-Chart)
 function getWeekBoundsForDate(date) {
   const d = new Date(date);
   const day = d.getDay();
@@ -45,73 +41,111 @@ function getWeekBoundsForDate(date) {
   return { monday, sunday };
 }
 
-// Löst targetRef zu einem Aktivitäts-Label auf – unterstützt neue (ObjectId) und alte (String) Ziele
-async function resolveActivityLabel(goal) {
-  const isNew = goal.targetRefModel === 'ActivityType';
-  if (isNew && mongoose.Types.ObjectId.isValid(goal.targetRef)) {
-    const at = await ActivityType.findById(goal.targetRef).select('label').lean();
-    return at?.label ?? null;
+// Gibt den MongoDB-Filterausdruck für Aktivitätslogs zurück.
+// Neue Ziele nutzen activityTypeRef (ObjectId), Legacy-Ziele den String-Label.
+async function buildActivityMatchQuery(goal) {
+  const isNewStyle = goal.targetRefModel === 'ActivityType' &&
+    mongoose.Types.ObjectId.isValid(goal.targetRef);
+
+  if (isNewStyle) {
+    return { activityTypeRef: new mongoose.Types.ObjectId(String(goal.targetRef)) };
   }
-  // Legacy: targetRef ist direkt der String-Label
-  return typeof goal.targetRef === 'string' ? goal.targetRef : null;
+
+  // Legacy: targetRef ist der String-Label
+  const label = typeof goal.targetRef === 'string' ? goal.targetRef : null;
+  return label ? { activityType: label } : null;
 }
 
-// Berechnet den Wert für einen beliebigen Zeitraum gemäß metric
-async function getValueForMetric(metric, goal, userId, start, end) {
+function buildActivityFilterMatch(activityFilters, isMax) {
+  if (!isMax || !activityFilters?.length) return {};
+  const match = {};
+  for (const f of activityFilters) {
+    if (f.fieldType === 'number') {
+      if (f.numValue != null) {
+        const path = ['duration', 'distance'].includes(f.fieldKey)
+          ? f.fieldKey
+          : `customValues.${f.fieldKey}`;
+        const op = f.numOperator === 'max' ? '$lte' : f.numOperator === 'exact' ? '$eq' : '$gte';
+        match[path] = { [op]: f.numValue };
+      }
+    } else {
+      if (f.values?.length) {
+        const path = `customValues.${f.fieldKey}`;
+        match[path] = f.operator === 'allOf' ? { $all: f.values } : { $in: f.values };
+      }
+    }
+  }
+  return match;
+}
+
+async function getValueForMetric(metric, goal, userId, start, end, valueScope = 'total', aggregation = 'sum', activityFilters = []) {
   const isActivity = goal.targetRefModel === 'ActivityType' || goal.targetRefModel === 'activity';
+  const uid = new mongoose.Types.ObjectId(String(userId));
+  const isMax = aggregation === 'max';
+  const perActivity = !isMax && valueScope === 'perActivity';
+  const filterMatch = buildActivityFilterMatch(activityFilters, isMax);
 
   if (isActivity) {
+    const typeFilter = await buildActivityMatchQuery(goal);
+    if (!typeFilter) return 0;
+
+    const dateFilter = { date: { $gte: start, $lte: end } };
+    const baseMatch = { userId: uid, ...typeFilter, ...dateFilter, ...filterMatch };
+
     if (metric === 'distance' || metric === 'duration') {
-      const label = await resolveActivityLabel(goal);
-      if (!label) return 0;
+      const aggOp = isMax ? '$max' : '$sum';
       const agg = await ActivityLog.aggregate([
-        { $match: { userId: new mongoose.Types.ObjectId(String(userId)), activityType: label, date: { $gte: start, $lte: end } } },
-        { $group: { _id: null, total: { $sum: `$${metric}` } } }
+        { $match: baseMatch },
+        { $group: { _id: null, total: { [aggOp]: `$${metric}` }, count: { $sum: 1 } } }
       ]);
-      return Math.round((agg[0]?.total ?? 0) * 100) / 100;
+      const total = agg[0]?.total ?? 0;
+      const count = agg[0]?.count ?? 0;
+      const raw = perActivity && count > 0 ? total / count : total;
+      return Math.round(raw * 100) / 100;
     }
-    if (metric && metric.startsWith('custom_')) {
+
+    if (metric?.startsWith('custom_')) {
       const fieldKey = metric.slice(7);
-      const label = await resolveActivityLabel(goal);
-      if (!label) return 0;
+      const aggOp = isMax ? '$max' : '$sum';
       const agg = await ActivityLog.aggregate([
-        { $match: { userId: new mongoose.Types.ObjectId(String(userId)), activityType: label, date: { $gte: start, $lte: end } } },
-        { $group: { _id: null, total: { $sum: `$customValues.${fieldKey}` } } }
+        { $match: baseMatch },
+        { $group: { _id: null, total: { [aggOp]: `$customValues.${fieldKey}` }, count: { $sum: 1 } } }
       ]);
-      return Math.round((agg[0]?.total ?? 0) * 100) / 100;
+      const total = agg[0]?.total ?? 0;
+      const count = agg[0]?.count ?? 0;
+      const raw = perActivity && count > 0 ? total / count : total;
+      return Math.round(raw * 100) / 100;
     }
-    // 'select_fieldKey:optionValue' → Einträge zählen wo customValues.fieldKey === optionValue
-    if (metric && metric.startsWith('select_')) {
+
+    if (metric?.startsWith('select_')) {
       const rest = metric.slice(7);
       const colonIdx = rest.indexOf(':');
       if (colonIdx === -1) return 0;
       const fieldKey = rest.slice(0, colonIdx);
       const fieldValue = rest.slice(colonIdx + 1);
-      const label = await resolveActivityLabel(goal);
-      if (!label) return 0;
       return ActivityLog.countDocuments({
         userId,
-        activityType: label,
+        ...typeFilter,
         [`customValues.${fieldKey}`]: fieldValue,
-        date: { $gte: start, $lte: end }
+        ...dateFilter,
       });
     }
-    // 'count' or falsy → count documents
-    const label = await resolveActivityLabel(goal);
-    if (!label) return 0;
-    return ActivityLog.countDocuments({ userId, activityType: label, date: { $gte: start, $lte: end } });
+
+    // 'count' oder kein metric
+    return ActivityLog.countDocuments({ userId, ...typeFilter, ...dateFilter });
   } else {
-    // Habit goal
+    // Habit-Ziel
     if (metric === 'count') {
       return HabitLog.countDocuments({ userId, habitId: goal.targetRef, date: { $gte: start, $lte: end } });
     }
-    // 'value' or falsy → sum HabitLog.value
     const logs = await HabitLog.find({ userId, habitId: goal.targetRef, date: { $gte: start, $lte: end } }).select('value');
+    if (perActivity && logs.length > 0) {
+      return Math.round((logs.reduce((sum, l) => sum + l.value, 0) / logs.length) * 100) / 100;
+    }
     return logs.reduce((sum, l) => sum + l.value, 0);
   }
 }
 
-// Prüft ob eine Bedingung erfüllt ist
 function checkConditionMet(condition, currentValue, targetValue) {
   if (condition === 'min') return currentValue >= targetValue;
   if (condition === 'max') return currentValue <= targetValue;
@@ -119,7 +153,34 @@ function checkConditionMet(condition, currentValue, targetValue) {
   return false;
 }
 
-// Reichert ein Ziel-Objekt mit lesbarem targetName, customFields und ggf. unitSymbol an
+// Prüft ob eine Metrik-Bedingung für die aktuellen Felderdefinitionen noch gültig ist.
+function checkMetricValid(metric, customFields = []) {
+  if (!metric || metric === 'count' || metric === 'distance' || metric === 'duration' || metric === 'value') {
+    return { valid: true };
+  }
+  if (metric.startsWith('custom_')) {
+    const key = metric.slice(7);
+    const exists = customFields.some(f => f.key === key && f.type === 'number');
+    return exists
+      ? { valid: true }
+      : { valid: false, reason: `Zahlenfeld "${key}" wurde entfernt oder umbenannt` };
+  }
+  if (metric.startsWith('select_')) {
+    const rest = metric.slice(7);
+    const colonIdx = rest.indexOf(':');
+    if (colonIdx === -1) return { valid: false, reason: 'Ungültige Metrik-Syntax' };
+    const fieldKey = rest.slice(0, colonIdx);
+    const optionValue = rest.slice(colonIdx + 1);
+    const field = customFields.find(f => f.key === fieldKey && (f.type === 'select' || f.type === 'multiselect'));
+    if (!field) return { valid: false, reason: `Auswahlfeld "${fieldKey}" wurde entfernt oder umbenannt` };
+    if (!field.options.includes(optionValue)) {
+      return { valid: false, reason: `Option "${optionValue}" nicht mehr vorhanden in "${field.label}"` };
+    }
+    return { valid: true };
+  }
+  return { valid: true };
+}
+
 async function enrichGoal(goal) {
   const obj = goal.toObject ? goal.toObject() : { ...goal };
   const isActivity = obj.targetRefModel === 'ActivityType' || obj.targetRefModel === 'activity';
@@ -128,11 +189,20 @@ async function enrichGoal(goal) {
     const at = await ActivityType.findById(obj.targetRef).select('label customFields').lean();
     obj.targetName = at?.label ?? 'Unbekannt';
     obj.customFields = at?.customFields || [];
+
+    // Metrik-Warnungen: prüfen ob alle Metriken noch auf existierende Felder zeigen
+    const allConditions = obj.conditions?.length ? obj.conditions : [{ metric: obj.metric }];
+    const warnings = allConditions
+      .map(c => checkMetricValid(c.metric, obj.customFields))
+      .filter(r => !r.valid)
+      .map(r => r.reason)
+      .filter(Boolean);
+    if (warnings.length > 0) obj.metricWarnings = warnings;
   } else if (isActivity) {
     obj.targetName = typeof obj.targetRef === 'string' ? obj.targetRef : 'Unbekannt';
     obj.customFields = [];
   } else {
-    // habit
+    // Habit-Ziel
     const hd = await HabitDefinition.findById(obj.targetRef).select('name unitSymbol').lean();
     obj.targetName = hd?.name ?? 'Unbekannt';
     obj.customFields = [];
@@ -143,7 +213,6 @@ async function enrichGoal(goal) {
 
 // ─── Routen ───────────────────────────────────────────────────────────────────
 
-// GET /api/goals – alle aktiven Ziele mit aufgelöstem targetName
 router.get('/', auth, async (req, res) => {
   try {
     const goals = await Goal.find({ userId: req.user._id, isActive: true }).sort({ createdAt: -1 });
@@ -154,7 +223,6 @@ router.get('/', auth, async (req, res) => {
   }
 });
 
-// GET /api/goals/:id/progress – Fortschrittsberechnung für ein Ziel
 router.get('/:id/progress', auth, async (req, res) => {
   try {
     const goal = await Goal.findOne({ _id: req.params.id, userId: req.user._id });
@@ -162,7 +230,6 @@ router.get('/:id/progress', auth, async (req, res) => {
 
     const isLongTerm = goal.type.startsWith('long-term');
 
-    // Determine time bounds
     let start, end;
     if (isLongTerm) {
       start = goal.startDate ? new Date(goal.startDate) : new Date(0);
@@ -173,67 +240,77 @@ router.get('/:id/progress', auth, async (req, res) => {
       ({ start, end } = getIntervalBounds(iv, iu));
     }
 
-    // Build conditions list (use goal.conditions if present, else legacy single condition)
     let condDefs;
     if (goal.conditions && goal.conditions.length > 0) {
       condDefs = goal.conditions;
     } else {
-      condDefs = [{
-        metric: goal.metric,
-        condition: goal.condition,
-        targetValue: goal.targetValue,
-        unitSymbol: goal.unitSymbol,
-      }];
+      condDefs = [{ metric: goal.metric, condition: goal.condition, targetValue: goal.targetValue, unitSymbol: goal.unitSymbol }];
     }
 
-    // Evaluate each condition
     const condResults = await Promise.all(condDefs.map(async (cond) => {
-      const currentValue = await getValueForMetric(cond.metric, goal, req.user._id, start, end);
+      const currentValue = await getValueForMetric(cond.metric, goal, req.user._id, start, end, cond.valueScope, cond.aggregation, cond.activityFilters);
       const met = checkConditionMet(cond.condition, currentValue, cond.targetValue);
-      return {
-        metric: cond.metric,
-        condition: cond.condition,
-        targetValue: cond.targetValue,
-        unitSymbol: cond.unitSymbol,
-        currentValue,
-        met,
-      };
+      return { metric: cond.metric, condition: cond.condition, targetValue: cond.targetValue, unitSymbol: cond.unitSymbol, valueScope: cond.valueScope, aggregation: cond.aggregation, activityFilters: cond.activityFilters, currentValue, met };
     }));
 
     const conditionOperator = goal.conditionOperator || 'AND';
-    let met;
-    if (conditionOperator === 'OR') {
-      met = condResults.some(c => c.met);
-    } else {
-      met = condResults.every(c => c.met);
-    }
+    const met = conditionOperator === 'OR' ? condResults.some(c => c.met) : condResults.every(c => c.met);
 
-    // Wöchentlicher Verlauf (nur für langfristige Ziele → Chart)
-    // Uses the first condition's metric
     let weeklyData = [];
     if (isLongTerm && goal.startDate && goal.endDate) {
       const firstMetric = condDefs[0]?.metric;
+      const firstAggregation = condDefs[0]?.aggregation;
+      const firstActivityFilters = condDefs[0]?.activityFilters;
       let weekStart = new Date(goal.startDate);
       const dow = weekStart.getDay();
       weekStart.setDate(weekStart.getDate() - (dow === 0 ? 6 : dow - 1));
       weekStart.setHours(0, 0, 0, 0);
-
       const now = new Date();
       while (weekStart <= goal.endDate && weekStart <= now) {
         const { monday, sunday } = getWeekBoundsForDate(weekStart);
-        const value = await getValueForMetric(firstMetric, goal, req.user._id, monday, sunday);
+        const value = await getValueForMetric(firstMetric, goal, req.user._id, monday, sunday, undefined, firstAggregation, firstActivityFilters);
         weeklyData.push({ weekStart: monday.toISOString(), value });
         weekStart.setDate(weekStart.getDate() + 7);
       }
     }
 
-    res.json({ conditions: condResults, conditionOperator, met, weeklyData });
+    let stepResults = [];
+    if (isLongTerm && goal.intermediateSteps?.length > 0) {
+      const goalStart = goal.startDate ? new Date(goal.startDate) : new Date(0);
+      const now = new Date(); now.setHours(23, 59, 59, 999);
+      const firstCond = condDefs[0];
+      stepResults = await Promise.all(
+        [...goal.intermediateSteps]
+          .sort((a, b) => new Date(a.date) - new Date(b.date))
+          .map(async (step) => {
+            const stepEnd = new Date(step.date); stepEnd.setHours(23, 59, 59, 999);
+            const isPast = stepEnd < now;
+            let actualValue = null;
+            if (isPast && firstCond) {
+              actualValue = await getValueForMetric(
+                firstCond.metric, goal, req.user._id, goalStart, stepEnd, firstCond.valueScope, firstCond.aggregation, firstCond.activityFilters
+              );
+            }
+            return {
+              date: step.date,
+              targetValue: step.targetValue,
+              description: step.description,
+              isPast,
+              actualValue,
+              met: isPast && actualValue !== null
+                ? checkConditionMet(firstCond?.condition || 'min', actualValue, step.targetValue)
+                : null,
+            };
+          })
+      );
+    }
+
+    res.json({ conditions: condResults, conditionOperator, met, weeklyData, stepResults });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });
 
-// POST /api/goals – neues Ziel erstellen
 router.post('/', auth, async (req, res) => {
   try {
     const goal = await Goal.create({ userId: req.user._id, ...req.body });
@@ -243,7 +320,6 @@ router.post('/', auth, async (req, res) => {
   }
 });
 
-// PUT /api/goals/:id
 router.put('/:id', auth, async (req, res) => {
   try {
     const goal = await Goal.findOneAndUpdate(
@@ -258,7 +334,6 @@ router.put('/:id', auth, async (req, res) => {
   }
 });
 
-// DELETE /api/goals/:id
 router.delete('/:id', auth, async (req, res) => {
   try {
     await Goal.findOneAndDelete({ _id: req.params.id, userId: req.user._id });

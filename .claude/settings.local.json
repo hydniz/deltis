@@ -38,7 +38,13 @@
       "Bash(podman build *)",
       "Bash(podman rmi *)",
       "Bash(./backup.sh)",
-      "Bash(node scripts/migrate-versioned-refs.js)"
+      "Bash(node scripts/migrate-versioned-refs.js)",
+      "Bash(grep -n \"f.conditions, {\" /home/nonnenmann/workspace/habit_tracker/client/src/pages/Goals.jsx)",
+      "Bash(python3 -)",
+      "Bash(node --input-type=module --eval ' *)",
+      "Bash(node -e \"require\\('./server/models/HabitPlan'\\)\" --require dotenv/config)",
+      "Bash(xargs ls -la)",
+      "Bash(chmod +x /home/nonnenmann/workspace/habit_tracker/build-nas.sh)"
     ]
   }
 }
