@@ -5,6 +5,7 @@ const crypto = require('crypto');
 const cors = require('cors');
 const path = require('path');
 const fs = require('fs');
+const branding = require('./config/branding');
 
 const BACKUP_LOCK = path.join(__dirname, '..', 'backups', '.backup.lock');
 
@@ -26,6 +27,7 @@ app.use((req, res, next) => {
   next();
 });
 
+app.use('/api/branding', require('./routes/branding'));
 app.use('/api/auth', require('./routes/auth'));
 app.use('/api/admin', require('./routes/admin'));
 app.use('/api/data', require('./routes/data'));
@@ -73,7 +75,7 @@ async function seedAdminUser() {
     const uuid = crypto.randomUUID();
     await User.create({ uuid, name: 'Admin', isAdmin: true });
     console.log('\n' + '═'.repeat(58));
-    console.log('  FIRST START – admin account created!');
+    console.log(`  ${branding.name} – FIRST START – admin account created!`);
     console.log(`  UUID: ${uuid}`);
     console.log('  Complete setup at /admin in your browser.');
     console.log('═'.repeat(58) + '\n');
@@ -100,7 +102,7 @@ mongoose.connect(process.env.MONGODB_URI)
     await seedAdminUser();
     await seedPredefinedData();
     const PORT = process.env.PORT || 3001;
-    app.listen(PORT, () => console.log(`✓ Server running on port ${PORT}`));
+    app.listen(PORT, () => console.log(`✓ ${branding.name} server running on port ${PORT}`));
   })
   .catch(err => {
     console.error('✗ MongoDB error:', err.message);
