@@ -43,23 +43,20 @@ jobs:
 
             chmod +x ./backup.sh ./restore.sh
 
-            # Ensure backups directory exists with correct ownership.
-            # Docker creates bind-mount directories as root if they don't exist,
-            # which would make them unwritable by the SSH user.
-            mkdir -p backups
-            chmod u+w backups 2>/dev/null || true
-
-            # Pre-deploy backup via docker exec to avoid host permission issues.
-            # No lock file needed here – containers are restarted immediately after.
+            # Pre-deploy backup written directly to TARGET_DIR (not a subdirectory)
+            # because Docker may have created ./backups as root, making it unwritable.
+            # No lock file needed – containers are restarted immediately after anyway.
             if docker container inspect habit-tracker-mongo >/dev/null 2>&1; then
               echo "Running pre-deploy backup..."
-              BACKUP_FILE="backups/habit_tracker_deploy_$(date +%Y%m%d_%H%M%S).archive.gz"
+              BACKUP_FILE="predeploy_$(date +%Y%m%d_%H%M%S).archive.gz"
               docker exec habit-tracker-mongo mongodump \
                 --db habit_tracker \
                 --archive=/tmp/pre_deploy.archive \
                 --gzip --quiet
-              docker cp habit-tracker-mongo:/tmp/pre_deploy.archive "$BACKUP_FILE"
+              docker cp habit-tracker-mongo:/tmp/pre_deploy.archive "./$BACKUP_FILE"
               docker exec habit-tracker-mongo rm /tmp/pre_deploy.archive
+              # Keep only the last 5 pre-deploy backups
+              ls -1t predeploy_*.archive.gz 2>/dev/null | tail -n +6 | xargs rm -f
               echo "Backup: $BACKUP_FILE"
             else
               echo "First deploy – skipping backup."
