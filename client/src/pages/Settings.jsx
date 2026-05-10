@@ -224,6 +224,9 @@ function ExportImport() {
             <li>• {result.weight} Gewichtseinträge</li>
             <li>• {result.habits} Gewohnheitseinträge</li>
             <li>• {result.activities} Aktivitäten</li>
+            <li>• {result.plans} Planereinträge</li>
+            <li>• {result.goals} Ziele</li>
+            {result.settings && <li>• Einstellungen wiederhergestellt</li>}
           </ul>
           {result.errors?.length > 0 && (
             <details className="mt-2">
