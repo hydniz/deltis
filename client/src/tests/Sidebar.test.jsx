@@ -38,7 +38,7 @@ function renderSidebar(user = mockUser) {
 describe('Sidebar', () => {
   it('renders the app name', async () => {
     renderSidebar();
-    expect(await screen.findByText('Habit Tracker')).toBeInTheDocument();
+    expect(await screen.findByText('Deltis')).toBeInTheDocument();
   });
 
   it('renders navigation links for a regular user', async () => {

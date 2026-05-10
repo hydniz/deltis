@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
+import { APP_NAME, APP_SLOGAN } from '../config/branding';
 import { Activity, KeyRound, ShieldCheck, AlertCircle, Eye, EyeOff } from 'lucide-react';
 
 export default function Login() {
@@ -23,7 +24,7 @@ export default function Login() {
     setError('');
     try {
       await login(trimmedUuid, isAdminLogin ? adminSecret.trim() : null);
-      navigate('/');
+      navigate('/dashboard');
     } catch (err) {
       const msg = err.response?.data?.error;
       if (msg === 'Admin-Secret erforderlich' || msg === 'Falsches Admin-Secret') {
@@ -49,8 +50,8 @@ export default function Login() {
           <div className="inline-flex items-center justify-center w-16 h-16 bg-brand-600 rounded-2xl mb-5 shadow-lg shadow-brand-600/30">
             <Activity size={28} className="text-white" />
           </div>
-          <h1 className="text-3xl font-bold text-white mb-2">Habit Tracker</h1>
-          <p className="text-slate-400">Gib deine persönliche UUID ein</p>
+          <h1 className="text-3xl font-bold text-white mb-2">{APP_NAME}</h1>
+          <p className="text-slate-400">{APP_SLOGAN}</p>
         </div>
 
         <div className="card p-6">

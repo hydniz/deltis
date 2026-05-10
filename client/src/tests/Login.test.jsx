@@ -54,12 +54,12 @@ describe('Login page', () => {
     expect(getSubmitButton()).not.toBeDisabled();
   });
 
-  it('navigates to / on successful login', async () => {
+  it('navigates to /dashboard on successful login', async () => {
     const user = userEvent.setup();
     renderLogin();
     await user.type(screen.getByPlaceholderText(/xxxx/), 'valid-uuid');
     await user.click(getSubmitButton());
-    await waitFor(() => expect(mockNavigate).toHaveBeenCalledWith('/'));
+    await waitFor(() => expect(mockNavigate).toHaveBeenCalledWith('/dashboard'));
   });
 
   it('shows an error message when login fails', async () => {
