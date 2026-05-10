@@ -15,7 +15,17 @@ CONTAINER_NAME="habit-tracker-mongo"
 BACKUP_DIR="$SCRIPT_DIR/backups"
 PID_FILE="$SCRIPT_DIR/.run.pid"
 LOG_FILE="$SCRIPT_DIR/.run.log"
-LOCK_FILE="$SCRIPT_DIR/.backup.lock"
+LOCK_FILE="$BACKUP_DIR/.backup.lock"
+
+# docker oder $RUNTIME verwenden (was verfügbar ist)
+if command -v $RUNTIME &>/dev/null; then
+  RUNTIME="$RUNTIME"
+elif command -v docker &>/dev/null; then
+  RUNTIME="docker"
+else
+  echo "Fehler: Weder docker noch $RUNTIME gefunden." >&2
+  exit 1
+fi
 
 GREEN='\033[0;32m'; RED='\033[0;31m'; YELLOW='\033[1;33m'
 CYAN='\033[0;36m'; BOLD='\033[1m'; NC='\033[0m'
@@ -27,7 +37,7 @@ warn() { echo -e "${YELLOW}!${NC} $*"; }
 # Lock + temporäre Containerdatei bei Fehler aufräumen
 cleanup() {
   rm -f "$LOCK_FILE"
-  podman exec "$CONTAINER_NAME" rm -f /tmp/restore.archive 2>/dev/null || true
+  $RUNTIME exec "$CONTAINER_NAME" rm -f /tmp/restore.archive 2>/dev/null || true
 }
 trap cleanup EXIT
 
@@ -64,7 +74,7 @@ if [ ! -f "$BACKUP_FILE" ]; then
   exit 1
 fi
 
-if ! podman container inspect "$CONTAINER_NAME" --format '{{.State.Running}}' 2>/dev/null | grep -q true; then
+if ! $RUNTIME container inspect "$CONTAINER_NAME" --format '{{.State.Running}}' 2>/dev/null | grep -q true; then
   err "MongoDB-Container '$CONTAINER_NAME' läuft nicht."
   echo -e "  Starte zuerst mit: ${BOLD}./run.sh start${NC}"
   exit 1
@@ -97,13 +107,13 @@ echo ""
 
 # Compose-Modus erkennen: App-Container vorhanden?
 COMPOSE_MODE=false
-if podman container exists habit-tracker-app 2>/dev/null; then
+if $RUNTIME container inspect habit-tracker-app >/dev/null 2>&1; then
   COMPOSE_MODE=true
 fi
 
 info "App stoppen, MongoDB bleibt aktiv..."
 if $COMPOSE_MODE; then
-  podman stop habit-tracker-app 2>/dev/null || true
+  $RUNTIME stop habit-tracker-app 2>/dev/null || true
   ok "App-Container gestoppt"
 elif [ -f "$PID_FILE" ]; then
   PID=$(cat "$PID_FILE")
@@ -127,10 +137,10 @@ fi
 
 info "Backup-Datei in Container kopieren..."
 touch "$LOCK_FILE"
-podman cp "$BACKUP_FILE" "${CONTAINER_NAME}:/tmp/restore.archive"
+$RUNTIME cp "$BACKUP_FILE" "${CONTAINER_NAME}:/tmp/restore.archive"
 
 info "Datenbank wiederherstellen (bestehende Daten werden gelöscht)..."
-podman exec "$CONTAINER_NAME" mongorestore \
+$RUNTIME exec "$CONTAINER_NAME" mongorestore \
   --db habit_tracker \
   --archive=/tmp/restore.archive \
   --gzip \
@@ -144,9 +154,9 @@ rm -f "$LOCK_FILE"
 
 info "App neu starten..."
 if $COMPOSE_MODE; then
-  podman start habit-tracker-app 2>/dev/null
+  $RUNTIME start habit-tracker-app 2>/dev/null
   sleep 2
-  if podman container inspect habit-tracker-app --format '{{.State.Running}}' 2>/dev/null | grep -q true; then
+  if $RUNTIME container inspect habit-tracker-app --format '{{.State.Running}}' 2>/dev/null | grep -q true; then
     ok "App-Container läuft wieder"
   else
     warn "Container konnte nicht gestartet werden."

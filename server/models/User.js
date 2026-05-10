@@ -5,6 +5,7 @@ const userSchema = new mongoose.Schema({
   name: { type: String, default: 'Nutzer' },
   weightUnit: { type: String, default: 'kg' },
   selectedHabitIds: [{ type: mongoose.Schema.Types.ObjectId, ref: 'HabitDefinition' }],
+  habitSettings: { type: mongoose.Schema.Types.Mixed, default: {} },
   createdAt: { type: Date, default: Date.now }
 });
 
