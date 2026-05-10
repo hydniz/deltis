@@ -53,7 +53,7 @@ function CustomFieldInput({ field, value, onChange }) {
   );
 }
 
-// ─── Plan hinzufügen (Aktivität oder Gewohnheit) ─────────────────────────────
+// ── Add plan (activity or habit) ─────────────────────────────
 
 function AddPlanModal({ date, activityTypes, habits, onSave, onClose }) {
   const [mode, setMode] = useState(activityTypes.length > 0 ? 'activity' : 'habit');
@@ -224,7 +224,7 @@ function AddPlanModal({ date, activityTypes, habits, onSave, onClose }) {
   );
 }
 
-// ─── Aktivität vervollständigen → loggen ─────────────────────────────────────
+// ── Complete activity → log ─────────────────────────────────────
 
 function CompleteActivityModal({ plan, onSave, onClose }) {
   const typeConfig = plan.activityTypeRef || {};
@@ -313,7 +313,7 @@ function CompleteActivityModal({ plan, onSave, onClose }) {
   );
 }
 
-// ─── Gewohnheit vervollständigen → loggen ────────────────────────────────────
+// ── Complete habit → log ────────────────────────────────────
 
 function CompleteHabitModal({ plan, onSave, onClose }) {
   const isBoolean = plan.habitType === 'boolean';
@@ -384,7 +384,7 @@ function CompleteHabitModal({ plan, onSave, onClose }) {
   );
 }
 
-// ─── Hauptseite ──────────────────────────────────────────────────────────────
+// ── Main page ──────────────────────────────────────────────────────────────
 
 export default function Planner() {
   const [weekStart, setWeekStart] = useState(() => startOfWeek(new Date(), { weekStartsOn: 1 }));

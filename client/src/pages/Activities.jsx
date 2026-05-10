@@ -7,7 +7,7 @@ import {
   ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid
 } from 'recharts';
 
-// ─── OptionsInput ─────────────────────────────────────────────────────────────
+// ── OptionsInput ─────────────────────────────────────────────────────────────
 // Hält den Rohtext lokal – parst erst beim Verlassen des Feldes (onBlur).
 // Verhindert das Cursor-Springen bei gesteuertem Input mit Split/Join-Transformation.
 
@@ -31,7 +31,7 @@ function OptionsInput({ options, onChange }) {
   );
 }
 
-// ─── CustomFieldEditor ──────────────────────────────────────────────────────
+// ── CustomFieldEditor ──────────────────────────────────────────────────────
 
 function CustomFieldEditor({ field, onChange, onRemove }) {
   return (
@@ -98,7 +98,7 @@ function CustomFieldEditor({ field, onChange, onRemove }) {
   );
 }
 
-// ─── ActivityTypesModal ─────────────────────────────────────────────────────
+// ── ActivityTypesModal ─────────────────────────────────────────────────────
 
 function ActivityTypeCard({ type, onSave, onDelete }) {
   const [editing, setEditing] = useState(false);
@@ -400,7 +400,7 @@ function ActivityTypesModal({ onClose, onUpdate }) {
   );
 }
 
-// ─── Aktivitätsformular ─────────────────────────────────────────────────────
+// ── Activity form ─────────────────────────────────────────────────────
 
 function ActivityForm({ activityTypes, onSave, onClose }) {
   const today = format(new Date(), 'yyyy-MM-dd');
@@ -554,7 +554,7 @@ function ActivityForm({ activityTypes, onSave, onClose }) {
   );
 }
 
-// ─── Verlauf-Chart ──────────────────────────────────────────────────────────
+// ── History chart ──────────────────────────────────────────────────────────
 
 function ActivityChart({ typeId, typeLabel, onClose }) {
   const [data, setData] = useState([]);
@@ -618,7 +618,7 @@ function ActivityChart({ typeId, typeLabel, onClose }) {
   );
 }
 
-// ─── Aktivität bearbeiten ────────────────────────────────────────────────────
+// ── Edit activity ────────────────────────────────────────────────────
 
 function EditActivityModal({ activity, onSave, onClose }) {
   // Aktuelle Felddefinitionen verwenden (nicht historische), damit neue Felder erscheinen
@@ -751,7 +751,7 @@ function EditActivityModal({ activity, onSave, onClose }) {
   );
 }
 
-// ─── Aktivitätskarte ────────────────────────────────────────────────────────
+// ── Activity card ────────────────────────────────────────────────────────
 
 function ActivityCard({ activity, onDelete, onEdit }) {
   const [editing, setEditing] = useState(false);
@@ -845,7 +845,7 @@ function ActivityCard({ activity, onDelete, onEdit }) {
   );
 }
 
-// ─── Hauptseite ─────────────────────────────────────────────────────────────
+// ── Main page ─────────────────────────────────────────────────────────────
 
 export default function Activities() {
   const [activityTypes, setActivityTypes] = useState([]);
