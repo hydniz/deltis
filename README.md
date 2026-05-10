@@ -108,6 +108,20 @@ Configure these repository secrets:
 
 ---
 
+## Logs
+
+**Development:**
+```bash
+./run.sh logs        # follow background log file
+```
+Or run `npm run dev` directly – logs stream to stdout.
+
+**Docker:**
+```bash
+docker compose logs -f app    # app server only
+docker compose logs -f        # all services
+```
+
 ## Backup & Restore
 
 ```bash
@@ -136,4 +150,4 @@ Backups are stored in `./backups/` (excluded from git). Write access to the app 
 
 ## License
 
-MIT – see [LICENSE](LICENSE) for details.
+MIT – see [LICENCE](LICENCE) for details.
