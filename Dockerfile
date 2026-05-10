@@ -1,4 +1,4 @@
-# ── Stage 1: React-Frontend bauen ─────────────────────────────────────────
+# ── Stage 1: Build React frontend ─────────────────────────────────────────
 FROM node:20-alpine AS frontend
 WORKDIR /app/client
 COPY client/package*.json ./
@@ -6,21 +6,21 @@ RUN npm ci
 COPY client/ ./
 RUN npm run build
 
-# ── Stage 2: Production-Image ──────────────────────────────────────────────
+# ── Stage 2: Production image ──────────────────────────────────────────────
 FROM node:20-alpine
 WORKDIR /app
 
-# Nur Server-Abhängigkeiten (keine devDeps)
+# Server dependencies only (no devDependencies)
 COPY package*.json ./
 RUN npm ci --omit=dev
 
-# Server-Code
+# Server source
 COPY server/ ./server/
 
-# Gebautes Frontend aus Stage 1
+# Pre-built frontend from stage 1
 COPY --from=frontend /app/client/dist ./client/dist
 
-# Backups-Verzeichnis anlegen und Rechte setzen (node-User aus Base-Image)
+# Create backups directory and set ownership (node user from base image)
 RUN mkdir -p backups && chown -R node:node /app
 USER node
 

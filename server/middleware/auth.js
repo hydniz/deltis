@@ -8,13 +8,13 @@ module.exports = async (req, res, next) => {
   }
 
   const token = authHeader.slice(7).trim();
-  // Format: "uuid" für normale Nutzer, "uuid:adminSecret" für Admin
+  // Token format: "uuid" for regular users, "uuid:adminPassword" for admin
   const colonIdx = token.indexOf(':');
   const uuid = colonIdx !== -1 ? token.slice(0, colonIdx) : token;
   const providedSecret = colonIdx !== -1 ? token.slice(colonIdx + 1) : null;
 
   try {
-    // adminSecretHash explizit einschließen (da select: false im Schema)
+    // Explicitly include adminSecretHash (select: false in schema)
     const user = await User.findOne({ uuid }).select('+adminSecretHash');
     if (!user) {
       return res.status(401).json({ error: 'Ungültige UUID' });

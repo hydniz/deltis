@@ -7,7 +7,7 @@ import {
   ResponsiveContainer, LineChart, Line, XAxis, YAxis, Tooltip, CartesianGrid
 } from 'recharts';
 
-// ─── Bearbeitbarer Eintrag für eigene Gewohnheiten ───────────────────────────
+// ── Editable row for custom habits ───────────────────────────
 
 function CustomHabitRow({ def, selected, onToggle, onDelete, onUpdate }) {
   const [editing, setEditing] = useState(false);
@@ -99,7 +99,7 @@ function CustomHabitRow({ def, selected, onToggle, onDelete, onUpdate }) {
   );
 }
 
-// ─── Verwaltungs-Modal ───────────────────────────────────────────────────────
+// ── Management modal ───────────────────────────────────────────────────────
 
 function ManageHabitsModal({ definitions, onSave, onClose }) {
   const [selected, setSelected] = useState(
@@ -293,7 +293,7 @@ function ManageHabitsModal({ definitions, onSave, onClose }) {
   );
 }
 
-// ─── Habit-Karte ─────────────────────────────────────────────────────────────
+// ── Habit card ─────────────────────────────────────────────────────────────
 
 function HabitCard({ habit, todayLog, onLog }) {
   const todayStr = format(new Date(), 'yyyy-MM-dd');
@@ -563,7 +563,7 @@ function HabitCard({ habit, todayLog, onLog }) {
   );
 }
 
-// ─── Hauptseite ─────────────────────────────────────────────────────────────
+// ── Main page ─────────────────────────────────────────────────────────────
 
 export default function Habits() {
   const [definitions, setDefinitions] = useState([]);
