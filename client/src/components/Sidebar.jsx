@@ -1,12 +1,13 @@
 import { NavLink, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
+import { APP_NAME } from '../config/branding';
 import {
   LayoutDashboard, Dumbbell, CalendarDays, Sparkles,
   Scale, Target, Settings, LogOut, Activity, ShieldCheck
 } from 'lucide-react';
 
 const navItems = [
-  { to: '/', icon: LayoutDashboard, label: 'Dashboard', end: true },
+  { to: '/dashboard', icon: LayoutDashboard, label: 'Dashboard', end: true },
   { to: '/activities', icon: Dumbbell, label: 'Aktivitäten' },
   { to: '/planner', icon: CalendarDays, label: 'Planer' },
   { to: '/habits', icon: Sparkles, label: 'Gewohnheiten' },
@@ -31,7 +32,7 @@ export default function Sidebar() {
           <div className="w-9 h-9 bg-brand-600 rounded-xl flex items-center justify-center">
             <Activity size={18} className="text-white" />
           </div>
-          <span className="font-semibold text-white">Habit Tracker</span>
+          <span className="font-semibold text-white">{APP_NAME}</span>
         </div>
       </div>
 

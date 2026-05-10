@@ -7,7 +7,9 @@
     "build": "npm run build --prefix client",
     "install:all": "npm install && npm install --prefix client",
     "test": "jest --runInBand --forceExit",
-    "test:coverage": "jest --runInBand --forceExit --coverage"
+    "test:coverage": "jest --runInBand --forceExit --coverage",
+    "test:client": "npm test --prefix client",
+    "test:all": "npm test && npm test --prefix client"
   },
   "jest": {
     "testEnvironment": "node",
