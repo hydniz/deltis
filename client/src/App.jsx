@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import Layout from './components/Layout';
+import Landing from './pages/Landing';
 import Login from './pages/Login';
 import Dashboard from './pages/Dashboard';
 import Activities from './pages/Activities';
@@ -22,13 +23,21 @@ function Spinner() {
   );
 }
 
+// Root route: Landing page for guests, redirect to /dashboard for logged-in users
+function RootRoute() {
+  const { user, loading } = useAuth();
+  if (loading) return <Spinner />;
+  if (user) return <Navigate to="/dashboard" replace />;
+  return <Landing />;
+}
+
 function ProtectedRoute({ children }) {
   const { user, loading } = useAuth();
   if (loading) return <Spinner />;
   return user ? children : <Navigate to="/login" replace />;
 }
 
-// Eigenständige Route für /admin – prüft selbst Auth und Setup-Status
+// Standalone route for /admin – checks auth and setup status itself
 function AdminPage() {
   const { user, loading } = useAuth();
   const [setupNeeded, setSetupNeeded] = useState(null);
@@ -58,15 +67,22 @@ export default function App() {
     <AuthProvider>
       <BrowserRouter>
         <Routes>
+          {/* Public routes */}
+          <Route path="/" element={<RootRoute />} />
           <Route path="/login" element={<Login />} />
           <Route path="/admin/setup" element={<AdminSetup />} />
           <Route path="/admin" element={<AdminPage />} />
-          <Route path="/" element={
-            <ProtectedRoute>
-              <Layout />
-            </ProtectedRoute>
-          }>
-            <Route index element={<Dashboard />} />
+
+          {/* Protected app routes */}
+          <Route
+            path="/"
+            element={
+              <ProtectedRoute>
+                <Layout />
+              </ProtectedRoute>
+            }
+          >
+            <Route path="dashboard" element={<Dashboard />} />
             <Route path="activities" element={<Activities />} />
             <Route path="planner" element={<Planner />} />
             <Route path="habits" element={<Habits />} />
@@ -74,6 +90,9 @@ export default function App() {
             <Route path="goals" element={<Goals />} />
             <Route path="settings" element={<Settings />} />
           </Route>
+
+          {/* Catch-all: redirect unknown paths to home */}
+          <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </BrowserRouter>
     </AuthProvider>

@@ -7,7 +7,7 @@ import {
 } from 'lucide-react';
 
 const mobileNav = [
-  { to: '/', icon: LayoutDashboard, label: 'Home', end: true },
+  { to: '/dashboard', icon: LayoutDashboard, label: 'Home', end: true },
   { to: '/activities', icon: Dumbbell, label: 'Sport' },
   { to: '/habits', icon: Sparkles, label: 'Habits' },
   { to: '/weight', icon: Scale, label: 'Gewicht' },

@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ShieldCheck, Copy, Check, Eye, EyeOff, AlertCircle, Activity } from 'lucide-react';
+import { APP_NAME } from '../config/branding';
 import api from '../utils/api';
 
 function CopyButton({ text }) {
@@ -83,7 +84,7 @@ export default function AdminSetup() {
           <div className="inline-flex items-center justify-center w-16 h-16 bg-brand-600 rounded-2xl mb-5 shadow-lg shadow-brand-600/30">
             <Activity size={28} className="text-white" />
           </div>
-          <h1 className="text-2xl font-bold text-white mb-1">Habit Tracker</h1>
+          <h1 className="text-2xl font-bold text-white mb-1">{APP_NAME}</h1>
           <p className="text-slate-400 text-sm">Ersteinrichtung des Admin-Kontos</p>
         </div>
 
