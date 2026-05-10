@@ -10,9 +10,9 @@ const adminOnly = (req, res, next) => {
   next();
 };
 
-// ─── Öffentliche Setup-Routen (kein Auth nötig) ──────────────────────────────
+// ── Public setup routes (no auth required) ────────────────────────────────────
 
-// Setup-Status abfragen – gibt UUID nur zurück solange kein Passwort gesetzt ist
+// Returns whether first-time setup is still pending; exposes the admin UUID only during setup
 router.get('/setup-status', async (req, res) => {
   try {
     const admin = await User.findOne({ isAdmin: true }).select('+adminSecretHash');
@@ -24,7 +24,7 @@ router.get('/setup-status', async (req, res) => {
   }
 });
 
-// Admin-Passwort setzen – nur einmalig möglich, solange keines gesetzt ist
+// Set the admin password – only works once while no password is set
 router.post('/setup', async (req, res) => {
   try {
     const admin = await User.findOne({ isAdmin: true }).select('+adminSecretHash');
@@ -43,7 +43,7 @@ router.post('/setup', async (req, res) => {
   }
 });
 
-// Admin-Passwort ändern (benötigt aktuelles Passwort zur Bestätigung)
+// Change the admin password (requires current password for verification)
 router.put('/password', auth, adminOnly, async (req, res) => {
   try {
     const admin = await User.findById(req.user._id).select('+adminSecretHash');
@@ -67,9 +67,9 @@ router.put('/password', auth, adminOnly, async (req, res) => {
   }
 });
 
-// ─── Geschützte Admin-Routen ─────────────────────────────────────────────────
+// ── Protected admin routes ────────────────────────────────────────────────────
 
-// Alle Nutzer auflisten
+// List all users
 router.get('/users', auth, adminOnly, async (req, res) => {
   try {
     const users = await User.find({}, 'uuid name isAdmin createdAt').sort({ createdAt: 1 });
@@ -79,7 +79,7 @@ router.get('/users', auth, adminOnly, async (req, res) => {
   }
 });
 
-// Neuen Nutzer anlegen (UUID wird automatisch generiert)
+// Create a new user (UUID is auto-generated)
 router.post('/users', auth, adminOnly, async (req, res) => {
   try {
     const { name } = req.body;
@@ -94,7 +94,7 @@ router.post('/users', auth, adminOnly, async (req, res) => {
   }
 });
 
-// Nutzer löschen (Admin kann nicht gelöscht werden)
+// Delete a user (admin account cannot be deleted)
 router.delete('/users/:id', auth, adminOnly, async (req, res) => {
   try {
     const user = await User.findById(req.params.id);
