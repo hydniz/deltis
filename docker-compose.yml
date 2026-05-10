@@ -6,6 +6,8 @@ services:
     container_name: habit-tracker-mongo
     volumes:
       - mongo_data:/data/db
+    ports:
+      - "27017:27017"
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "mongosh", "--quiet", "--eval", "db.runCommand('ping').ok"]
