@@ -16,7 +16,7 @@ app.use(cors({
 }));
 app.use(express.json());
 
-// Schreibzugriffe während Backup-Modus blockieren
+// Block write requests while a backup is in progress
 app.use((req, res, next) => {
   if (fs.existsSync(BACKUP_LOCK) && ['POST', 'PUT', 'PATCH', 'DELETE'].includes(req.method)) {
     return res.status(503).json({
@@ -68,16 +68,17 @@ async function seedAdminUser() {
 
   const admin = await User.findOne({ isAdmin: true });
   if (!admin) {
+    // First start: generate admin UUID, password is set via /admin/setup in the browser
     const uuid = crypto.randomUUID();
     await User.create({ uuid, name: 'Admin', isAdmin: true });
     console.log('\n' + '═'.repeat(58));
-    console.log('  ERSTSTART – Admin-Konto angelegt!');
+    console.log('  FIRST START – admin account created!');
     console.log(`  UUID: ${uuid}`);
-    console.log('  Setup unter /admin abschließen.');
+    console.log('  Complete setup at /admin in your browser.');
     console.log('═'.repeat(58) + '\n');
   }
 
-  // Migration: VALID_UUIDS aus .env als reguläre Nutzer anlegen
+  // Legacy migration: import VALID_UUIDS from .env as regular users
   const legacyUuids = (process.env.VALID_UUIDS || '')
     .split(',')
     .map(u => u.trim())
@@ -86,21 +87,21 @@ async function seedAdminUser() {
   for (const uuid of legacyUuids) {
     const exists = await User.findOne({ uuid });
     if (!exists) {
-      await User.create({ uuid, name: 'Nutzer ' + uuid.slice(0, 8) });
-      console.log(`✓ Migriert: ${uuid.slice(0, 8)}...`);
+      await User.create({ uuid, name: 'User ' + uuid.slice(0, 8) });
+      console.log(`✓ Migrated: ${uuid.slice(0, 8)}...`);
     }
   }
 }
 
 mongoose.connect(process.env.MONGODB_URI)
   .then(async () => {
-    console.log('✓ MongoDB verbunden');
+    console.log('✓ MongoDB connected');
     await seedAdminUser();
     await seedPredefinedData();
     const PORT = process.env.PORT || 3001;
-    app.listen(PORT, () => console.log(`✓ Server läuft auf Port ${PORT}`));
+    app.listen(PORT, () => console.log(`✓ Server running on port ${PORT}`));
   })
   .catch(err => {
-    console.error('✗ MongoDB Fehler:', err.message);
+    console.error('✗ MongoDB error:', err.message);
     process.exit(1);
   });

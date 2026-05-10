@@ -8,7 +8,7 @@ import {
   Tooltip, CartesianGrid, ReferenceLine
 } from 'recharts';
 
-// ─── Intervall-Hilfsfunktionen ────────────────────────────────────────────────
+// ── Interval helpers ────────────────────────────────────────────────
 
 function unitLabel(value, unit) {
   if (unit === 'day') return value === 1 ? 'Tag' : 'Tage';
@@ -58,7 +58,7 @@ function metricLabel(metric, customFields = []) {
   return metric;
 }
 
-// ─── Fortschrittsanzeige für ein einzelnes Ziel ────────────────────────────
+// ── Single goal progress display ────────────────────────────
 
 function GoalProgress({ goal }) {
   const [progress, setProgress] = useState(null);
@@ -290,7 +290,7 @@ function GoalProgress({ goal }) {
   );
 }
 
-// ─── Formular zum Erstellen eines Ziels ───────────────────────────────────
+// ── Goal creation form ───────────────────────────────────
 
 function CreateGoalModal({ activityTypes, habits, onSave, onClose }) {
   const [form, setForm] = useState({
@@ -904,7 +904,7 @@ function CreateGoalModal({ activityTypes, habits, onSave, onClose }) {
   );
 }
 
-// ─── Bearbeitungsmodal (periodisch & langfristig) ───────────────────────────
+// ── Edit modal (periodic & long-term) ───────────────────────────
 
 function EditGoalModal({ goal, onSave, onClose }) {
   const isActivityGoal = goal.targetRefModel === 'ActivityType' || goal.targetRefModel === 'activity';
@@ -1379,7 +1379,7 @@ function EditGoalModal({ goal, onSave, onClose }) {
   );
 }
 
-// ─── Hauptseite ─────────────────────────────────────────────────────────────
+// ── Main page ─────────────────────────────────────────────────────────────
 
 export default function Goals() {
   const [goals, setGoals] = useState([]);

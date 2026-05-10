@@ -6,7 +6,7 @@ import {
   Settings as SettingsIcon, Copy, Check, LogOut, User, Save, KeyRound, Eye, EyeOff
 } from 'lucide-react';
 
-// ─── Hauptseite ─────────────────────────────────────────────────────────────
+// ── Main page ─────────────────────────────────────────────────────────────
 
 export default function Settings() {
   const { user, logout, updateUser } = useAuth();

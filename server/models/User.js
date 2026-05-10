@@ -11,7 +11,7 @@ const userSchema = new mongoose.Schema({
   createdAt: { type: Date, default: Date.now }
 });
 
-// Niemals adminSecretHash in API-Antworten einschließen
+// Never include adminSecretHash in API responses
 userSchema.set('toJSON', {
   transform: (doc, ret) => {
     delete ret.adminSecretHash;
