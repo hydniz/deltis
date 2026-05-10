@@ -3,7 +3,8 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import api from '../utils/api';
 import {
-  Settings as SettingsIcon, Copy, Check, LogOut, User, Save, KeyRound, Eye, EyeOff
+  Settings as SettingsIcon, Copy, Check, LogOut, User, Save, KeyRound, Eye, EyeOff,
+  Download, Upload, AlertCircle
 } from 'lucide-react';
 
 // ── Main page ─────────────────────────────────────────────────────────────
@@ -114,6 +115,9 @@ export default function Settings() {
         </div>
       </div>
 
+      {/* Export / Import */}
+      <ExportImport />
+
       {/* Admin-Passwort */}
       {user?.isAdmin && <ChangePasswordForm />}
 
@@ -128,6 +132,111 @@ export default function Settings() {
           Abmelden
         </button>
       </div>
+    </div>
+  );
+}
+
+function ExportImport() {
+  const [importing, setImporting] = useState(false);
+  const [exporting, setExporting] = useState(false);
+  const [result, setResult] = useState(null);
+  const [error, setError] = useState('');
+
+  const handleExport = async () => {
+    setExporting(true);
+    setError('');
+    try {
+      const res = await api.get('/data/export', { responseType: 'blob' });
+      const url = URL.createObjectURL(new Blob([res.data], { type: 'application/zip' }));
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `habit-tracker-export-${new Date().toISOString().slice(0, 10)}.zip`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch {
+      setError('Export fehlgeschlagen.');
+    } finally {
+      setExporting(false);
+    }
+  };
+
+  const handleImport = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    e.target.value = '';
+    setImporting(true);
+    setResult(null);
+    setError('');
+    try {
+      const form = new FormData();
+      form.append('file', file);
+      const res = await api.post('/data/import', form);
+      setResult(res.data);
+    } catch (err) {
+      setError(err.response?.data?.error || 'Import fehlgeschlagen.');
+    } finally {
+      setImporting(false);
+    }
+  };
+
+  return (
+    <div className="card p-5">
+      <h2 className="font-semibold text-white mb-1 flex items-center gap-2">
+        <Download size={16} className="text-brand-400" />
+        Daten exportieren & importieren
+      </h2>
+      <p className="text-xs text-slate-500 mb-4">
+        Exportiert Gewicht, Gewohnheiten und Aktivitäten als ZIP mit CSV-Dateien.
+      </p>
+
+      <div className="flex flex-wrap gap-3">
+        <button
+          onClick={handleExport}
+          disabled={exporting}
+          className="btn-primary flex items-center gap-2"
+        >
+          {exporting
+            ? <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+            : <Download size={15} />}
+          Exportieren
+        </button>
+
+        <label className={`btn-secondary flex items-center gap-2 cursor-pointer ${importing ? 'opacity-50 pointer-events-none' : ''}`}>
+          {importing
+            ? <div className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin" />
+            : <Upload size={15} />}
+          Importieren
+          <input type="file" accept=".zip" className="hidden" onChange={handleImport} />
+        </label>
+      </div>
+
+      {error && (
+        <div className="mt-3 flex items-center gap-2 text-red-400 text-sm bg-red-900/20 border border-red-900/50 rounded-xl px-3 py-2">
+          <AlertCircle size={14} />
+          {error}
+        </div>
+      )}
+
+      {result && (
+        <div className="mt-3 bg-green-900/20 border border-green-700/50 rounded-xl px-4 py-3 space-y-1">
+          <p className="text-green-400 text-sm font-medium">Import abgeschlossen!</p>
+          <ul className="text-slate-400 text-xs space-y-0.5">
+            <li>• {result.weight} Gewichtseinträge</li>
+            <li>• {result.habits} Gewohnheitseinträge</li>
+            <li>• {result.activities} Aktivitäten</li>
+          </ul>
+          {result.errors?.length > 0 && (
+            <details className="mt-2">
+              <summary className="text-yellow-500 text-xs cursor-pointer">
+                {result.errors.length} Fehler
+              </summary>
+              <ul className="mt-1 text-xs text-slate-500 space-y-0.5">
+                {result.errors.map((e, i) => <li key={i}>• {e}</li>)}
+              </ul>
+            </details>
+          )}
+        </div>
+      )}
     </div>
   );
 }
