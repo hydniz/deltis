@@ -1,3 +1,4 @@
+const bcrypt = require('bcryptjs');
 const User = require('../models/User');
 
 module.exports = async (req, res, next) => {
@@ -6,21 +7,29 @@ module.exports = async (req, res, next) => {
     return res.status(401).json({ error: 'Nicht autorisiert' });
   }
 
-  const uuid = authHeader.slice(7).trim();
-  const validUuids = (process.env.VALID_UUIDS || '')
-    .split(',')
-    .map(u => u.trim())
-    .filter(Boolean);
-
-  if (!validUuids.includes(uuid)) {
-    return res.status(401).json({ error: 'Ungültige UUID' });
-  }
+  const token = authHeader.slice(7).trim();
+  // Format: "uuid" für normale Nutzer, "uuid:adminSecret" für Admin
+  const colonIdx = token.indexOf(':');
+  const uuid = colonIdx !== -1 ? token.slice(0, colonIdx) : token;
+  const providedSecret = colonIdx !== -1 ? token.slice(colonIdx + 1) : null;
 
   try {
-    let user = await User.findOne({ uuid });
+    // adminSecretHash explizit einschließen (da select: false im Schema)
+    const user = await User.findOne({ uuid }).select('+adminSecretHash');
     if (!user) {
-      user = await User.create({ uuid, name: 'Nutzer ' + uuid.slice(0, 8) });
+      return res.status(401).json({ error: 'Ungültige UUID' });
     }
+
+    if (user.isAdmin) {
+      if (!providedSecret || !user.adminSecretHash) {
+        return res.status(401).json({ error: 'Admin-Secret erforderlich' });
+      }
+      const valid = await bcrypt.compare(providedSecret, user.adminSecretHash);
+      if (!valid) {
+        return res.status(401).json({ error: 'Falsches Admin-Secret' });
+      }
+    }
+
     req.user = user;
     next();
   } catch (err) {
