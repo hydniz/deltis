@@ -1,6 +1,7 @@
 require('dotenv').config();
 const express = require('express');
 const mongoose = require('mongoose');
+const crypto = require('crypto');
 const cors = require('cors');
 const path = require('path');
 const fs = require('fs');
@@ -26,6 +27,7 @@ app.use((req, res, next) => {
 });
 
 app.use('/api/auth', require('./routes/auth'));
+app.use('/api/admin', require('./routes/admin'));
 app.use('/api/activities', require('./routes/activities'));
 app.use('/api/planner', require('./routes/planner'));
 app.use('/api/habits', require('./routes/habits'));
@@ -61,9 +63,39 @@ async function seedPredefinedData() {
   }
 }
 
+async function seedAdminUser() {
+  const User = require('./models/User');
+
+  const admin = await User.findOne({ isAdmin: true });
+  if (!admin) {
+    const uuid = crypto.randomUUID();
+    await User.create({ uuid, name: 'Admin', isAdmin: true });
+    console.log('\n' + '═'.repeat(58));
+    console.log('  ERSTSTART – Admin-Konto angelegt!');
+    console.log(`  UUID: ${uuid}`);
+    console.log('  Setup unter /admin abschließen.');
+    console.log('═'.repeat(58) + '\n');
+  }
+
+  // Migration: VALID_UUIDS aus .env als reguläre Nutzer anlegen
+  const legacyUuids = (process.env.VALID_UUIDS || '')
+    .split(',')
+    .map(u => u.trim())
+    .filter(Boolean);
+
+  for (const uuid of legacyUuids) {
+    const exists = await User.findOne({ uuid });
+    if (!exists) {
+      await User.create({ uuid, name: 'Nutzer ' + uuid.slice(0, 8) });
+      console.log(`✓ Migriert: ${uuid.slice(0, 8)}...`);
+    }
+  }
+}
+
 mongoose.connect(process.env.MONGODB_URI)
   .then(async () => {
     console.log('✓ MongoDB verbunden');
+    await seedAdminUser();
     await seedPredefinedData();
     const PORT = process.env.PORT || 3001;
     app.listen(PORT, () => console.log(`✓ Server läuft auf Port ${PORT}`));

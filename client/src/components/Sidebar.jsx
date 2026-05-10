@@ -2,7 +2,7 @@ import { NavLink, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import {
   LayoutDashboard, Dumbbell, CalendarDays, Sparkles,
-  Scale, Target, Settings, LogOut, Activity
+  Scale, Target, Settings, LogOut, Activity, ShieldCheck
 } from 'lucide-react';
 
 const navItems = [
@@ -53,6 +53,27 @@ export default function Sidebar() {
             {label}
           </NavLink>
         ))}
+
+        {user?.isAdmin && (
+          <>
+            <div className="pt-2 pb-1 px-3">
+              <div className="border-t border-slate-800" />
+            </div>
+            <NavLink
+              to="/admin"
+              className={({ isActive }) =>
+                `flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-colors ${
+                  isActive
+                    ? 'bg-brand-600 text-white'
+                    : 'text-slate-400 hover:text-slate-100 hover:bg-slate-800'
+                }`
+              }
+            >
+              <ShieldCheck size={18} />
+              Nutzerverwaltung
+            </NavLink>
+          </>
+        )}
       </nav>
 
       <div className="p-3 border-t border-slate-800">
