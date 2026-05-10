@@ -1,7 +1,7 @@
 {
-  "name": "Habit Tracker",
-  "short_name": "Habits",
-  "description": "Persönlicher Aktivitäten & Gewohnheiten Tracker",
+  "name": "Deltis",
+  "short_name": "Deltis",
+  "description": "Data-driven Habit tracking",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#0f172a",
