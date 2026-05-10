@@ -4,13 +4,17 @@ const auth = require('../middleware/auth');
 const ActivityLog = require('../models/ActivityLog');
 const ActivityType = require('../models/ActivityType');
 
-// Berechnet den historischen Namen, falls sich der Aktivitätstyp-Name seit der Erfassung geändert hat.
+// Reichert einen ActivityLog mit historischem Namen und historischen Felderdefinitionen an,
+// falls sich der Aktivitätstyp seit der Erfassung geändert hat.
 function enrichActivity(activityObj) {
   const ref = activityObj.activityTypeRef;
   const version = activityObj.activityTypeVersion;
   if (ref && version && ref.version !== version) {
     const historical = (ref.nameHistory || []).find(h => h.version === version);
-    if (historical) activityObj.historicalLabel = historical.name;
+    if (historical) {
+      if (historical.name !== ref.label) activityObj.historicalLabel = historical.name;
+      if (historical.customFields?.length) activityObj.historicalCustomFields = historical.customFields;
+    }
   }
   if (ref) delete ref.nameHistory;
   return activityObj;

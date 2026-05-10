@@ -17,9 +17,13 @@ services:
   # ── App (Express + gebautes React-Frontend) ───────────────────────────────
   app:
     build: .
+    image: habit-tracker:latest
     container_name: habit-tracker-app
     ports:
       - "3001:3001"
+    volumes:
+      # Backups-Verzeichnis: für backup.sh und restore.sh vom Host zugänglich
+      - ./backups:/app/backups
     env_file:
       - .env.production
     environment:
@@ -34,6 +38,4 @@ services:
 
 volumes:
   mongo_data:
-    # Selber Name wie im Dev-Setup → bestehende Daten werden wiederverwendet.
-    # Für eine saubere Production-DB den Namen ändern, z.B. habit-tracker-mongo-prod
     name: habit-tracker-mongo-data

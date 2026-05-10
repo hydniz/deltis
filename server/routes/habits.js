@@ -10,7 +10,12 @@ function enrichLog(logObj) {
   const version = logObj.habitVersion;
   if (habit && version && habit.version !== version) {
     const historical = (habit.nameHistory || []).find(h => h.version === version);
-    if (historical) logObj.historicalLabel = historical.name;
+    if (historical) {
+      if (historical.name !== habit.name) logObj.historicalLabel = historical.name;
+      if (historical.unitSymbol && historical.unitSymbol !== habit.unitSymbol) {
+        logObj.historicalUnit = historical.unitSymbol;
+      }
+    }
   }
   if (habit) delete habit.nameHistory;
   return logObj;
@@ -25,11 +30,17 @@ router.get('/definitions', auth, async (req, res) => {
 
     const selectedIds = (req.user.selectedHabitIds || []).map(id => id.toString());
     const noneSelected = selectedIds.length === 0;
+    const habitSettings = req.user.habitSettings || {};
 
-    const result = definitions.map(d => ({
-      ...d.toObject(),
-      selected: noneSelected || selectedIds.includes(d._id.toString())
-    }));
+    const result = definitions.map(d => {
+      const s = habitSettings[d._id.toString()] || {};
+      return {
+        ...d.toObject(),
+        selected: noneSelected || selectedIds.includes(d._id.toString()),
+        missingDayMode: s.missingDayMode || 'none',
+        defaultValue: s.defaultValue ?? 0,
+      };
+    });
 
     res.json(result);
   } catch (err) {
@@ -74,7 +85,10 @@ router.put('/definitions/:id', auth, async (req, res) => {
 
     const { nameHistory: _nh, version: _v, _id: _i, createdAt: _c, userId: _u, __v: _vv, ...safeBody } = req.body;
 
-    if (safeBody.name && safeBody.name !== current.name) {
+    const nameChanged = safeBody.name && safeBody.name !== current.name;
+    const unitChanged = safeBody.unitSymbol && safeBody.unitSymbol !== current.unitSymbol;
+
+    if (nameChanged || unitChanged) {
       const validFrom = current.nameHistory?.length > 0
         ? current.nameHistory[current.nameHistory.length - 1].validUntil
         : current.createdAt;
@@ -86,6 +100,7 @@ router.put('/definitions/:id', auth, async (req, res) => {
           $push: {
             nameHistory: {
               name: current.name,
+              unitSymbol: current.unitSymbol,
               version: current.version || 1,
               validFrom,
               validUntil: new Date(),
@@ -111,6 +126,19 @@ router.delete('/definitions/:id', auth, async (req, res) => {
     res.json({ success: true });
   } catch (err) {
     res.status(500).json({ error: err.message });
+  }
+});
+
+// Nutzer-spezifische Gewohnheitseinstellungen speichern
+router.put('/settings/:id', auth, async (req, res) => {
+  try {
+    const { missingDayMode, defaultValue } = req.body;
+    await User.findByIdAndUpdate(req.user._id, {
+      $set: { [`habitSettings.${req.params.id}`]: { missingDayMode, defaultValue: +defaultValue } }
+    });
+    res.json({ success: true });
+  } catch (err) {
+    res.status(400).json({ error: err.message });
   }
 });
 

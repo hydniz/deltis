@@ -3,13 +3,16 @@ const mongoose = require('mongoose');
 const customFieldSchema = new mongoose.Schema({
   key: { type: String, required: true },
   label: { type: String, required: true },
-  type: { type: String, enum: ['number', 'select'], default: 'number' },
+  type: { type: String, enum: ['number', 'select', 'multiselect'], default: 'number' },
   unit: { type: String },
   options: [{ type: String }],
+  showInPreview: { type: Boolean, default: true },
 }, { _id: false });
 
+// Speichert den vollständigen Zustand einer Version (Name + Felderdefinitionen)
 const nameHistorySchema = new mongoose.Schema({
   name: { type: String, required: true },
+  customFields: { type: mongoose.Schema.Types.Mixed, default: [] },
   version: { type: Number, required: true },
   validFrom: { type: Date, required: true },
   validUntil: { type: Date, required: true },
