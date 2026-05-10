@@ -5,22 +5,23 @@ on:
     branches:
       - main
 
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
 jobs:
   build-and-deploy:
     runs-on: ubuntu-latest
     steps:
-      - name: Repository auschecken
+      - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Docker Image bauen
-        run: |
-          docker build -t habit-tracker:latest .
+      - name: Build Docker image
+        run: docker build -t habit-tracker:latest .
 
-      - name: Image als Tar-Archiv exportieren
-        run: |
-          docker save habit-tracker:latest | gzip > habit-tracker-deploy.tar.gz
+      - name: Export image as tar archive
+        run: docker save habit-tracker:latest | gzip > habit-tracker-deploy.tar.gz
 
-      - name: Dateien auf den Server kopieren (SCP)
+      - name: Copy files to server (SCP)
         uses: appleboy/scp-action@v0.1.7
         with:
           host: ${{ secrets.SERVER_HOST }}
@@ -30,7 +31,7 @@ jobs:
           target: ${{ secrets.TARGET_DIR }}
           overwrite: true
 
-      - name: Backup, Image laden und neu starten (SSH)
+      - name: Backup, load image and restart (SSH)
         uses: appleboy/ssh-action@v1.0.3
         with:
           host: ${{ secrets.SERVER_HOST }}
@@ -40,27 +41,24 @@ jobs:
             set -e
             cd ${{ secrets.TARGET_DIR }}
 
-            # Skripte ausführbar machen
             chmod +x ./backup.sh ./restore.sh
-
-            # Backups-Verzeichnis sicherstellen (für Volume-Mount und Lock-Datei)
             mkdir -p backups
 
-            # Backup nur wenn MongoDB bereits läuft (kein Backup beim ersten Deploy)
+            # Backup before deploy (skip on first deploy when no container exists yet)
             if docker container inspect habit-tracker-mongo >/dev/null 2>&1; then
-              echo "Führe Backup vor dem Deploy aus..."
+              echo "Running pre-deploy backup..."
               ./backup.sh
             else
-              echo "Erster Deploy – kein Backup nötig."
+              echo "First deploy – skipping backup."
             fi
 
-            # Neues Image laden
+            # Load new image
             docker load < habit-tracker-deploy.tar.gz
-
-            # Container mit neuem Image starten
-            docker compose up -d
-
-            # Tar-Archiv aufräumen
             rm habit-tracker-deploy.tar.gz
 
-            echo "Deploy erfolgreich!"
+            # Force-recreate containers so the new image is actually used.
+            # --no-build: don't try to build (source code is not on the server)
+            # --force-recreate: replace running containers even if config looks unchanged
+            docker compose up -d --no-build --force-recreate
+
+            echo "Deploy successful!"
