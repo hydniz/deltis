@@ -6,11 +6,27 @@ const intermediateStepSchema = new mongoose.Schema({
   description: { type: String }
 }, { _id: false });
 
+// Filter, der auf die Aktivität selbst angewandt wird (nur bei aggregation='max' relevant)
+const activityFilterSchema = new mongoose.Schema({
+  fieldKey: { type: String, required: true },
+  fieldType: { type: String, enum: ['select', 'number'], default: 'select' },
+  // select/multiselect:
+  operator: { type: String, enum: ['anyOf', 'allOf'], default: 'anyOf' },
+  values: [{ type: String }],
+  // number (duration, distance, custom number):
+  numOperator: { type: String, enum: ['min', 'max', 'exact'], default: 'min' },
+  numValue: { type: Number }
+}, { _id: false });
+
 const conditionSchema = new mongoose.Schema({
   metric: { type: String },
   condition: { type: String, enum: ['min', 'max', 'exact'] },
   targetValue: { type: Number },
-  unitSymbol: { type: String }
+  unitSymbol: { type: String },
+  valueScope: { type: String, enum: ['total', 'perActivity'], default: 'total' },
+  aggregation: { type: String, enum: ['sum', 'max'], default: 'sum' },
+  // Nur bei aggregation='max': Aktivität muss diese Felder erfüllen um in die Bestleistung einzugehen
+  activityFilters: [activityFilterSchema]
 }, { _id: false });
 
 const goalSchema = new mongoose.Schema({

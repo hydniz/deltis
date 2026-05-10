@@ -20,6 +20,29 @@ const DEFAULTS = [
   { label: 'Sonstiges', showDistance: false, showDuration: true, customFields: [] },
 ];
 
+// Vergleicht customFields-Arrays ohne _id-Felder auf inhaltliche Gleichheit
+function customFieldsChanged(a = [], b = []) {
+  const normalize = (fields) => fields.map(f => ({
+    key: f.key, label: f.label, type: f.type,
+    unit: f.unit ?? null,
+    options: f.options ? [...f.options].sort() : [],
+  }));
+  return JSON.stringify(normalize(a)) !== JSON.stringify(normalize(b));
+}
+
+// Stellt sicher, dass bestehende Felder ihren key behalten (verhindert kaputte Metrik-Referenzen)
+function preserveExistingKeys(incoming = [], current = []) {
+  return incoming.map(field => {
+    const existing = current.find(c => c.key === field.key);
+    if (existing) return { ...field, key: existing.key };
+    // Neues Feld: key aus label generieren (falls leer)
+    if (!field.key) {
+      field.key = field.label.toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '');
+    }
+    return field;
+  });
+}
+
 router.get('/', auth, async (req, res) => {
   try {
     let types = await ActivityType.find({ userId: req.user._id }).sort({ createdAt: 1 });
@@ -53,11 +76,18 @@ router.put('/:id', auth, async (req, res) => {
     const current = await ActivityType.findOne({ _id: req.params.id, userId: req.user._id });
     if (!current) return res.status(404).json({ error: 'Nicht gefunden' });
 
-    // Strip internal versioning fields the frontend may echo back
     const { nameHistory: _nh, version: _v, _id: _i, createdAt: _c, userId: _u, __v: _vv, ...safeBody } = req.body;
 
-    if (safeBody.label && safeBody.label !== current.label) {
-      // Name changed: archive old name, bump version
+    // Feldreihenfolge/-keys sichern: bestehende Keys nicht verändern
+    if (safeBody.customFields) {
+      safeBody.customFields = preserveExistingKeys(safeBody.customFields, current.customFields);
+    }
+
+    const labelChanged = safeBody.label && safeBody.label !== current.label;
+    const fieldsChanged = safeBody.customFields !== undefined &&
+      customFieldsChanged(safeBody.customFields, current.customFields.map(f => f.toObject ? f.toObject() : f));
+
+    if (labelChanged || fieldsChanged) {
       const validFrom = current.nameHistory?.length > 0
         ? current.nameHistory[current.nameHistory.length - 1].validUntil
         : current.createdAt;
@@ -69,6 +99,7 @@ router.put('/:id', auth, async (req, res) => {
           $push: {
             nameHistory: {
               name: current.label,
+              customFields: current.customFields.map(f => f.toObject ? f.toObject() : f),
               version: current.version || 1,
               validFrom,
               validUntil: new Date(),

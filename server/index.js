@@ -5,7 +5,7 @@ const cors = require('cors');
 const path = require('path');
 const fs = require('fs');
 
-const BACKUP_LOCK = path.join(__dirname, '..', '.backup.lock');
+const BACKUP_LOCK = path.join(__dirname, '..', 'backups', '.backup.lock');
 
 const app = express();
 
