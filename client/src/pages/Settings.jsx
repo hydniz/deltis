@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import api from '../utils/api';
 import {
-  Settings as SettingsIcon, Copy, Check, LogOut, User, Save
+  Settings as SettingsIcon, Copy, Check, LogOut, User, Save, KeyRound, Eye, EyeOff
 } from 'lucide-react';
 
 // ─── Hauptseite ─────────────────────────────────────────────────────────────
@@ -18,6 +18,7 @@ export default function Settings() {
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [showUuid, setShowUuid] = useState(false);
 
   const handleSaveProfile = async (e) => {
     e.preventDefault();
@@ -86,7 +87,22 @@ export default function Settings() {
         <div>
           <label className="label">Deine UUID (Zugangscode)</label>
           <div className="flex gap-2">
-            <input className="input font-mono text-sm" value={user?.uuid || ''} readOnly />
+            <div className="relative flex-1">
+              <input
+                className={`input font-mono text-sm pr-10 ${showUuid ? '' : 'blur-sm select-none'}`}
+                value={user?.uuid || ''}
+                readOnly
+                tabIndex={showUuid ? 0 : -1}
+              />
+              <button
+                type="button"
+                onClick={() => setShowUuid(v => !v)}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-200 transition-colors"
+                title={showUuid ? 'UUID verbergen' : 'UUID anzeigen'}
+              >
+                {showUuid ? <EyeOff size={16} /> : <Eye size={16} />}
+              </button>
+            </div>
             <button onClick={copyUuid} className="btn-secondary px-3 flex-shrink-0 flex items-center gap-1.5">
               {copied ? <Check size={15} className="text-emerald-400" /> : <Copy size={15} />}
               {copied ? 'Kopiert' : 'Kopieren'}
@@ -97,6 +113,9 @@ export default function Settings() {
           </p>
         </div>
       </div>
+
+      {/* Admin-Passwort */}
+      {user?.isAdmin && <ChangePasswordForm />}
 
       {/* Konto */}
       <div className="card p-5">
@@ -109,6 +128,104 @@ export default function Settings() {
           Abmelden
         </button>
       </div>
+    </div>
+  );
+}
+
+function ChangePasswordForm() {
+  const [current, setCurrent] = useState('');
+  const [next, setNext] = useState('');
+  const [confirm, setConfirm] = useState('');
+  const [showPw, setShowPw] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+  const [success, setSuccess] = useState(false);
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    if (next.length < 8) { setError('Neues Passwort muss mindestens 8 Zeichen haben.'); return; }
+    if (next !== confirm) { setError('Passwörter stimmen nicht überein.'); return; }
+    setLoading(true);
+    setError('');
+    setSuccess(false);
+    try {
+      await api.put('/admin/password', { currentPassword: current, newPassword: next });
+      setSuccess(true);
+      setCurrent(''); setNext(''); setConfirm('');
+    } catch (err) {
+      setError(err.response?.data?.error || 'Fehler beim Ändern.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="card p-5">
+      <h2 className="font-semibold text-white mb-4 flex items-center gap-2">
+        <KeyRound size={16} className="text-brand-400" />
+        Admin-Passwort ändern
+      </h2>
+      <form onSubmit={handleSubmit} className="space-y-3">
+        <div>
+          <label className="label">Aktuelles Passwort</label>
+          <div className="relative">
+            <input
+              type={showPw ? 'text' : 'password'}
+              value={current}
+              onChange={e => setCurrent(e.target.value)}
+              className="input pr-10"
+              autoComplete="current-password"
+            />
+            <button
+              type="button"
+              onClick={() => setShowPw(v => !v)}
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-200 transition-colors"
+              tabIndex={-1}
+            >
+              {showPw ? <EyeOff size={16} /> : <Eye size={16} />}
+            </button>
+          </div>
+        </div>
+        <div>
+          <label className="label">Neues Passwort</label>
+          <input
+            type={showPw ? 'text' : 'password'}
+            value={next}
+            onChange={e => setNext(e.target.value)}
+            className="input"
+            placeholder="Mindestens 8 Zeichen"
+            autoComplete="new-password"
+          />
+        </div>
+        <div>
+          <label className="label">Neues Passwort bestätigen</label>
+          <input
+            type={showPw ? 'text' : 'password'}
+            value={confirm}
+            onChange={e => setConfirm(e.target.value)}
+            className="input"
+            autoComplete="new-password"
+          />
+        </div>
+
+        {error && <p className="text-red-400 text-sm">{error}</p>}
+        {success && (
+          <p className="text-green-400 text-sm flex items-center gap-1.5">
+            <Check size={14} /> Passwort erfolgreich geändert.
+          </p>
+        )}
+
+        <button
+          type="submit"
+          disabled={loading || !current || !next || !confirm}
+          className="btn-primary flex items-center gap-2"
+        >
+          {loading
+            ? <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+            : <Save size={15} />}
+          Passwort ändern
+        </button>
+      </form>
     </div>
   );
 }

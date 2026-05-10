@@ -8,31 +8,33 @@ export function AuthProvider({ children }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const uuid = localStorage.getItem('uuid');
-    if (uuid) {
+    const token = localStorage.getItem('auth_token');
+    if (token) {
       api.get('/auth/me')
         .then(res => setUser(res.data))
-        .catch(() => localStorage.removeItem('uuid'))
+        .catch(() => localStorage.removeItem('auth_token'))
         .finally(() => setLoading(false));
     } else {
       setLoading(false);
     }
   }, []);
 
-  const login = async (uuid) => {
-    localStorage.setItem('uuid', uuid);
+  // adminSecret nur angeben wenn Admin-Login
+  const login = async (uuid, adminSecret = null) => {
+    const token = adminSecret ? `${uuid}:${adminSecret}` : uuid;
+    localStorage.setItem('auth_token', token);
     try {
       const res = await api.get('/auth/me');
       setUser(res.data);
       return res.data;
     } catch (err) {
-      localStorage.removeItem('uuid');
+      localStorage.removeItem('auth_token');
       throw err;
     }
   };
 
   const logout = () => {
-    localStorage.removeItem('uuid');
+    localStorage.removeItem('auth_token');
     setUser(null);
   };
 
