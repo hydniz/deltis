@@ -95,7 +95,7 @@ async function acquireLock(MigrationLock) {
 
 async function releaseLock(MigrationLock) {
   try {
-    await MigrationLock.deleteOne({ _id: 'lock' });
+    await MigrationLock.deleteMany({});
   } catch (err) {
     logErr(`Warning: failed to release migration lock: ${err.message}`);
   }
@@ -165,6 +165,12 @@ async function runMigrations(opts = {}) {
           let restoreError = null;
           try {
             await restoreBackup({ db: mongoose.connection.db, file: backupFile });
+            // Recreate indexes lost when collections were dropped during restore.
+            for (const model of Object.values(mongoose.models)) {
+              try { await model.syncIndexes(); } catch (e) {
+                logErr(`Warning: syncIndexes for ${model.modelName}: ${e.message}`);
+              }
+            }
           } catch (restoreErr) {
             restoreError = restoreErr;
           }

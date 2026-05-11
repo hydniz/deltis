@@ -16,10 +16,12 @@ function log(msg) { console.log(`[migration]   ${msg}`); }
 async function up() {
   const usersColl = mongoose.connection.collection('users');
 
+  // Find every user that still carries either legacy field, regardless of
+  // whether the value is empty — the $unset must run for all of them.
   const legacyUsers = await usersColl.find({
     $or: [
-      { selectedHabitIds: { $exists: true, $not: { $size: 0 } } },
-      { habitSettings:    { $exists: true, $ne: {} } },
+      { selectedHabitIds: { $exists: true } },
+      { habitSettings:    { $exists: true } },
     ],
   }).toArray();
 
@@ -32,16 +34,23 @@ async function up() {
   let skipped = 0;
 
   for (const user of legacyUsers) {
-    const existing = await UserHabitSettings.findOne({ userId: user._id });
-    if (existing) {
-      skipped++;
-    } else {
-      await UserHabitSettings.create({
-        userId: user._id,
-        selectedHabitIds: user.selectedHabitIds || [],
-        habitSettings: user.habitSettings || {},
-      });
-      migrated++;
+    const hasData =
+      (Array.isArray(user.selectedHabitIds) && user.selectedHabitIds.length > 0) ||
+      (user.habitSettings && typeof user.habitSettings === 'object' &&
+        Object.keys(user.habitSettings).length > 0);
+
+    if (hasData) {
+      const existing = await UserHabitSettings.findOne({ userId: user._id });
+      if (existing) {
+        skipped++;
+      } else {
+        await UserHabitSettings.create({
+          userId: user._id,
+          selectedHabitIds: user.selectedHabitIds || [],
+          habitSettings: user.habitSettings || {},
+        });
+        migrated++;
+      }
     }
 
     // Remove the legacy fields from the User document regardless — they're not
