@@ -96,15 +96,25 @@ async function seedAdminUser() {
   }
 }
 
-mongoose.connect(process.env.MONGODB_URI)
-  .then(async () => {
-    console.log('✓ MongoDB connected');
-    await seedAdminUser();
-    await seedPredefinedData();
-    const PORT = process.env.PORT || 3001;
-    app.listen(PORT, () => console.log(`✓ ${branding.name} server running on port ${PORT}`));
-  })
-  .catch(err => {
-    console.error('✗ MongoDB error:', err.message);
-    process.exit(1);
-  });
+const { runMigrations } = require('./migrations/runner');
+
+async function start() {
+  await mongoose.connect(process.env.MONGODB_URI);
+  console.log('✓ MongoDB connected');
+
+  // Apply pending migrations BEFORE seeding so seeds always run against the
+  // current schema. A failure here automatically restores from the
+  // pre-migration backup and exits the process.
+  await runMigrations();
+
+  await seedAdminUser();
+  await seedPredefinedData();
+
+  const PORT = process.env.PORT || 3001;
+  app.listen(PORT, () => console.log(`✓ ${branding.name} server running on port ${PORT}`));
+}
+
+start().catch(err => {
+  console.error('✗ Startup failed:', err.message);
+  process.exit(1);
+});

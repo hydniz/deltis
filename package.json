@@ -11,7 +11,8 @@
     "test:client": "npm test --prefix client",
     "test:all": "npm test && npm test --prefix client",
     "admin:reset-password": "node scripts/reset-admin-password.js",
-    "migrate:habit-settings": "node scripts/migrate-habit-settings.js"
+    "migrate:status": "node scripts/migration-status.js",
+    "migrate:rollback": "node scripts/rollback-migration.js"
   },
   "jest": {
     "testEnvironment": "node",
