@@ -53,16 +53,30 @@ gespeicherte Versionsstand vom aktuellen Namen abweicht. Das Frontend zeigt dann
 ## Modelle
 
 ### User
-Repräsentiert einen Benutzer. Login erfolgt ausschließlich per UUID.
+Repräsentiert einen Benutzer. Login erfolgt per Benutzername + Passwort (nach Migration).
 
-| Feld              | Typ        | Relation / Beschreibung                                  |
-|-------------------|------------|----------------------------------------------------------|
-| `_id`             | ObjectId   | Primärschlüssel                                          |
-| `uuid`            | String     | Eindeutiger Login-Schlüssel (aus `.env` VALID_UUIDS)    |
-| `name`            | String     | Anzeigename des Benutzers                                |
-| `weightUnit`      | String     | Bevorzugte Gewichtseinheit (`kg` oder `lbs`)             |
-| `selectedHabitIds`| ObjectId[] | **→ HabitDefinition[]** Aktiv ausgewählte Gewohnheiten  |
-| `createdAt`       | Date       | Erstellungszeitpunkt                                     |
+| Feld              | Typ        | Beschreibung                                                                      |
+|-------------------|------------|-----------------------------------------------------------------------------------|
+| `_id`             | ObjectId   | Primärschlüssel                                                                   |
+| `uuid`            | String     | Ursprünglicher Zugangscode (aus `.env` VALID_UUIDS); nach Migration gesperrt      |
+| `username`        | String     | Benutzername für den Login (≥3 Zeichen, unique, lowercase); wird bei Migration gesetzt |
+| `passwordHash`    | String     | bcrypt-Hash des Benutzerpassworts (+ Pepper); `select: false`, nie in API-Responses |
+| `name`            | String     | Anzeigename des Benutzers                                                         |
+| `isAdmin`         | Boolean    | Admin-Flag                                                                        |
+| `adminSecretHash` | String     | bcrypt-Hash des Admin-Secrets; `select: false`                                    |
+| `weightUnit`      | String     | Bevorzugte Gewichtseinheit (`kg` oder `lbs`)                                      |
+| `selectedHabitIds`| ObjectId[] | **→ HabitDefinition[]** Aktiv ausgewählte Gewohnheiten                           |
+| `createdAt`       | Date       | Erstellungszeitpunkt                                                              |
+
+**Auth-Token-Format** (Bearer-Header):
+
+| Zustand                        | Token-Format                    |
+|--------------------------------|---------------------------------|
+| Migration (noch kein Username) | `<uuid>`                        |
+| Normaler Login                 | `<username>:<password>`         |
+| Admin-Login                    | `<username>:<admin-secret>`     |
+
+UUID-Login wird serverseitig dauerhaft abgelehnt (`UUID_BLOCKED`), sobald `username` gesetzt ist.
 
 ---
 
@@ -295,6 +309,40 @@ Stellt einen Datenbankzustand aus einem Backup wieder her.
 
 > **Warnung:** `--drop` löscht alle aktuellen Daten vor der Wiederherstellung.
 > Die Bestätigung mit `ja` ist erforderlich.
+
+---
+
+### Admin-Passwort zurücksetzen – `scripts/reset-admin-password.js`
+
+Setzt das Admin-Passwort direkt in der Datenbank zurück, ohne dass das aktuelle Passwort
+bekannt sein muss. Nützlich bei vergessenem Admin-Secret.
+
+**Was es tut:**
+1. Verbindet sich mit MongoDB über `MONGODB_URI` aus `.env`
+2. Sucht den Admin-Account (Feld `isAdmin: true`)
+3. Zeigt UUID und Username des gefundenen Accounts zur Bestätigung an
+4. Fragt zweimal nach dem neuen Passwort (kein Echo im Terminal)
+5. Hasht das Passwort mit bcrypt (12 Runden) und speichert es als `adminSecretHash`
+
+**Verwendung:**
+
+```bash
+# Interaktiv (empfohlen) – Passwort wird versteckt eingegeben
+node scripts/reset-admin-password.js
+
+# Alternativ per npm-Script
+npm run admin:reset-password
+
+# Non-interaktiv (Skripte, Pipelines)
+node scripts/reset-admin-password.js --password "NeuesPasswort123"
+
+# Via stdin (Passwort taucht nicht in der Prozessliste auf)
+echo "NeuesPasswort123" | node scripts/reset-admin-password.js
+```
+
+> **Hinweis:** Das Skript nutzt **kein Pepper** – `adminSecretHash` wird immer ohne Pepper
+> gehasht, nur `passwordHash` (reguläre Nutzer) verwendet den konfigurierten Pepper.
+> Das Reset-Skript muss daher nicht angepasst werden, wenn sich der Pepper ändert.
 
 ---
 
