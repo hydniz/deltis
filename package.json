@@ -10,7 +10,8 @@
     "test:coverage": "jest --runInBand --forceExit --coverage",
     "test:client": "npm test --prefix client",
     "test:all": "npm test && npm test --prefix client",
-    "admin:reset-password": "node scripts/reset-admin-password.js"
+    "admin:reset-password": "node scripts/reset-admin-password.js",
+    "migrate:habit-settings": "node scripts/migrate-habit-settings.js"
   },
   "jest": {
     "testEnvironment": "node",

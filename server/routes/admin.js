@@ -78,10 +78,11 @@ router.get('/users', auth, adminOnly, async (req, res) => {
   }
 });
 
-// Create a new user with username + temporary password
+// Create a new user with username + temporary password.
+// Pass isAdmin: true to create an admin account.
 router.post('/users', auth, adminOnly, async (req, res) => {
   try {
-    const { username, password, name } = req.body;
+    const { username, password, name, isAdmin: makeAdmin } = req.body;
 
     if (!username || typeof username !== 'string') {
       return res.status(400).json({ error: 'Benutzername erforderlich.' });
@@ -105,19 +106,28 @@ router.post('/users', auth, adminOnly, async (req, res) => {
       return res.status(400).json({ error: 'Temporäres Passwort muss mindestens 8 Zeichen lang sein.' });
     }
 
-    const passwordHash = await pw.hash(password);
-    const user = await User.create({
+    // Admin accounts use adminSecretHash (no pepper); regular accounts use passwordHash (pepper)
+    const userFields = {
       uuid: crypto.randomUUID(),
       username: normalized,
-      passwordHash,
       mustChangePassword: true,
       name: name?.trim() || normalized,
-    });
+    };
+
+    if (makeAdmin) {
+      userFields.isAdmin = true;
+      userFields.adminSecretHash = await bcrypt.hash(password, 12);
+    } else {
+      userFields.passwordHash = await pw.hash(password);
+    }
+
+    const user = await User.create(userFields);
 
     res.status(201).json({
       _id: user._id,
       username: user.username,
       name: user.name,
+      isAdmin: user.isAdmin,
       mustChangePassword: user.mustChangePassword,
       createdAt: user.createdAt,
     });
@@ -162,7 +172,12 @@ router.put('/users/:id', auth, adminOnly, async (req, res) => {
       if (password.length < 8) {
         return res.status(400).json({ error: 'Passwort muss mindestens 8 Zeichen lang sein.' });
       }
-      update.passwordHash = await pw.hash(password);
+      // Admin accounts use adminSecretHash; regular accounts use passwordHash
+      if (user.isAdmin) {
+        update.adminSecretHash = await bcrypt.hash(password, 12);
+      } else {
+        update.passwordHash = await pw.hash(password);
+      }
       update.mustChangePassword = true;
     }
 
@@ -183,7 +198,9 @@ router.delete('/users/:id', auth, adminOnly, async (req, res) => {
   try {
     const user = await User.findById(req.params.id);
     if (!user) return res.status(404).json({ error: 'Nutzer nicht gefunden' });
-    if (user.isAdmin) return res.status(400).json({ error: 'Admin-Konto kann nicht gelöscht werden' });
+    if (user._id.equals(req.user._id)) {
+      return res.status(400).json({ error: 'Du kannst dein eigenes Konto nicht löschen.' });
+    }
     await User.findByIdAndDelete(req.params.id);
     res.json({ ok: true });
   } catch (err) {
