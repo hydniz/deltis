@@ -1,7 +1,7 @@
 #!/usr/bin/env node
-// Setzt das Admin-Passwort direkt in der Datenbank zurück.
-// Verwendung: node scripts/reset-admin-password.js
-//         oder: node scripts/reset-admin-password.js --password <neues-passwort>
+// Resets the admin password directly in the database.
+// Usage: node scripts/reset-admin-password.js
+//        node scripts/reset-admin-password.js --password <new-password>
 
 require('dotenv').config();
 const readline = require('readline');
@@ -38,11 +38,11 @@ function readSecret(prompt) {
           process.stdout.write('\n');
           resolve(value);
           break;
-        case '': // Ctrl+C
+        case '': // Ctrl+C
           process.stdout.write('\n');
           process.exit(1);
           break;
-        case '': // Backspace
+        case '': // Backspace
         case '\b':
           if (value.length > 0) value = value.slice(0, -1);
           break;
@@ -58,13 +58,13 @@ async function main() {
   const pwFlagIdx = process.argv.indexOf('--password');
   let newPassword = pwFlagIdx !== -1 ? process.argv[pwFlagIdx + 1] ?? null : null;
 
-  console.log('── Admin-Passwort zurücksetzen ──────────────────────────');
-  console.log(`Datenbank: ${MONGODB_URI}\n`);
+  console.log('── Reset admin password ─────────────────────────────────');
+  console.log(`Database: ${MONGODB_URI}\n`);
 
   try {
     await mongoose.connect(MONGODB_URI);
   } catch (err) {
-    console.error(`Fehler: Verbindung zur Datenbank fehlgeschlagen.\n${err.message}`);
+    console.error(`Error: could not connect to database.\n${err.message}`);
     process.exit(1);
   }
 
@@ -77,27 +77,27 @@ async function main() {
 
   const admin = await User.findOne({ isAdmin: true });
   if (!admin) {
-    console.error('Fehler: Kein Admin-Account in der Datenbank gefunden.');
+    console.error('Error: no admin account found in the database.');
     await mongoose.disconnect();
     process.exit(1);
   }
 
-  console.log('Admin-Account gefunden:');
+  console.log('Admin account found:');
   console.log(`  UUID:     ${admin.uuid}`);
-  console.log(`  Username: ${admin.username || '(noch nicht gesetzt)'}\n`);
+  console.log(`  Username: ${admin.username || '(not set)'}\n`);
 
   if (!newPassword) {
-    newPassword = await readSecret('Neues Admin-Passwort:  ');
-    const confirm = await readSecret('Passwort bestätigen:   ');
+    newPassword = await readSecret('New admin password:    ');
+    const confirm = await readSecret('Confirm password:      ');
     if (newPassword !== confirm) {
-      console.error('Fehler: Passwörter stimmen nicht überein.');
+      console.error('Error: passwords do not match.');
       await mongoose.disconnect();
       process.exit(1);
     }
   }
 
   if (!newPassword || newPassword.length < MIN_LENGTH) {
-    console.error(`Fehler: Passwort muss mindestens ${MIN_LENGTH} Zeichen lang sein.`);
+    console.error(`Error: password must be at least ${MIN_LENGTH} characters long.`);
     await mongoose.disconnect();
     process.exit(1);
   }
@@ -105,11 +105,11 @@ async function main() {
   const hash = await bcrypt.hash(newPassword, ROUNDS);
   await User.findByIdAndUpdate(admin._id, { adminSecretHash: hash });
 
-  console.log('Admin-Passwort wurde erfolgreich zurückgesetzt.');
+  console.log('Admin password has been reset successfully.');
   await mongoose.disconnect();
 }
 
 main().catch(err => {
-  console.error('Unerwarteter Fehler:', err.message);
+  console.error('Unexpected error:', err.message);
   process.exit(1);
 });

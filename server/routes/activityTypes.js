@@ -78,7 +78,7 @@ router.put('/:id', auth, async (req, res) => {
 
     const { nameHistory: _nh, version: _v, _id: _i, createdAt: _c, userId: _u, __v: _vv, ...safeBody } = req.body;
 
-    // Feldreihenfolge/-keys sichern: bestehende Keys nicht verändern
+    // Preserve field order and keys: do not change keys of existing fields
     if (safeBody.customFields) {
       safeBody.customFields = preserveExistingKeys(safeBody.customFields, current.customFields);
     }
