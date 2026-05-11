@@ -3,14 +3,14 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import api from '../utils/api';
 import {
-  Settings as SettingsIcon, Copy, Check, LogOut, User, Save, KeyRound, Eye, EyeOff,
-  Download, Upload, AlertCircle
+  Check, LogOut, User, Save, KeyRound, Eye, EyeOff,
+  Download, Upload, AlertCircle, AtSign, Lock
 } from 'lucide-react';
 
 // ── Main page ─────────────────────────────────────────────────────────────
 
 export default function Settings() {
-  const { user, logout, updateUser } = useAuth();
+  const { user, logout, updateUser, setUsername, changePassword } = useAuth();
   const navigate = useNavigate();
 
   // Profil
@@ -18,8 +18,12 @@ export default function Settings() {
   const [weightUnit, setWeightUnit] = useState(user?.weightUnit || 'kg');
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
-  const [copied, setCopied] = useState(false);
-  const [showUuid, setShowUuid] = useState(false);
+
+  // Username
+  const [newUsername, setNewUsername] = useState('');
+  const [usernameError, setUsernameError] = useState('');
+  const [usernameSaving, setUsernameSaving] = useState(false);
+  const [usernameSaved, setUsernameSaved] = useState(false);
 
   const handleSaveProfile = async (e) => {
     e.preventDefault();
@@ -36,10 +40,25 @@ export default function Settings() {
     }
   };
 
-  const copyUuid = () => {
-    navigator.clipboard.writeText(user?.uuid || '');
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
+  const handleSaveUsername = async (e) => {
+    e.preventDefault();
+    const trimmed = newUsername.trim();
+    if (trimmed.length < 3) {
+      setUsernameError('Benutzername muss mindestens 3 Zeichen lang sein.');
+      return;
+    }
+    setUsernameSaving(true);
+    setUsernameError('');
+    try {
+      await setUsername(trimmed);
+      setNewUsername('');
+      setUsernameSaved(true);
+      setTimeout(() => setUsernameSaved(false), 2000);
+    } catch (err) {
+      setUsernameError(err.response?.data?.error || 'Fehler beim Speichern.');
+    } finally {
+      setUsernameSaving(false);
+    }
   };
 
   const handleLogout = () => {
@@ -79,44 +98,52 @@ export default function Settings() {
         </form>
       </div>
 
-      {/* UUID */}
+      {/* Benutzername */}
       <div className="card p-5">
         <h2 className="font-semibold text-white mb-4 flex items-center gap-2">
-          <SettingsIcon size={16} className="text-brand-400" />
-          Zugang
+          <AtSign size={16} className="text-brand-400" />
+          Benutzername
         </h2>
-        <div>
-          <label className="label">Deine UUID (Zugangscode)</label>
-          <div className="flex gap-2">
-            <div className="relative flex-1">
-              <input
-                className={`input font-mono text-sm pr-10 ${showUuid ? '' : 'blur-sm select-none'}`}
-                value={user?.uuid || ''}
-                readOnly
-                tabIndex={showUuid ? 0 : -1}
-              />
-              <button
-                type="button"
-                onClick={() => setShowUuid(v => !v)}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-200 transition-colors"
-                title={showUuid ? 'UUID verbergen' : 'UUID anzeigen'}
-              >
-                {showUuid ? <EyeOff size={16} /> : <Eye size={16} />}
-              </button>
-            </div>
-            <button onClick={copyUuid} className="btn-secondary px-3 flex-shrink-0 flex items-center gap-1.5">
-              {copied ? <Check size={15} className="text-emerald-400" /> : <Copy size={15} />}
-              {copied ? 'Kopiert' : 'Kopieren'}
-            </button>
-          </div>
-          <p className="text-xs text-slate-600 mt-1.5">
-            Bewahre diese UUID sicher auf – sie ist dein einziger Zugangscode.
+        {user?.username && (
+          <p className="text-sm text-slate-400 mb-4">
+            Aktuell: <span className="text-white font-mono">{user.username}</span>
           </p>
-        </div>
+        )}
+        <form onSubmit={handleSaveUsername} className="space-y-3">
+          <div>
+            <label className="label">{user?.username ? 'Neuer Benutzername' : 'Benutzername wählen'}</label>
+            <input
+              className="input"
+              value={newUsername}
+              onChange={e => { setNewUsername(e.target.value); setUsernameError(''); }}
+              placeholder="Mindestens 3 Zeichen"
+              minLength={3}
+              maxLength={30}
+              autoComplete="username"
+            />
+          </div>
+          {usernameError && (
+            <div className="flex items-center gap-2 text-red-400 text-sm bg-red-900/20 border border-red-900/50 rounded-xl px-3 py-2">
+              <AlertCircle size={14} />
+              {usernameError}
+            </div>
+          )}
+          <button
+            type="submit"
+            disabled={usernameSaving || newUsername.trim().length < 3}
+            className="btn-primary flex items-center gap-2"
+          >
+            {usernameSaved ? <Check size={16} /> : <Save size={16} />}
+            {usernameSaved ? 'Gespeichert!' : usernameSaving ? 'Speichern...' : 'Benutzernamen speichern'}
+          </button>
+        </form>
       </div>
 
       {/* Export / Import */}
       <ExportImport />
+
+      {/* Passwort ändern (nur für reguläre Nutzer mit gesetztem Passwort) */}
+      {!user?.isAdmin && user?.username && <UserPasswordForm changePassword={changePassword} />}
 
       {/* Admin-Passwort */}
       {user?.isAdmin && <ChangePasswordForm />}
@@ -240,6 +267,104 @@ function ExportImport() {
           )}
         </div>
       )}
+    </div>
+  );
+}
+
+function UserPasswordForm({ changePassword }) {
+  const [current, setCurrent] = useState('');
+  const [next, setNext] = useState('');
+  const [confirm, setConfirm] = useState('');
+  const [showPw, setShowPw] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+  const [success, setSuccess] = useState(false);
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    if (next.length < 8) { setError('Neues Passwort muss mindestens 8 Zeichen haben.'); return; }
+    if (next !== confirm) { setError('Passwörter stimmen nicht überein.'); return; }
+    setLoading(true);
+    setError('');
+    setSuccess(false);
+    try {
+      await changePassword(current, next);
+      setSuccess(true);
+      setCurrent(''); setNext(''); setConfirm('');
+    } catch (err) {
+      setError(err.response?.data?.error || 'Fehler beim Ändern.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="card p-5">
+      <h2 className="font-semibold text-white mb-4 flex items-center gap-2">
+        <Lock size={16} className="text-brand-400" />
+        Passwort ändern
+      </h2>
+      <form onSubmit={handleSubmit} className="space-y-3">
+        <div>
+          <label className="label">Aktuelles Passwort</label>
+          <div className="relative">
+            <input
+              type={showPw ? 'text' : 'password'}
+              value={current}
+              onChange={e => setCurrent(e.target.value)}
+              className="input pr-10"
+              autoComplete="current-password"
+            />
+            <button
+              type="button"
+              onClick={() => setShowPw(v => !v)}
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-200 transition-colors"
+              tabIndex={-1}
+            >
+              {showPw ? <EyeOff size={16} /> : <Eye size={16} />}
+            </button>
+          </div>
+        </div>
+        <div>
+          <label className="label">Neues Passwort</label>
+          <input
+            type={showPw ? 'text' : 'password'}
+            value={next}
+            onChange={e => setNext(e.target.value)}
+            className="input"
+            placeholder="Mindestens 8 Zeichen"
+            autoComplete="new-password"
+          />
+        </div>
+        <div>
+          <label className="label">Neues Passwort bestätigen</label>
+          <input
+            type={showPw ? 'text' : 'password'}
+            value={confirm}
+            onChange={e => setConfirm(e.target.value)}
+            className="input"
+            autoComplete="new-password"
+          />
+        </div>
+
+        {error && <p className="text-red-400 text-sm">{error}</p>}
+        {success && (
+          <p className="text-green-400 text-sm flex items-center gap-1.5">
+            <Check size={14} /> Passwort erfolgreich geändert.
+          </p>
+        )}
+
+        <button
+          type="submit"
+          disabled={loading || !current || !next || !confirm}
+          className="btn-primary flex items-center gap-2"
+        >
+          {loading
+            ? <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+            : <Save size={15} />}
+          Passwort ändern
+        </button>
+      </form>
     </div>
   );
 }
