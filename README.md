@@ -9,8 +9,8 @@ A self-hosted personal habit and activity tracking PWA. Multi-user, Docker-ready
 - **Habit tracking** – track daily habits (sleep, water intake, screen time, …) with charts
 - **Weight log** – visualize weight trends over time
 - **Goals** – set weekly and long-term goals with milestones
-- **Multi-user** – admin creates UUID-based accounts for each user
-- **Admin panel** – manage users, generate login UUIDs, change admin password
+- **Multi-user** – admin creates accounts; users log in with username + password
+- **Admin panel** – manage users, change admin password
 - **PWA** – installable as a native app on mobile and desktop
 
 ## Tech Stack
@@ -18,7 +18,7 @@ A self-hosted personal habit and activity tracking PWA. Multi-user, Docker-ready
 - **Backend**: Node.js / Express
 - **Database**: MongoDB
 - **Frontend**: React + Vite + TailwindCSS
-- **Auth**: UUID-only for regular users; UUID + password for admin
+- **Auth**: username + password for all users (bcrypt + pepper); admin secret for admin actions
 
 ---
 
@@ -63,6 +63,9 @@ npm run dev
 3. Your admin UUID is displayed on the setup page. **Copy and save it.**
 4. Set your admin password to complete setup.
 5. Log in at `/login` → click *"Als Admin anmelden"* → enter UUID + password.
+6. After logging in, a prompt will appear to choose a **username**. Once set, the UUID is disabled as a login method.
+
+> **Tip:** Set up a pepper before creating any user accounts. See [SECURITY.md](SECURITY.md).
 
 ---
 
@@ -141,10 +144,30 @@ Backups are stored in `./backups/` (excluded from git). Write access to the app 
 
 ## Authentication
 
-- **Regular users** log in with their UUID (no password).
-- **Admin** logs in with UUID + password via the *"Als Admin anmelden"* toggle on the login page.
+- **Regular users** log in with their **username + password**.
+- **Admin** logs in with username + admin secret via the *"Als Admin anmelden"* toggle on the login page.
 - The admin can create and delete user accounts from the admin panel (`/admin`).
 - The admin can change their password in the settings (`/settings`).
+
+### Migration from UUID-only
+
+Existing UUID-based accounts are migrated on first login: users enter their UUID, are prompted to choose a username and password, and the UUID is permanently disabled as a login method afterwards. The UUID remains stored in the database for reference but can no longer be used to authenticate.
+
+### Password security (Pepper)
+
+User passwords are hashed with bcrypt (12 rounds) plus a server-side **pepper** – a secret key stored outside the database. This means a leaked database alone is not sufficient for offline password cracking. See [SECURITY.md](SECURITY.md) for setup instructions.
+
+### Admin password reset
+
+If the admin password is lost, it can be reset directly against the database:
+
+```bash
+node scripts/reset-admin-password.js
+# or:
+npm run admin:reset-password
+```
+
+See [SECURITY.md](SECURITY.md) for details.
 
 ---
 
