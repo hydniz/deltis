@@ -143,25 +143,116 @@ describe('GET /api/admin/users', () => {
 });
 
 describe('POST /api/admin/users', () => {
-  it('creates a new user with an auto-generated UUID', async () => {
+  it('creates a new regular user with username, temporary password and mustChangePassword=true', async () => {
     const { token } = await createAdminUser();
     const res = await request(app)
       .post('/api/admin/users')
       .set(authHeader(token))
-      .send({ name: 'New User' });
+      .send({ username: 'newuser', password: 'temppass1', name: 'New User' });
     expect(res.status).toBe(201);
-    expect(res.body.uuid).toBeDefined();
+    expect(res.body.username).toBe('newuser');
     expect(res.body.name).toBe('New User');
+    expect(res.body.isAdmin).toBeFalsy();
+    expect(res.body.mustChangePassword).toBe(true);
+    expect(res.body.passwordHash).toBeUndefined();
+    expect(res.body.adminSecretHash).toBeUndefined();
   });
 
-  it('generates a default name when none is provided', async () => {
+  it('defaults name to username when no name is provided', async () => {
     const { token } = await createAdminUser();
     const res = await request(app)
       .post('/api/admin/users')
       .set(authHeader(token))
-      .send({});
+      .send({ username: 'plainuser', password: 'temppass1' });
     expect(res.status).toBe(201);
-    expect(res.body.name).toBeDefined();
+    expect(res.body.name).toBe('plainuser');
+  });
+
+  it('normalizes the username to lowercase', async () => {
+    const { token } = await createAdminUser();
+    const res = await request(app)
+      .post('/api/admin/users')
+      .set(authHeader(token))
+      .send({ username: 'MixedCase', password: 'temppass1' });
+    expect(res.status).toBe(201);
+    expect(res.body.username).toBe('mixedcase');
+  });
+
+  it('creates an admin user when isAdmin=true is passed', async () => {
+    const { token } = await createAdminUser();
+    const res = await request(app)
+      .post('/api/admin/users')
+      .set(authHeader(token))
+      .send({ username: 'secondadmin', password: 'temppass1', isAdmin: true });
+    expect(res.status).toBe(201);
+    expect(res.body.isAdmin).toBe(true);
+  });
+
+  it('returns 400 when username is missing', async () => {
+    const { token } = await createAdminUser();
+    const res = await request(app)
+      .post('/api/admin/users')
+      .set(authHeader(token))
+      .send({ password: 'temppass1' });
+    expect(res.status).toBe(400);
+  });
+
+  it('returns 400 when username is shorter than 3 characters', async () => {
+    const { token } = await createAdminUser();
+    const res = await request(app)
+      .post('/api/admin/users')
+      .set(authHeader(token))
+      .send({ username: 'ab', password: 'temppass1' });
+    expect(res.status).toBe(400);
+  });
+
+  it('returns 400 when username exceeds 30 characters', async () => {
+    const { token } = await createAdminUser();
+    const res = await request(app)
+      .post('/api/admin/users')
+      .set(authHeader(token))
+      .send({ username: 'a'.repeat(31), password: 'temppass1' });
+    expect(res.status).toBe(400);
+  });
+
+  it('returns 400 when username contains invalid characters', async () => {
+    const { token } = await createAdminUser();
+    const res = await request(app)
+      .post('/api/admin/users')
+      .set(authHeader(token))
+      .send({ username: 'bad user!', password: 'temppass1' });
+    expect(res.status).toBe(400);
+  });
+
+  it('returns 409 when username is already taken', async () => {
+    const { token } = await createAdminUser();
+    await request(app)
+      .post('/api/admin/users')
+      .set(authHeader(token))
+      .send({ username: 'duplicate', password: 'temppass1' });
+    const res = await request(app)
+      .post('/api/admin/users')
+      .set(authHeader(token))
+      .send({ username: 'duplicate', password: 'temppass2' });
+    expect(res.status).toBe(409);
+  });
+
+  it('returns 400 when password is missing', async () => {
+    const { token } = await createAdminUser();
+    const res = await request(app)
+      .post('/api/admin/users')
+      .set(authHeader(token))
+      .send({ username: 'validuser' });
+    expect(res.status).toBe(400);
+  });
+
+  it('returns 400 when password is shorter than 8 characters', async () => {
+    const { token } = await createAdminUser();
+    const res = await request(app)
+      .post('/api/admin/users')
+      .set(authHeader(token))
+      .send({ username: 'validuser', password: 'short' });
+    expect(res.status).toBe(400);
   });
 
   it('returns 403 for a regular user', async () => {
@@ -169,7 +260,151 @@ describe('POST /api/admin/users', () => {
     const res = await request(app)
       .post('/api/admin/users')
       .set(authHeader(token))
-      .send({ name: 'Hacker' });
+      .send({ username: 'hacker', password: 'temppass1' });
+    expect(res.status).toBe(403);
+  });
+});
+
+describe('PUT /api/admin/users/:id', () => {
+  it('updates the username of a regular user', async () => {
+    const { token } = await createAdminUser();
+    const { user } = await createUser({ name: 'Alice' });
+    const res = await request(app)
+      .put(`/api/admin/users/${user._id}`)
+      .set(authHeader(token))
+      .send({ username: 'alice' });
+    expect(res.status).toBe(200);
+    expect(res.body.username).toBe('alice');
+  });
+
+  it('updates the name of a regular user', async () => {
+    const { token } = await createAdminUser();
+    const { user } = await createUser({ name: 'Old Name' });
+    const res = await request(app)
+      .put(`/api/admin/users/${user._id}`)
+      .set(authHeader(token))
+      .send({ name: 'New Name' });
+    expect(res.status).toBe(200);
+    expect(res.body.name).toBe('New Name');
+  });
+
+  it('resets the password and sets mustChangePassword=true', async () => {
+    const { token } = await createAdminUser();
+    const { user } = await createUser();
+    const res = await request(app)
+      .put(`/api/admin/users/${user._id}`)
+      .set(authHeader(token))
+      .send({ password: 'freshpass1' });
+    expect(res.status).toBe(200);
+    expect(res.body.mustChangePassword).toBe(true);
+  });
+
+  it('ignores an empty password string (no password change)', async () => {
+    const { token } = await createAdminUser();
+    const { user } = await createUser({ name: 'NoChange' });
+    const res = await request(app)
+      .put(`/api/admin/users/${user._id}`)
+      .set(authHeader(token))
+      .send({ name: 'Renamed', password: '' });
+    expect(res.status).toBe(200);
+    expect(res.body.name).toBe('Renamed');
+  });
+
+  it('returns 404 for a non-existent user', async () => {
+    const { token } = await createAdminUser();
+    const fakeId = '507f1f77bcf86cd799439011';
+    const res = await request(app)
+      .put(`/api/admin/users/${fakeId}`)
+      .set(authHeader(token))
+      .send({ name: 'Ghost' });
+    expect(res.status).toBe(404);
+  });
+
+  it('returns 400 when trying to edit an admin account', async () => {
+    const { token, user } = await createAdminUser();
+    const res = await request(app)
+      .put(`/api/admin/users/${user._id}`)
+      .set(authHeader(token))
+      .send({ name: 'Renamed Admin' });
+    expect(res.status).toBe(400);
+  });
+
+  it('returns 400 when username is too short', async () => {
+    const { token } = await createAdminUser();
+    const { user } = await createUser();
+    const res = await request(app)
+      .put(`/api/admin/users/${user._id}`)
+      .set(authHeader(token))
+      .send({ username: 'ab' });
+    expect(res.status).toBe(400);
+  });
+
+  it('returns 400 when username is too long', async () => {
+    const { token } = await createAdminUser();
+    const { user } = await createUser();
+    const res = await request(app)
+      .put(`/api/admin/users/${user._id}`)
+      .set(authHeader(token))
+      .send({ username: 'a'.repeat(31) });
+    expect(res.status).toBe(400);
+  });
+
+  it('returns 400 when username has invalid characters', async () => {
+    const { token } = await createAdminUser();
+    const { user } = await createUser();
+    const res = await request(app)
+      .put(`/api/admin/users/${user._id}`)
+      .set(authHeader(token))
+      .send({ username: 'bad user!' });
+    expect(res.status).toBe(400);
+  });
+
+  it('returns 409 when new username is already taken by another user', async () => {
+    const { token } = await createAdminUser();
+    const { user: a } = await createUser();
+    const { user: b } = await createUser();
+    await request(app)
+      .put(`/api/admin/users/${a._id}`)
+      .set(authHeader(token))
+      .send({ username: 'taken' });
+    const res = await request(app)
+      .put(`/api/admin/users/${b._id}`)
+      .set(authHeader(token))
+      .send({ username: 'taken' });
+    expect(res.status).toBe(409);
+  });
+
+  it('allows keeping the same username on the same user', async () => {
+    const { token } = await createAdminUser();
+    const { user } = await createUser();
+    await request(app)
+      .put(`/api/admin/users/${user._id}`)
+      .set(authHeader(token))
+      .send({ username: 'samename' });
+    const res = await request(app)
+      .put(`/api/admin/users/${user._id}`)
+      .set(authHeader(token))
+      .send({ username: 'samename' });
+    expect(res.status).toBe(200);
+  });
+
+  it('returns 400 when password is too short', async () => {
+    const { token } = await createAdminUser();
+    const { user } = await createUser();
+    const res = await request(app)
+      .put(`/api/admin/users/${user._id}`)
+      .set(authHeader(token))
+      .send({ password: 'short' });
+    expect(res.status).toBe(400);
+  });
+
+  it('returns 403 for a regular user', async () => {
+    const { token } = await createUser();
+    const { user: victim } = await createUser();
+    const res = await request(app)
+      .put(`/api/admin/users/${victim._id}`)
+      .set(authHeader(token))
+      .send({ name: 'Hacked' });
     expect(res.status).toBe(403);
   });
 });
