@@ -21,7 +21,7 @@ function restoreConsole() {
 
 // Track tmp dirs/files for cleanup in afterEach.
 const tmpResources = [];
-function tmpDir(prefix = 'mig-test-') {
+function tmpDir(prefix = 'habit-tracker-mig-test-') {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), prefix));
   tmpResources.push(dir);
   return dir;
@@ -58,6 +58,10 @@ afterEach(async () => {
   restoreConsole();
   while (tmpResources.length) {
     const dir = tmpResources.pop();
+    // Safety: refuse to delete anything outside the OS temp directory.
+    if (!dir.startsWith(os.tmpdir() + path.sep) && dir !== os.tmpdir()) {
+      throw new Error(`Refusing to rmSync non-temp path: ${dir}`);
+    }
     fs.rmSync(dir, { recursive: true, force: true });
   }
 });
@@ -274,6 +278,48 @@ describe('backup module', () => {
   it('pruneOldBackups returns 0 when directory does not exist', async () => {
     const removed = await pruneOldBackups({ dir: path.join(os.tmpdir(), 'nope-' + Date.now()) });
     expect(removed).toBe(0);
+  });
+});
+
+describe('migration runner — lock and index invariants', () => {
+  it('releases the migration lock even when a migration fails', async () => {
+    const dir = tmpDir();
+    const backupDir = tmpDir('habit-tracker-mig-backup-');
+    writeMigration(dir, '001', 'fail', `    throw new Error('intentional');`);
+
+    const MigrationLock = require('../models/MigrationLock');
+
+    silenceConsole();
+    try {
+      await runMigrations({ dir, backupDir, exitOnFailure: false });
+    } catch { /* expected */ }
+    restoreConsole();
+
+    const lock = await MigrationLock.findOne({ _id: 'lock' });
+    expect(lock).toBeNull();
+  });
+
+  it('unique indexes survive a failed-migration rollback (syncIndexes runs after restore)', async () => {
+    const dir = tmpDir();
+    const backupDir = tmpDir('habit-tracker-mig-backup-');
+
+    const UserHabitSettings = require('../models/UserHabitSettings');
+    const uid = new mongoose.Types.ObjectId();
+    await UserHabitSettings.create({ userId: uid, selectedHabitIds: [], habitSettings: {} });
+
+    writeMigration(dir, '001', 'fail', `    throw new Error('intentional');`);
+
+    silenceConsole();
+    try {
+      await runMigrations({ dir, backupDir, exitOnFailure: false });
+    } catch { /* expected */ }
+    restoreConsole();
+
+    // The unique index on UserHabitSettings.userId must still be enforced after
+    // the restore + syncIndexes — a second insert for the same userId must fail.
+    await expect(
+      UserHabitSettings.create({ userId: uid, selectedHabitIds: [], habitSettings: {} })
+    ).rejects.toThrow();
   });
 });
 
