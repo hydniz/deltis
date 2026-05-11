@@ -3,7 +3,7 @@ const router = express.Router();
 const auth = require('../middleware/auth');
 const HabitDefinition = require('../models/HabitDefinition');
 const HabitLog = require('../models/HabitLog');
-const User = require('../models/User');
+const UserHabitSettings = require('../models/UserHabitSettings');
 
 function enrichLog(logObj) {
   const habit = logObj.habitId;
@@ -24,13 +24,15 @@ function enrichLog(logObj) {
 // Definitions – returns all habits with a `selected` flag
 router.get('/definitions', auth, async (req, res) => {
   try {
-    const definitions = await HabitDefinition.find({
-      $or: [{ userId: null }, { userId: req.user._id }]
-    }).sort({ isPredefined: -1, name: 1 });
+    const [definitions, settings] = await Promise.all([
+      HabitDefinition.find({ $or: [{ userId: null }, { userId: req.user._id }] })
+        .sort({ isPredefined: -1, name: 1 }),
+      UserHabitSettings.findOne({ userId: req.user._id }),
+    ]);
 
-    const selectedIds = (req.user.selectedHabitIds || []).map(id => id.toString());
+    const selectedIds = (settings?.selectedHabitIds || []).map(id => id.toString());
     const noneSelected = selectedIds.length === 0;
-    const habitSettings = req.user.habitSettings || {};
+    const habitSettings = settings?.habitSettings || {};
 
     const result = definitions.map(d => {
       const s = habitSettings[d._id.toString()] || {};
@@ -52,7 +54,11 @@ router.get('/definitions', auth, async (req, res) => {
 router.put('/selection', auth, async (req, res) => {
   try {
     const { selectedIds } = req.body;
-    await User.findByIdAndUpdate(req.user._id, { selectedHabitIds: selectedIds });
+    await UserHabitSettings.findOneAndUpdate(
+      { userId: req.user._id },
+      { $set: { selectedHabitIds: selectedIds } },
+      { upsert: true }
+    );
     res.json({ success: true });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -133,9 +139,11 @@ router.delete('/definitions/:id', auth, async (req, res) => {
 router.put('/settings/:id', auth, async (req, res) => {
   try {
     const { missingDayMode, defaultValue } = req.body;
-    await User.findByIdAndUpdate(req.user._id, {
-      $set: { [`habitSettings.${req.params.id}`]: { missingDayMode, defaultValue: +defaultValue } }
-    });
+    await UserHabitSettings.findOneAndUpdate(
+      { userId: req.user._id },
+      { $set: { [`habitSettings.${req.params.id}`]: { missingDayMode, defaultValue: +defaultValue } } },
+      { upsert: true }
+    );
     res.json({ success: true });
   } catch (err) {
     res.status(400).json({ error: err.message });
