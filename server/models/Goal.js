@@ -6,7 +6,7 @@ const intermediateStepSchema = new mongoose.Schema({
   description: { type: String }
 }, { _id: false });
 
-// Filter, der auf die Aktivität selbst angewandt wird (nur bei aggregation='max' relevant)
+// Filter applied to individual activities (only relevant when aggregation='max')
 const activityFilterSchema = new mongoose.Schema({
   fieldKey: { type: String, required: true },
   fieldType: { type: String, enum: ['select', 'number'], default: 'select' },
@@ -25,12 +25,11 @@ const conditionSchema = new mongoose.Schema({
   unitSymbol: { type: String },
   valueScope: { type: String, enum: ['total', 'perActivity'], default: 'total' },
   aggregation: { type: String, enum: ['sum', 'max'], default: 'sum' },
-  // Nur bei aggregation='max': Aktivität muss diese Felder erfüllen um in die Bestleistung einzugehen
+  // Only when aggregation='max': the activity must satisfy these filters to count towards the best effort
   activityFilters: [activityFilterSchema]
 }, { _id: false });
 
 const goalSchema = new mongoose.Schema({
-  // Relation: Benutzer dem dieses Ziel gehört
   userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
 
   name: { type: String, required: true },
@@ -38,24 +37,24 @@ const goalSchema = new mongoose.Schema({
 
   type: {
     type: String,
-    // periodic-* = frei konfigurierbares Intervall (neu)
-    // weekly-*   = Legacy, wird wie periodic mit intervalValue=1, intervalUnit='week' behandelt
+    // periodic-* = freely configurable interval
+    // weekly-*   = legacy, treated as periodic with intervalValue=1, intervalUnit='week'
     enum: ['periodic-activity', 'periodic-habit', 'weekly-activity', 'weekly-habit', 'long-term-activity', 'long-term-habit'],
     required: true
   },
 
-  // Intervall für periodische Ziele (ignoriert bei langfristigen Zielen)
+  // Interval for periodic goals (ignored for long-term goals)
   intervalValue: { type: Number, default: 1, min: 1 },
   intervalUnit: { type: String, enum: ['day', 'week', 'month'], default: 'week' },
 
-  // Polymorphe Relation: zeigt entweder auf ActivityType oder HabitDefinition.
-  // Neue Einträge speichern hier die ObjectId des referenzierten Dokuments.
-  // Alte Einträge (legacy) speichern einen String-Label (Aktivität) oder ObjectId-String (Gewohnheit).
+  // Polymorphic reference to either ActivityType or HabitDefinition.
+  // New entries store the ObjectId of the referenced document.
+  // Legacy entries store a string label (activity) or ObjectId string (habit).
   targetRef: { type: mongoose.Schema.Types.Mixed, required: true },
 
-  // Bestimmt welches Modell targetRef referenziert.
-  // Neue Werte: 'ActivityType' | 'HabitDefinition'
-  // Legacy-Werte: 'activity' | 'habit' (werden weiterhin unterstützt)
+  // Determines which model targetRef points to.
+  // Current values: 'ActivityType' | 'HabitDefinition'
+  // Legacy values: 'activity' | 'habit' (still supported)
   targetRefModel: {
     type: String,
     enum: ['ActivityType', 'HabitDefinition', 'activity', 'habit'],
@@ -67,19 +66,19 @@ const goalSchema = new mongoose.Schema({
   targetValue: { type: Number, required: true },
   unitSymbol: { type: String },
 
-  // Wie der Wert gemessen wird (legacy single-metric, now also used as fallback)
-  // 'count'    – Anzahl der Einträge (Standard für Aktivitäten)
-  // 'distance' – Summe der Distanz in km (nur Aktivitätsziele)
-  // 'duration' – Summe der Dauer in Minuten (nur Aktivitätsziele)
-  // 'value'    – Summe der eingetragenen Werte (Standard für Gewohnheiten)
-  // 'custom_fieldKey' – Summe eines custom fields (kein enum, erlaubt beliebige Werte)
+  // How the value is measured (legacy single-metric, also used as fallback)
+  // 'count'    – number of entries (default for activities)
+  // 'distance' – sum of distance in km (activity goals only)
+  // 'duration' – sum of duration in minutes (activity goals only)
+  // 'value'    – sum of logged values (default for habits)
+  // 'custom_fieldKey' – sum of a custom field (no enum, allows arbitrary keys)
   metric: { type: String },
 
   // Multi-condition support
   conditionOperator: { type: String, enum: ['AND', 'OR'], default: 'AND' },
   conditions: [conditionSchema],
 
-  // Nur für langfristige Ziele
+  // Long-term goals only
   startDate: { type: Date },
   endDate: { type: Date },
   startValue: { type: Number },
