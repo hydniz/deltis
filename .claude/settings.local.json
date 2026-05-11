@@ -61,7 +61,14 @@
       "Bash(git -C /home/nonnenmann/workspace/habit_tracker log --oneline -6)",
       "Bash(git -C /home/nonnenmann/workspace/habit_tracker add .env.production.example DATABASE.md README.md SECURITY.md package.json client/src/App.jsx client/src/contexts/AuthContext.jsx client/src/pages/Admin.jsx client/src/pages/Login.jsx client/src/pages/Settings.jsx server/middleware/auth.js server/models/User.js server/routes/admin.js server/routes/auth.js server/utils/password.js scripts/reset-admin-password.js)",
       "Bash(git -C /home/nonnenmann/workspace/habit_tracker commit -m ' *)",
-      "Bash(git -C /home/nonnenmann/workspace/habit_tracker add DATABASE.md SECURITY.md TODO.md server/models/ActivityLog.js server/models/ActivityType.js server/models/ActivityPlan.js server/models/HabitLog.js server/models/HabitPlan.js server/models/HabitDefinition.js server/models/Goal.js server/routes/activities.js server/routes/activityTypes.js server/routes/goals.js server/routes/habits.js server/routes/planner.js server/utils/password.js scripts/reset-admin-password.js client/src/pages/Activities.jsx client/src/pages/Habits.jsx)"
+      "Bash(git -C /home/nonnenmann/workspace/habit_tracker add DATABASE.md SECURITY.md TODO.md server/models/ActivityLog.js server/models/ActivityType.js server/models/ActivityPlan.js server/models/HabitLog.js server/models/HabitPlan.js server/models/HabitDefinition.js server/models/Goal.js server/routes/activities.js server/routes/activityTypes.js server/routes/goals.js server/routes/habits.js server/routes/planner.js server/utils/password.js scripts/reset-admin-password.js client/src/pages/Activities.jsx client/src/pages/Habits.jsx)",
+      "Bash(node --check server/models/UserHabitSettings.js)",
+      "Bash(node --check server/routes/habits.js)",
+      "Bash(node --check server/routes/data.js)",
+      "Bash(node --check scripts/migrate-habit-settings.js)",
+      "Bash(git -C /home/nonnenmann/workspace/habit_tracker add server/models/User.js server/models/UserHabitSettings.js server/routes/habits.js server/routes/data.js server/routes/admin.js server/routes/auth.js client/src/pages/Admin.jsx scripts/migrate-habit-settings.js package.json)",
+      "Bash(git stash *)",
+      "Bash(npx jest *)"
     ]
   }
 }

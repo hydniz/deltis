@@ -3,8 +3,10 @@ import { http, HttpResponse } from 'msw';
 export const mockUser = {
   _id: 'user-123',
   uuid: 'aaaa-bbbb-cccc-dddd',
+  username: 'testuser',
   name: 'Test User',
   isAdmin: false,
+  mustChangePassword: false,
   weightUnit: 'kg',
 };
 
@@ -23,11 +25,11 @@ export const handlers = [
       return HttpResponse.json({ error: 'Nicht autorisiert' }, { status: 401 });
     }
     const token = auth.slice(7);
-    if (token.includes(':')) {
-      return HttpResponse.json(mockAdminUser);
-    }
     if (token === 'invalid-token') {
       return HttpResponse.json({ error: 'Ungültige UUID' }, { status: 401 });
+    }
+    if (token.includes(':admin')) {
+      return HttpResponse.json(mockAdminUser);
     }
     return HttpResponse.json(mockUser);
   }),
@@ -35,6 +37,20 @@ export const handlers = [
   http.put('/api/auth/me', async ({ request }) => {
     const body = await request.json();
     return HttpResponse.json({ ...mockUser, ...body });
+  }),
+
+  http.put('/api/auth/me/username', async ({ request }) => {
+    const body = await request.json();
+    const username = (body.username || '').trim().toLowerCase();
+    return HttpResponse.json({ ...mockUser, username });
+  }),
+
+  http.put('/api/auth/me/password', async () => {
+    return HttpResponse.json({ ok: true });
+  }),
+
+  http.put('/api/auth/me/password/forced', async () => {
+    return HttpResponse.json({ ok: true });
   }),
 
   http.get('/api/admin/setup-status', () => {

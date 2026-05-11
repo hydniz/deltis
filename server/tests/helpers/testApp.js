@@ -47,6 +47,16 @@ async function createUser({ name = 'Test User', isAdmin = false } = {}) {
   return { user, token: uuid };
 }
 
+// Creates a regular user who has completed migration (username + password set).
+async function createUserWithPassword({ name = 'Test User', username = 'testuser', password = 'testpass123', mustChangePassword = false } = {}) {
+  const User = require('../../models/User');
+  const pw = require('../../utils/password');
+  const uuid = crypto.randomUUID();
+  const passwordHash = await pw.hash(password);
+  const user = await User.create({ uuid, name, username, passwordHash, mustChangePassword });
+  return { user, token: `${username}:${password}`, uuid, username, password };
+}
+
 async function createAdminUser({ password = 'adminpassword123' } = {}) {
   const User = require('../../models/User');
   const uuid = crypto.randomUUID();
@@ -59,4 +69,4 @@ function authHeader(token) {
   return { Authorization: `Bearer ${token}` };
 }
 
-module.exports = { startDb, stopDb, clearDb, buildApp, createUser, createAdminUser, authHeader };
+module.exports = { startDb, stopDb, clearDb, buildApp, createUser, createUserWithPassword, createAdminUser, authHeader };
