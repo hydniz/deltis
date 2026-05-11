@@ -48,7 +48,20 @@
       "Bash(node -e \"const a = require\\('./node_modules/archiver'\\); console.log\\(typeof a\\)\")",
       "Bash(node -e \"const a = require\\('./node_modules/archiver'\\); console.log\\(Object.keys\\(a\\)\\)\")",
       "Bash(npm test *)",
-      "Bash(npm ci *)"
+      "Bash(npm ci *)",
+      "Bash(node --check server/models/User.js)",
+      "Bash(node --check server/middleware/auth.js)",
+      "Bash(node --check server/routes/auth.js)",
+      "Bash(node --check server/utils/password.js)",
+      "Bash(chmod +x /home/nonnenmann/workspace/habit_tracker/scripts/reset-admin-password.js)",
+      "Bash(node --check /home/nonnenmann/workspace/habit_tracker/scripts/reset-admin-password.js)",
+      "Bash(node --check server/routes/admin.js)",
+      "Bash(git -C /home/nonnenmann/workspace/habit_tracker status)",
+      "Bash(git -C /home/nonnenmann/workspace/habit_tracker diff HEAD)",
+      "Bash(git -C /home/nonnenmann/workspace/habit_tracker log --oneline -6)",
+      "Bash(git -C /home/nonnenmann/workspace/habit_tracker add .env.production.example DATABASE.md README.md SECURITY.md package.json client/src/App.jsx client/src/contexts/AuthContext.jsx client/src/pages/Admin.jsx client/src/pages/Login.jsx client/src/pages/Settings.jsx server/middleware/auth.js server/models/User.js server/routes/admin.js server/routes/auth.js server/utils/password.js scripts/reset-admin-password.js)",
+      "Bash(git -C /home/nonnenmann/workspace/habit_tracker commit -m ' *)",
+      "Bash(git -C /home/nonnenmann/workspace/habit_tracker add DATABASE.md SECURITY.md TODO.md server/models/ActivityLog.js server/models/ActivityType.js server/models/ActivityPlan.js server/models/HabitLog.js server/models/HabitPlan.js server/models/HabitDefinition.js server/models/Goal.js server/routes/activities.js server/routes/activityTypes.js server/routes/goals.js server/routes/habits.js server/routes/planner.js server/utils/password.js scripts/reset-admin-password.js client/src/pages/Activities.jsx client/src/pages/Habits.jsx)"
     ]
   }
 }

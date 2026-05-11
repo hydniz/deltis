@@ -173,4 +173,4 @@ See [SECURITY.md](SECURITY.md) for details.
 
 ## License
 
-MIT – see [LICENCE](LICENCE) for details.
+PolyForm Noncommercial License 1.0.0 – see [LICENCE](LICENCE) for details. Short: Use, modify, and share the software for personal or educational purposes but the use is not intended for commercial advantage or monetary compensation
