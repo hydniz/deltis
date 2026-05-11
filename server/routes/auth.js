@@ -108,9 +108,6 @@ router.put('/me/password', auth, async (req, res) => {
 // Does not require the current password (user is already authenticated).
 router.put('/me/password/forced', auth, async (req, res) => {
   try {
-    if (req.user.isAdmin) {
-      return res.status(400).json({ error: 'Admins nutzen /admin/password.' });
-    }
     if (!req.user.mustChangePassword) {
       return res.status(400).json({ error: 'Kein erzwungener Passwortwechsel ausstehend.' });
     }
@@ -118,8 +115,14 @@ router.put('/me/password/forced', auth, async (req, res) => {
     if (!newPassword || newPassword.length < 8) {
       return res.status(400).json({ error: 'Passwort muss mindestens 8 Zeichen lang sein.' });
     }
-    const user = await User.findById(req.user._id);
-    user.passwordHash = await pw.hash(newPassword);
+    const user = await User.findById(req.user._id).select('+adminSecretHash +passwordHash');
+    // Admin accounts use adminSecretHash (no pepper); regular accounts use passwordHash (pepper)
+    if (user.isAdmin) {
+      const bcrypt = require('bcryptjs');
+      user.adminSecretHash = await bcrypt.hash(newPassword, 12);
+    } else {
+      user.passwordHash = await pw.hash(newPassword);
+    }
     user.mustChangePassword = false;
     await user.save();
     res.json({ ok: true });
