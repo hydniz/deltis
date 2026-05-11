@@ -4,6 +4,7 @@ const crypto = require('crypto');
 const bcrypt = require('bcryptjs');
 const auth = require('../middleware/auth');
 const User = require('../models/User');
+const pw = require('../utils/password');
 
 const adminOnly = (req, res, next) => {
   if (!req.user?.isAdmin) return res.status(403).json({ error: 'Kein Zugriff' });
@@ -12,7 +13,6 @@ const adminOnly = (req, res, next) => {
 
 // ── Public setup routes (no auth required) ────────────────────────────────────
 
-// Returns whether first-time setup is still pending; exposes the admin UUID only during setup
 router.get('/setup-status', async (req, res) => {
   try {
     const admin = await User.findOne({ isAdmin: true }).select('+adminSecretHash');
@@ -24,7 +24,6 @@ router.get('/setup-status', async (req, res) => {
   }
 });
 
-// Set the admin password – only works once while no password is set
 router.post('/setup', async (req, res) => {
   try {
     const admin = await User.findOne({ isAdmin: true }).select('+adminSecretHash');
@@ -43,12 +42,10 @@ router.post('/setup', async (req, res) => {
   }
 });
 
-// Change the admin password (requires current password for verification)
 router.put('/password', auth, adminOnly, async (req, res) => {
   try {
     const admin = await User.findById(req.user._id).select('+adminSecretHash');
     const { currentPassword, newPassword } = req.body;
-
     if (!currentPassword || !newPassword) {
       return res.status(400).json({ error: 'Aktuelles und neues Passwort erforderlich' });
     }
@@ -69,32 +66,119 @@ router.put('/password', auth, adminOnly, async (req, res) => {
 
 // ── Protected admin routes ────────────────────────────────────────────────────
 
-// List all users
 router.get('/users', auth, adminOnly, async (req, res) => {
   try {
-    const users = await User.find({}, 'uuid name isAdmin createdAt').sort({ createdAt: 1 });
+    const users = await User.find(
+      {},
+      'uuid username name isAdmin mustChangePassword createdAt'
+    ).sort({ createdAt: 1 });
     res.json(users);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });
 
-// Create a new user (UUID is auto-generated)
+// Create a new user with username + temporary password
 router.post('/users', auth, adminOnly, async (req, res) => {
   try {
-    const { name } = req.body;
-    const uuid = crypto.randomUUID();
+    const { username, password, name } = req.body;
+
+    if (!username || typeof username !== 'string') {
+      return res.status(400).json({ error: 'Benutzername erforderlich.' });
+    }
+    const normalized = username.trim().toLowerCase();
+    if (normalized.length < 3) {
+      return res.status(400).json({ error: 'Benutzername muss mindestens 3 Zeichen lang sein.' });
+    }
+    if (normalized.length > 30) {
+      return res.status(400).json({ error: 'Benutzername darf maximal 30 Zeichen lang sein.' });
+    }
+    if (!/^[a-z0-9_.\-]+$/.test(normalized)) {
+      return res.status(400).json({ error: 'Benutzername darf nur Buchstaben, Zahlen, Punkte, Bindestriche und Unterstriche enthalten.' });
+    }
+    const existing = await User.findOne({ username: normalized });
+    if (existing) {
+      return res.status(409).json({ error: 'Benutzername bereits vergeben.' });
+    }
+
+    if (!password || typeof password !== 'string' || password.length < 8) {
+      return res.status(400).json({ error: 'Temporäres Passwort muss mindestens 8 Zeichen lang sein.' });
+    }
+
+    const passwordHash = await pw.hash(password);
     const user = await User.create({
-      uuid,
-      name: name?.trim() || 'Nutzer ' + uuid.slice(0, 8)
+      uuid: crypto.randomUUID(),
+      username: normalized,
+      passwordHash,
+      mustChangePassword: true,
+      name: name?.trim() || normalized,
     });
-    res.status(201).json({ _id: user._id, uuid: user.uuid, name: user.name, createdAt: user.createdAt });
+
+    res.status(201).json({
+      _id: user._id,
+      username: user.username,
+      name: user.name,
+      mustChangePassword: user.mustChangePassword,
+      createdAt: user.createdAt,
+    });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });
 
-// Delete a user (admin account cannot be deleted)
+// Edit a user: change username and/or reset password
+router.put('/users/:id', auth, adminOnly, async (req, res) => {
+  try {
+    const user = await User.findById(req.params.id);
+    if (!user) return res.status(404).json({ error: 'Nutzer nicht gefunden' });
+    if (user.isAdmin) return res.status(400).json({ error: 'Admin-Konto kann hier nicht bearbeitet werden.' });
+
+    const { username, password, name } = req.body;
+    const update = {};
+
+    if (username !== undefined) {
+      const normalized = username.trim().toLowerCase();
+      if (normalized.length < 3) {
+        return res.status(400).json({ error: 'Benutzername muss mindestens 3 Zeichen lang sein.' });
+      }
+      if (normalized.length > 30) {
+        return res.status(400).json({ error: 'Benutzername darf maximal 30 Zeichen lang sein.' });
+      }
+      if (!/^[a-z0-9_.\-]+$/.test(normalized)) {
+        return res.status(400).json({ error: 'Benutzername darf nur Buchstaben, Zahlen, Punkte, Bindestriche und Unterstriche enthalten.' });
+      }
+      const existing = await User.findOne({ username: normalized });
+      if (existing && !existing._id.equals(user._id)) {
+        return res.status(409).json({ error: 'Benutzername bereits vergeben.' });
+      }
+      update.username = normalized;
+    }
+
+    if (name !== undefined) {
+      update.name = name.trim() || user.name;
+    }
+
+    if (password !== undefined && password !== '') {
+      if (password.length < 8) {
+        return res.status(400).json({ error: 'Passwort muss mindestens 8 Zeichen lang sein.' });
+      }
+      update.passwordHash = await pw.hash(password);
+      update.mustChangePassword = true;
+    }
+
+    const updated = await User.findByIdAndUpdate(req.params.id, update, { new: true });
+    res.json({
+      _id: updated._id,
+      username: updated.username,
+      name: updated.name,
+      mustChangePassword: updated.mustChangePassword,
+      createdAt: updated.createdAt,
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 router.delete('/users/:id', auth, adminOnly, async (req, res) => {
   try {
     const user = await User.findById(req.params.id);
