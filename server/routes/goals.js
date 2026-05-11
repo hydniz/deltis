@@ -41,8 +41,8 @@ function getWeekBoundsForDate(date) {
   return { monday, sunday };
 }
 
-// Gibt den MongoDB-Filterausdruck für Aktivitätslogs zurück.
-// Neue Ziele nutzen activityTypeRef (ObjectId), Legacy-Ziele den String-Label.
+// Returns the MongoDB filter expression for activity logs.
+// New goals use activityTypeRef (ObjectId); legacy goals use a string label.
 async function buildActivityMatchQuery(goal) {
   const isNewStyle = goal.targetRefModel === 'ActivityType' &&
     mongoose.Types.ObjectId.isValid(goal.targetRef);
@@ -153,7 +153,7 @@ function checkConditionMet(condition, currentValue, targetValue) {
   return false;
 }
 
-// Prüft ob eine Metrik-Bedingung für die aktuellen Felderdefinitionen noch gültig ist.
+// Checks whether a metric condition is still valid given the current field definitions.
 function checkMetricValid(metric, customFields = []) {
   if (!metric || metric === 'count' || metric === 'distance' || metric === 'duration' || metric === 'value') {
     return { valid: true };
@@ -190,7 +190,7 @@ async function enrichGoal(goal) {
     obj.targetName = at?.label ?? 'Unbekannt';
     obj.customFields = at?.customFields || [];
 
-    // Metrik-Warnungen: prüfen ob alle Metriken noch auf existierende Felder zeigen
+    // Metric warnings: check whether all metrics still point to existing fields
     const allConditions = obj.conditions?.length ? obj.conditions : [{ metric: obj.metric }];
     const warnings = allConditions
       .map(c => checkMetricValid(c.metric, obj.customFields))

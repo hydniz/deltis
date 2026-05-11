@@ -21,7 +21,7 @@ function enrichLog(logObj) {
   return logObj;
 }
 
-// Definitions – liefert alle Habits mit `selected`-Flag
+// Definitions – returns all habits with a `selected` flag
 router.get('/definitions', auth, async (req, res) => {
   try {
     const definitions = await HabitDefinition.find({
@@ -48,7 +48,7 @@ router.get('/definitions', auth, async (req, res) => {
   }
 });
 
-// Auswahl der aktiven Habits speichern
+// Persist the user's active habit selection
 router.put('/selection', auth, async (req, res) => {
   try {
     const { selectedIds } = req.body;
@@ -77,7 +77,7 @@ router.post('/definitions', auth, async (req, res) => {
   }
 });
 
-// Name/Eigenschaften einer eigenen Gewohnheit ändern (mit Versionsverfolgung)
+// Update the name/properties of a custom habit (with version tracking)
 router.put('/definitions/:id', auth, async (req, res) => {
   try {
     const current = await HabitDefinition.findOne({ _id: req.params.id, userId: req.user._id });
@@ -129,7 +129,7 @@ router.delete('/definitions/:id', auth, async (req, res) => {
   }
 });
 
-// Nutzer-spezifische Gewohnheitseinstellungen speichern
+// Persist per-user habit settings (missing-day mode, default value)
 router.put('/settings/:id', auth, async (req, res) => {
   try {
     const { missingDayMode, defaultValue } = req.body;
@@ -142,7 +142,7 @@ router.put('/settings/:id', auth, async (req, res) => {
   }
 });
 
-// Logs
+// Logs – read and write daily habit values
 router.get('/logs', auth, async (req, res) => {
   try {
     const { startDate, endDate, habitId } = req.query;

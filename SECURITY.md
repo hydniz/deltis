@@ -1,203 +1,217 @@
-# Sicherheit & Authentifizierung
+# Security & Authentication
 
-Dokumentation des Authentifizierungssystems, der Passwort-Sicherheit und der
-verfügbaren Administrationswerkzeuge.
+Documentation of the authentication system, password security, and available
+administration tools.
 
 ---
 
-## Authentifizierungsmodell
+## Authentication Model
 
-### Reguläre Nutzer
+### Regular Users
 
-Nach der einmaligen Migration melden sich Nutzer mit **Benutzername + Passwort** an.
+After the one-time migration, users log in with **username + password**.
 
-| Phase          | Login-Methode                        | Token-Format im Bearer-Header  |
-|----------------|--------------------------------------|--------------------------------|
-| Migration      | UUID (kein Passwort erforderlich)    | `<uuid>`                       |
-| Nach Migration | Benutzername + Passwort              | `<username>:<password>`        |
+| Phase          | Login method                           | Bearer token format            |
+|----------------|----------------------------------------|--------------------------------|
+| Migration      | UUID (no password required)            | `<uuid>`                       |
+| After migration| Username + password                    | `<username>:<password>`        |
 
-Die UUID wird **dauerhaft gesperrt**, sobald ein Benutzername gesetzt wurde. Der Server
-lehnt UUID-Logins dann mit `HTTP 401 / code: UUID_BLOCKED` ab.
+The UUID is **permanently blocked** once a username is set. The server rejects UUID
+logins with `HTTP 401 / code: UUID_BLOCKED`.
 
 ### Admin
 
-| Login-Methode                    | Token-Format                      |
+| Login method                     | Token format                      |
 |----------------------------------|-----------------------------------|
-| Benutzername + Admin-Secret      | `<username>:<admin-secret>`       |
+| Username + admin secret          | `<username>:<admin-secret>`       |
 
-Das Admin-Secret ist unabhängig vom regulären Nutzerpasswort und wird separat in
-`adminSecretHash` gespeichert. Es unterliegt **nicht** dem Pepper-Mechanismus.
+The admin secret is independent of the regular user password and stored separately
+in `adminSecretHash`. It is **not** subject to the pepper mechanism.
 
-### Migrations-Ablauf (Bestandsnutzer)
+### Migration Flow (Existing Users)
 
-1. Nutzer gibt UUID im Login-Feld ein, Passwort-Feld bleibt leer
-2. Erfolgreicher Login (Server: kein `passwordHash` → Migration-Modus)
-3. Modal erscheint: Benutzername + Passwort wählen (Admin: nur Benutzername)
-4. Nach Speichern: UUID ist gesperrt, `localStorage`-Token wird auf `username:password` aktualisiert
-5. Alle künftigen Logins: Benutzername + Passwort
+1. User enters UUID in the login field, password field left empty
+2. Login succeeds (server: no `passwordHash` → migration mode)
+3. A modal appears: choose username + password (admin: username only)
+4. After saving: UUID is blocked, `localStorage` token updated to `username:password`
+5. All future logins: username + password
 
 ---
 
-## Passwort-Sicherheit: Pepper
+## Password Security: Pepper
 
-### Was ist ein Pepper?
+### What Is a Pepper?
 
-Ein **Pepper** ist ein servergespeichertes Geheimnis, das vor dem Hashing an jedes
-Passwort angehängt wird:
+A **pepper** is a server-side secret appended to every password before hashing:
 
 ```
-gespeicherter Hash = bcrypt( plaintext + pepper, rounds=12 )
+stored hash = bcrypt( plaintext + pepper, rounds=12 )
 ```
 
-Im Gegensatz zum Salt (zufällig, pro Passwort, in der DB gespeichert) ist der Pepper
-**nicht in der Datenbank** enthalten. Selbst wenn ein Angreifer die vollständige
-Datenbank erbeutet, kann er Passwörter nicht offline cracken – dazu bräuchte er
-zusätzlich den Pepper.
+Unlike the salt (random, per-password, stored in the DB), the pepper is
+**not stored in the database**. Even if an attacker obtains the full database,
+they cannot crack passwords offline without also having the pepper.
 
-### Pepper konfigurieren
+### Configuring the Pepper
 
-In der `.env`-Datei eine der folgenden Optionen setzen:
+Set one of the following options in your `.env` file:
 
-#### Option A: Datei (empfohlen)
+#### Option A: File (recommended)
 
 ```env
 PEPPER_FILE=/run/secrets/habit_tracker_pepper
 ```
 
-Pepper-Datei erzeugen (einmalig):
+Generate the pepper file (one-time):
 
 ```bash
-# 48 Bytes = 64 Base64-Zeichen, kryptografisch sicher
+# 48 bytes = 64 Base64 characters, cryptographically secure
 openssl rand -base64 48 > /run/secrets/habit_tracker_pepper
 chmod 600 /run/secrets/habit_tracker_pepper
 ```
 
-Der Pfad sollte **außerhalb** des Projektverzeichnisses liegen und nicht in Git landen.
+The path should be **outside** the project directory and must not be committed to git.
 
-#### Option B: Umgebungsvariable
+#### Option B: Environment variable
 
 ```env
-PASSWORD_PEPPER=dein_sehr_langes_zufaelliges_geheimnis_hier
+PASSWORD_PEPPER=your_very_long_random_secret_here
 ```
 
-Weniger sicher als Option A, da der Wert in Prozesslisten und Logs auftauchen kann.
+Less secure than Option A, as the value may appear in process listings and logs.
 
-#### Kein Pepper (nicht empfohlen)
+#### No pepper (not recommended)
 
-Ohne Konfiguration startet der Server mit einer Warnung. Passwörter werden nur mit
-bcrypt ohne Pepper gehasht. Funktional korrekt, aber schwächer gegen DB-Leaks.
+Without configuration the server starts with a warning. Passwords are hashed with
+bcrypt only, without a pepper. Functionally correct, but weaker against database leaks.
 
-### Wichtige Hinweise
+### Important Notes
 
-> **KRITISCH: Den Pepper niemals ändern oder löschen**, solange Nutzerkonten existieren.
-> Alle bestehenden Passwort-Hashes werden ungültig und Nutzer können sich nicht mehr anmelden.
-> Bei notwendiger Rotation müssten alle Nutzer ihre Passwörter zurücksetzen.
+> **CRITICAL: Never change or delete the pepper while user accounts exist.**
+> All existing password hashes will become invalid and users will no longer be able to
+> log in. If rotation is absolutely necessary, all users must reset their passwords.
 
-> **Docker/NAS:** Bei Docker Deployments kann der Pepper über Docker Secrets bereitgestellt
-> werden (z. B. `/run/secrets/habit_tracker_pepper`) – die Datei wird dann automatisch
-> in den Container gemountet ohne im Image oder in der Compose-Datei aufzutauchen.
+> **Docker / NAS:** The pepper can be provided via Docker Secrets
+> (e.g. `/run/secrets/habit_tracker_pepper`) – the file is mounted into the container
+> automatically without appearing in the image or Compose file.
 
 ---
 
-## Admin-Passwort zurücksetzen
+## Admin Password Reset
 
-Falls das Admin-Passwort vergessen wurde, kann es direkt gegen die Datenbank zurückgesetzt
-werden – ohne Kenntnis des aktuellen Passworts.
+If the admin password is lost, it can be reset directly against the database –
+without knowing the current password.
 
-### Voraussetzungen
+### Prerequisites
 
-- Zugriff auf das Dateisystem des Servers (SSH oder lokal)
-- `MONGODB_URI` in `.env` muss auf die laufende Datenbank zeigen
-- Node.js und die Projektabhängigkeiten (`npm install`) müssen installiert sein
+- Access to the server's filesystem (SSH or local)
+- `MONGODB_URI` in `.env` must point to the running database
+- Node.js and the project dependencies (`npm install`) must be installed
 
-### Verwendung
+### Usage
 
-**Interaktiv** (empfohlen – Passwort wird nicht angezeigt):
+**Interactive** (recommended – password input is not echoed):
 
 ```bash
 node scripts/reset-admin-password.js
 ```
 
-Ausgabe:
+Output:
 ```
-── Admin-Passwort zurücksetzen ──────────────────────────
-Datenbank: mongodb://localhost:27017/habit_tracker
+── Reset admin password ─────────────────────────────────
+Database: mongodb://localhost:27017/habit_tracker
 
-Admin-Account gefunden:
+Admin account found:
   UUID:     xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
   Username: admin
 
-Neues Admin-Passwort:  
-Passwort bestätigen:   
-Admin-Passwort wurde erfolgreich zurückgesetzt.
+New admin password:
+Confirm password:
+Admin password has been reset successfully.
 ```
 
-**Per npm-Script:**
+**Via npm script:**
 
 ```bash
 npm run admin:reset-password
 ```
 
-**Non-interaktiv** (Skripte, CI, Pipelines):
+**Non-interactive** (scripts, CI, pipelines):
 
 ```bash
-# Als Argument (taucht in Prozessliste auf – vermeiden in geteilten Umgebungen)
-node scripts/reset-admin-password.js --password "NeuesPasswort123"
+# As argument (appears in process list – avoid on shared systems)
+node scripts/reset-admin-password.js --password "NewPassword123"
 
-# Via stdin (sicherer – Passwort nicht in Prozessliste)
-echo "NeuesPasswort123" | node scripts/reset-admin-password.js
+# Via stdin (safer – password not in process list)
+echo "NewPassword123" | node scripts/reset-admin-password.js
 ```
 
-### Anforderungen ans Passwort
+### Password Requirements
 
-- Mindestens **8 Zeichen**
-- Keine weiteren Einschränkungen
+- At least **8 characters**
+- No further restrictions
 
-### Technischer Hinweis
+### Technical Note
 
-Das Reset-Skript verwendet **kein Pepper** – `adminSecretHash` wird immer mit reinem
-bcrypt gehasht (wie vom Admin-Setup und der bestehenden Admin-Auth erwartet).
-Nur `passwordHash` (reguläre Nutzer) enthält den Pepper. Das Skript funktioniert daher
-unabhängig von der Pepper-Konfiguration.
+The reset script does **not** use the pepper – `adminSecretHash` is always hashed
+with plain bcrypt (as expected by the admin setup and existing admin auth).
+Only `passwordHash` (regular users) includes the pepper. The script therefore works
+independently of the pepper configuration.
 
 ---
 
-## API-Endpunkte (Auth)
+## API Endpoints (Auth)
 
-| Methode | Pfad                   | Auth | Beschreibung                                           |
-|---------|------------------------|------|--------------------------------------------------------|
-| `GET`   | `/api/auth/me`         | ✓    | Gibt das eigene User-Objekt zurück                     |
-| `PUT`   | `/api/auth/me`         | ✓    | Aktualisiert Name und Gewichtseinheit                  |
-| `PUT`   | `/api/auth/me/username`| ✓    | Setzt Benutzernamen (+ Passwort beim ersten Mal)       |
-| `PUT`   | `/api/auth/me/password`| ✓    | Ändert das Passwort (erfordert aktuelles Passwort)     |
+| Method | Path                          | Auth | Description                                              |
+|--------|-------------------------------|------|----------------------------------------------------------|
+| `GET`  | `/api/auth/me`                | ✓    | Returns the current user object                          |
+| `PUT`  | `/api/auth/me`                | ✓    | Updates display name and weight unit                     |
+| `PUT`  | `/api/auth/me/username`       | ✓    | Sets username (+ password on first call)                 |
+| `PUT`  | `/api/auth/me/password`       | ✓    | Changes password (requires current password)             |
+| `PUT`  | `/api/auth/me/password/forced`| ✓    | Forced password change (no current password needed; only when `mustChangePassword` is true) |
 
 ### `PUT /api/auth/me/username`
 
-Beim ersten Aufruf (kein `passwordHash` vorhanden): setzt Benutzername **und** Passwort.
-Bei nachfolgenden Aufrufen: ändert nur den Benutzernamen.
+On the first call (no `passwordHash` present): sets both username **and** password.
+On subsequent calls: changes only the username.
 
 **Body:**
 ```json
 {
-  "username": "max_muster",
-  "password": "MeinPasswort123"
+  "username": "max_example",
+  "password": "MyPassword123"
 }
 ```
 
-Benutzername-Validierung: `^[a-z0-9_.\-]+$`, 3–30 Zeichen, unique (case-insensitive gespeichert).
+Username validation: `^[a-z0-9_.\-]+$`, 3–30 characters, unique (stored lowercase).
 
 ### `PUT /api/auth/me/password`
 
-Nur für reguläre Nutzer (nicht Admin – Admins nutzen `/api/admin/password`).
+Regular users only (not admin – admins use `/api/admin/password`).
 
 **Body:**
 ```json
 {
-  "currentPassword": "AltesPasswort",
-  "newPassword": "NeuesPasswort123"
+  "currentPassword": "OldPassword",
+  "newPassword": "NewPassword123"
 }
 ```
 
-Nach erfolgreichem Ändern muss der Client den `localStorage`-Token auf
-`username:neuesPasswort` aktualisieren (der `AuthContext` erledigt das automatisch über
+After a successful change the client must update the `localStorage` token to
+`username:newPassword` (the `AuthContext` handles this automatically via
 `changePassword()`).
+
+### `PUT /api/auth/me/password/forced`
+
+Only callable when `user.mustChangePassword === true`. Does not require the current
+password – the user is already authenticated via their session token.
+
+**Body:**
+```json
+{
+  "newPassword": "NewPassword123"
+}
+```
+
+Clears `mustChangePassword` on success. The `AuthContext`'s `forceChangePassword()`
+helper calls this endpoint and updates the `localStorage` token automatically.
