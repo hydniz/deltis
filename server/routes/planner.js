@@ -93,7 +93,7 @@ router.delete('/:id', auth, async (req, res) => {
   }
 });
 
-// ─── Gewohnheits-Pläne ────────────────────────────────────────────────────────
+// ─── Habit Plans ──────────────────────────────────────────────────────────────
 
 router.get('/habits', auth, async (req, res) => {
   try {

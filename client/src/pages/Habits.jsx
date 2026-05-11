@@ -300,7 +300,7 @@ function HabitCard({ habit, todayLog, onLog }) {
   const [selectedDate, setSelectedDate] = useState(todayStr);
   const isToday = selectedDate === todayStr;
 
-  // currentLog: today → vom Parent; anderer Tag → eigener Fetch
+  // currentLog: today → provided by parent; other dates → fetched locally
   const [currentLog, setCurrentLog] = useState(todayLog ?? null);
   const [value, setValue] = useState(todayLog?.value ?? '');
   const [loadingLog, setLoadingLog] = useState(false);
@@ -308,13 +308,13 @@ function HabitCard({ habit, todayLog, onLog }) {
   const [showChart, setShowChart] = useState(false);
   const [chartData, setChartData] = useState([]);
 
-  // Einstellungen für fehlende Tage
+  // Settings for missing days
   const [showSettings, setShowSettings] = useState(false);
   const [settingsMode, setSettingsMode] = useState(habit.missingDayMode ?? 'none');
   const [settingsDefaultVal, setSettingsDefaultVal] = useState(habit.defaultValue ?? 0);
   const [savingSettings, setSavingSettings] = useState(false);
 
-  // Heute-Log vom Parent übernehmen wenn Parent neu lädt
+  // Sync today's log from parent whenever parent reloads
   useEffect(() => {
     if (isToday) {
       setCurrentLog(todayLog ?? null);
@@ -322,7 +322,7 @@ function HabitCard({ habit, todayLog, onLog }) {
     }
   }, [todayLog, isToday]);
 
-  // Bei Datumswechsel auf anderen Tag: Log nachladen
+  // When switching to a different date, fetch that day's log
   useEffect(() => {
     if (isToday) return;
     setLoadingLog(true);
@@ -355,7 +355,7 @@ function HabitCard({ habit, todayLog, onLog }) {
       if (isToday) {
         onLog();
       } else {
-        // Eintrag für anderen Tag direkt nachladen
+        // Re-fetch the entry for the selected non-today date
         const d = new Date(selectedDate + 'T00:00:00');
         const end = new Date(d.getFullYear(), d.getMonth(), d.getDate(), 23, 59, 59, 999);
         const res = await api.get('/habits/logs', {
