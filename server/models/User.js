@@ -9,8 +9,6 @@ const userSchema = new mongoose.Schema({
   isAdmin: { type: Boolean, default: false },
   adminSecretHash: { type: String, select: false },
   weightUnit: { type: String, default: 'kg' },
-  selectedHabitIds: [{ type: mongoose.Schema.Types.ObjectId, ref: 'HabitDefinition' }],
-  habitSettings: { type: mongoose.Schema.Types.Mixed, default: {} },
   createdAt: { type: Date, default: Date.now }
 });
 
