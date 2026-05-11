@@ -4,8 +4,8 @@ const auth = require('../middleware/auth');
 const ActivityLog = require('../models/ActivityLog');
 const ActivityType = require('../models/ActivityType');
 
-// Reichert einen ActivityLog mit historischem Namen und historischen Felderdefinitionen an,
-// falls sich der Aktivitätstyp seit der Erfassung geändert hat.
+// Enriches an ActivityLog with historical name and field definitions
+// if the activity type has changed since the entry was recorded.
 function enrichActivity(activityObj) {
   const ref = activityObj.activityTypeRef;
   const version = activityObj.activityTypeVersion;

@@ -8,8 +8,8 @@ import {
 } from 'recharts';
 
 // ── OptionsInput ─────────────────────────────────────────────────────────────
-// Hält den Rohtext lokal – parst erst beim Verlassen des Feldes (onBlur).
-// Verhindert das Cursor-Springen bei gesteuertem Input mit Split/Join-Transformation.
+// Keeps raw text locally – only parses on blur.
+// Prevents cursor jumping in controlled inputs with split/join transformations.
 
 function OptionsInput({ options, onChange }) {
   const [raw, setRaw] = useState((options || []).join(', '));
@@ -121,7 +121,7 @@ function ActivityTypeCard({ type, onSave, onDelete }) {
       ...f,
       customFields: f.customFields.map((cf, idx) => {
         if (idx !== i) return cf;
-        // Bestehende Felder: key unveränderlich lassen
+        // Existing fields: keep key immutable
         if (idx < originalFieldCount.current) return { ...updatedField, key: cf.key };
         return updatedField;
       })
@@ -756,8 +756,8 @@ function EditActivityModal({ activity, onSave, onClose }) {
 function ActivityCard({ activity, onDelete, onEdit }) {
   const [editing, setEditing] = useState(false);
 
-  // showInPreview kommt immer aus den AKTUELLEN Feldern (Anzeigepräferenz)
-  // Label/Einheit kommen aus den HISTORISCHEN Feldern, falls der Name sich geändert hat
+  // showInPreview always comes from the CURRENT fields (display preference)
+  // Label/unit come from the HISTORICAL fields if the name has changed
   const currentFields = activity.activityTypeRef?.customFields || [];
   const historicalFields = activity.historicalCustomFields;
   const histMap = Object.fromEntries((historicalFields || []).map(f => [f.key, f]));

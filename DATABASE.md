@@ -1,11 +1,11 @@
-# Datenbank-Dokumentation – Habit Tracker
+# Database Documentation – Habit Tracker
 
-MongoDB-Datenbank: `habit_tracker`  
+MongoDB database: `habit_tracker`
 ODM: Mongoose 8
 
 ---
 
-## Relationsübersicht
+## Relationship Overview
 
 ```
 User ──────────────────────────────────────────────────────────┐
@@ -22,132 +22,133 @@ User ─────────────────────────
  ├──< WeightLog             (userId → User)                    │
  │                                                             │
  ├──< Goal                  (userId → User)                    │
- │       └── targetRef ──→  ActivityType  (polymorphe Ref)    │
- │                    ──→  HabitDefinition (polymorphe Ref)    │
+ │       └── targetRef ──→  ActivityType  (polymorphic ref)   │
+ │                    ──→  HabitDefinition (polymorphic ref)   │
  │                                                             │
  └── selectedHabitIds[] ──→ HabitDefinition[]                 │
 ```
 
 ---
 
-## Versionierte Referenzen (Namenshistorie)
+## Versioned References (Name History)
 
-ActivityType und HabitDefinition unterstützen Namensänderungen ohne Datenverlust.
-Wenn ein Name geändert wird, wird die alte Version in `nameHistory` archiviert und
-`version` hochgezählt. Logs und Pläne speichern die Version zum Zeitpunkt der Erfassung.
+ActivityType and HabitDefinition support name changes without data loss.
+When a name is changed, the old version is archived in `nameHistory` and
+`version` is incremented. Logs and plans store the version at the time of entry.
 
-### Konzept
+### Concept
 
 ```
-ActivityType { label: "Laufen", version: 2, nameHistory: [{ name: "Joggen", version: 1, ... }] }
+ActivityType { label: "Running", version: 2, nameHistory: [{ name: "Jogging", version: 1, ... }] }
 ActivityLog  { activityTypeRef: <id>, activityTypeVersion: 1 }
-              → historicalLabel: "Joggen"  (weil version 1 ≠ aktuelle version 2)
+              → historicalLabel: "Jogging"  (because version 1 ≠ current version 2)
 ```
 
-Das Backend berechnet beim Lesen des Logs automatisch `historicalLabel`, falls der
-gespeicherte Versionsstand vom aktuellen Namen abweicht. Das Frontend zeigt dann:
-**Laufen (Joggen)** – aktueller Name mit damaligem Namen in Klammern.
+The backend automatically computes `historicalLabel` when reading a log entry whose
+stored version differs from the current name. The frontend then displays:
+**Running (Jogging)** – current name with the historical name in parentheses.
 
 ---
 
-## Modelle
+## Models
 
 ### User
-Repräsentiert einen Benutzer. Login erfolgt per Benutzername + Passwort (nach Migration).
+Represents a user. Login is via username + password (after migration).
 
-| Feld              | Typ        | Beschreibung                                                                      |
-|-------------------|------------|-----------------------------------------------------------------------------------|
-| `_id`             | ObjectId   | Primärschlüssel                                                                   |
-| `uuid`            | String     | Ursprünglicher Zugangscode (aus `.env` VALID_UUIDS); nach Migration gesperrt      |
-| `username`        | String     | Benutzername für den Login (≥3 Zeichen, unique, lowercase); wird bei Migration gesetzt |
-| `passwordHash`    | String     | bcrypt-Hash des Benutzerpassworts (+ Pepper); `select: false`, nie in API-Responses |
-| `name`            | String     | Anzeigename des Benutzers                                                         |
-| `isAdmin`         | Boolean    | Admin-Flag                                                                        |
-| `adminSecretHash` | String     | bcrypt-Hash des Admin-Secrets; `select: false`                                    |
-| `weightUnit`      | String     | Bevorzugte Gewichtseinheit (`kg` oder `lbs`)                                      |
-| `selectedHabitIds`| ObjectId[] | **→ HabitDefinition[]** Aktiv ausgewählte Gewohnheiten                           |
-| `createdAt`       | Date       | Erstellungszeitpunkt                                                              |
+| Field             | Type       | Description                                                                        |
+|-------------------|------------|------------------------------------------------------------------------------------|
+| `_id`             | ObjectId   | Primary key                                                                        |
+| `uuid`            | String     | Original access code (from `.env` VALID_UUIDS); blocked as login after migration  |
+| `username`        | String     | Login username (≥3 chars, unique, lowercase); set during migration                 |
+| `passwordHash`    | String     | bcrypt hash of the user's password (+ pepper); `select: false`, never in API responses |
+| `mustChangePassword` | Boolean | When `true`, user is forced to choose a new password on next login               |
+| `name`            | String     | Display name                                                                       |
+| `isAdmin`         | Boolean    | Admin flag                                                                         |
+| `adminSecretHash` | String     | bcrypt hash of the admin secret; `select: false`                                   |
+| `weightUnit`      | String     | Preferred weight unit (`kg` or `lbs`)                                              |
+| `selectedHabitIds`| ObjectId[] | **→ HabitDefinition[]** actively selected habits                                  |
+| `createdAt`       | Date       | Creation timestamp                                                                 |
 
-**Auth-Token-Format** (Bearer-Header):
+**Auth token format** (Bearer header):
 
-| Zustand                        | Token-Format                    |
-|--------------------------------|---------------------------------|
-| Migration (noch kein Username) | `<uuid>`                        |
-| Normaler Login                 | `<username>:<password>`         |
-| Admin-Login                    | `<username>:<admin-secret>`     |
+| State                              | Token format                    |
+|------------------------------------|---------------------------------|
+| Migration (no username yet)        | `<uuid>`                        |
+| Normal login                       | `<username>:<password>`         |
+| Admin login                        | `<username>:<admin-secret>`     |
 
-UUID-Login wird serverseitig dauerhaft abgelehnt (`UUID_BLOCKED`), sobald `username` gesetzt ist.
+UUID login is permanently rejected (`UUID_BLOCKED`) once `username` is set.
 
 ---
 
 ### ActivityType
-Benutzerdefinierte Aktivitätstypen (z.B. „Gym", „Joggen 5k"). Werden beim ersten Abruf
-pro Benutzer mit Standardwerten vorbelegt. Unterstützt Namensänderungen mit Versionshistorie.
+User-defined activity types (e.g. "Gym", "5k Run"). Pre-populated with defaults on
+first access per user. Supports name changes with version history.
 
-| Feld           | Typ        | Relation / Beschreibung                                               |
-|----------------|------------|-----------------------------------------------------------------------|
-| `_id`          | ObjectId   | Primärschlüssel                                                       |
-| `userId`       | ObjectId   | **→ User** Eigentümer (required)                                     |
-| `label`        | String     | Aktueller Anzeigename                                                |
-| `version`      | Number     | Aktuelle Versionnummer (beginnt bei 1, steigt bei Umbenennung)       |
-| `nameHistory`  | Array      | Archiv alter Namen (siehe unten)                                     |
-| `showDistance` | Boolean    | Zeigt Distanzfeld im Eingabeformular                                 |
-| `showDuration` | Boolean    | Zeigt Dauerfeld im Eingabeformular                                   |
-| `customFields` | Array      | Eigene Felder (Objekte mit `key`, `label`, `type`, `unit`, `options`)|
-| `createdAt`    | Date       | —                                                                     |
+| Field          | Type       | Description                                                                |
+|----------------|------------|----------------------------------------------------------------------------|
+| `_id`          | ObjectId   | Primary key                                                                |
+| `userId`       | ObjectId   | **→ User** owner (required)                                               |
+| `label`        | String     | Current display name                                                       |
+| `version`      | Number     | Current version number (starts at 1, increments on rename)                |
+| `nameHistory`  | Array      | Archive of past names (see below)                                         |
+| `showDistance` | Boolean    | Show distance field in the entry form                                     |
+| `showDuration` | Boolean    | Show duration field in the entry form                                     |
+| `customFields` | Array      | Custom fields (objects with `key`, `label`, `type`, `unit`, `options`)    |
+| `createdAt`    | Date       | —                                                                          |
 
-**`nameHistory[]`-Einträge**:
+**`nameHistory[]` entries**:
 
-| Feld        | Typ    | Beschreibung                                  |
-|-------------|--------|-----------------------------------------------|
-| `name`      | String | Historischer Name                             |
-| `version`   | Number | Versionnummer, zu der dieser Name gültig war  |
-| `validFrom` | Date   | Beginn der Gültigkeit                         |
-| `validUntil`| Date   | Ende der Gültigkeit (Zeitpunkt der Umbenennung)|
+| Field       | Type   | Description                                     |
+|-------------|--------|-------------------------------------------------|
+| `name`      | String | Historical name                                 |
+| `version`   | Number | Version number this name was valid for          |
+| `validFrom` | Date   | Start of validity                               |
+| `validUntil`| Date   | End of validity (moment of rename)              |
 
-**`customFields[].type`**: `'number'` (Zahleneingabe mit Einheit) oder `'select'` (Auswahlliste)
+**`customFields[].type`**: `'number'` (numeric input with unit) or `'select'` (dropdown)
 
 ---
 
 ### ActivityLog
-Protokolliert eine absolvierte Aktivität.
+Records a completed activity.
 
-| Feld                  | Typ      | Relation / Beschreibung                                      |
-|-----------------------|----------|--------------------------------------------------------------|
-| `_id`                 | ObjectId | Primärschlüssel                                              |
-| `userId`              | ObjectId | **→ User** Eigentümer (required)                            |
-| `activityType`        | String   | Label-String der Aktivität (Abwärtskompatibilität)          |
-| `activityTypeRef`     | ObjectId | **→ ActivityType** Direkte Referenz                         |
-| `activityTypeVersion` | Number   | Version des ActivityType zum Zeitpunkt der Erfassung        |
-| `date`                | Date     | Datum der Aktivität                                          |
-| `duration`            | Number   | Dauer in Minuten (optional)                                  |
-| `distance`            | Number   | Distanz in Kilometern (optional)                             |
-| `notes`               | String   | Freitextnotizen (optional)                                   |
-| `customValues`        | Mixed    | Key-Value-Map für benutzerdefinierte Felder des ActivityType |
-| `createdAt`           | Date     | —                                                            |
+| Field                 | Type     | Description                                                         |
+|-----------------------|----------|---------------------------------------------------------------------|
+| `_id`                 | ObjectId | Primary key                                                         |
+| `userId`              | ObjectId | **→ User** owner (required)                                        |
+| `activityType`        | String   | Activity label as string (backwards compatibility)                 |
+| `activityTypeRef`     | ObjectId | **→ ActivityType** direct reference                                |
+| `activityTypeVersion` | Number   | ActivityType version at the time of logging                        |
+| `date`                | Date     | Date of the activity                                               |
+| `duration`            | Number   | Duration in minutes (optional)                                     |
+| `distance`            | Number   | Distance in kilometres (optional)                                  |
+| `notes`               | String   | Free-text notes (optional)                                         |
+| `customValues`        | Mixed    | Key-value map for the ActivityType's custom fields                 |
+| `createdAt`           | Date     | —                                                                   |
 
-**Indizes**: `{ userId, date }` · `{ userId, activityTypeRef, date }`
+**Indexes**: `{ userId, date }` · `{ userId, activityTypeRef, date }`
 
-Das Backend berechnet beim Lesen `historicalLabel`, falls `activityTypeVersion` vom
-aktuellen `ActivityType.version` abweicht.
+The backend computes `historicalLabel` when reading a log if `activityTypeVersion`
+differs from the current `ActivityType.version`.
 
 ---
 
 ### ActivityPlan
-Geplante (noch nicht absolvierte) Aktivität.
+A planned (not yet completed) activity.
 
-| Feld                  | Typ      | Relation / Beschreibung                                  |
+| Field                 | Type     | Description                                              |
 |-----------------------|----------|----------------------------------------------------------|
-| `_id`                 | ObjectId | Primärschlüssel                                          |
-| `userId`              | ObjectId | **→ User** Eigentümer (required)                        |
-| `activityType`        | String   | Label-String der Aktivität (Abwärtskompatibilität)      |
-| `activityTypeRef`     | ObjectId | **→ ActivityType** Direkte Referenz                     |
-| `activityTypeVersion` | Number   | Version des ActivityType zum Zeitpunkt der Planung      |
-| `scheduledDate`       | Date     | Geplantes Datum                                          |
-| `duration`            | Number   | Geplante Dauer in Minuten (optional)                     |
-| `distance`            | Number   | Geplante Distanz in Kilometern (optional)                |
-| `completed`           | Boolean  | Wurde der Plan abgehakt?                                 |
-| `notes`               | String   | Notizen (optional)                                       |
+| `_id`                 | ObjectId | Primary key                                              |
+| `userId`              | ObjectId | **→ User** owner (required)                             |
+| `activityType`        | String   | Activity label as string (backwards compatibility)      |
+| `activityTypeRef`     | ObjectId | **→ ActivityType** direct reference                    |
+| `activityTypeVersion` | Number   | ActivityType version at the time of planning            |
+| `scheduledDate`       | Date     | Planned date                                            |
+| `duration`            | Number   | Planned duration in minutes (optional)                  |
+| `distance`            | Number   | Planned distance in kilometres (optional)               |
+| `completed`           | Boolean  | Has the plan been checked off?                          |
+| `notes`               | String   | Notes (optional)                                        |
 | `createdAt`           | Date     | —                                                        |
 
 **Index**: `{ userId, scheduledDate }`
@@ -155,56 +156,55 @@ Geplante (noch nicht absolvierte) Aktivität.
 ---
 
 ### HabitDefinition
-Definition einer Gewohnheit – entweder vordefiniert (userId = null) oder benutzerdefiniert.
-Unterstützt Namensänderungen mit Versionshistorie (analog zu ActivityType).
+Definition of a habit – either predefined (`userId = null`) or user-created.
+Supports name changes with version history (same as ActivityType).
 
-| Feld           | Typ      | Relation / Beschreibung                                            |
-|----------------|----------|--------------------------------------------------------------------|
-| `_id`          | ObjectId | Primärschlüssel                                                    |
-| `userId`       | ObjectId | **→ User** (nullable – `null` bei vordefinierten Gewohnheiten)    |
-| `name`         | String   | Aktueller Anzeigename                                             |
-| `version`      | Number   | Aktuelle Versionnummer (beginnt bei 1)                            |
-| `nameHistory`  | Array    | Archiv alter Namen (gleiche Struktur wie bei ActivityType)        |
-| `unitSymbol`   | String   | Einheitenbezeichnung (z.B. `g`, `h`, `ml`, `Stück`)              |
-| `type`         | String   | `'amount'` (Menge), `'duration'` (Dauer) oder `'boolean'`        |
-| `isPredefined` | Boolean  | `true` bei systemseitig angelegten Gewohnheiten                   |
-| `createdAt`    | Date     | —                                                                  |
+| Field          | Type     | Description                                                              |
+|----------------|----------|--------------------------------------------------------------------------|
+| `_id`          | ObjectId | Primary key                                                              |
+| `userId`       | ObjectId | **→ User** (nullable – `null` for predefined habits)                    |
+| `name`         | String   | Current display name                                                     |
+| `version`      | Number   | Current version number (starts at 1)                                    |
+| `nameHistory`  | Array    | Archive of past names (same structure as ActivityType)                  |
+| `unitSymbol`   | String   | Unit label (e.g. `g`, `h`, `ml`, `pcs`)                                |
+| `type`         | String   | `'amount'` (quantity), `'duration'` (time) or `'boolean'`              |
+| `isPredefined` | Boolean  | `true` for system-defined habits                                         |
+| `createdAt`    | Date     | —                                                                         |
 
-**Vordefinierte Gewohnheiten** (userId = null, unveränderlich):
-Screen Time, Kreatin, Zigaretten, Wasser, Schlaf, Meditation, Koffein, Alkohol
+**Predefined habits** (userId = null, read-only):
+Screen Time, Creatine, Cigarettes, Water, Sleep, Meditation, Caffeine, Alcohol
 
-Eigene Gewohnheiten können über `PUT /api/habits/definitions/:id` umbenannt werden.
+Custom habits can be renamed via `PUT /api/habits/definitions/:id`.
 
 ---
 
 ### HabitLog
-Tageswert für eine Gewohnheit. Pro Benutzer und Gewohnheit wird nur ein Eintrag pro Tag
-gespeichert (Upsert).
+Daily value for a habit. Only one entry per user and habit per day (upsert).
 
-| Feld          | Typ      | Relation / Beschreibung                       |
-|---------------|----------|-----------------------------------------------|
-| `_id`         | ObjectId | Primärschlüssel                               |
-| `userId`      | ObjectId | **→ User** Eigentümer (required)             |
-| `habitId`     | ObjectId | **→ HabitDefinition** (required, populated)  |
-| `habitVersion`| Number   | Version der HabitDefinition zum Erfassungszeitpunkt |
-| `date`        | Date     | Datum des Eintrags (auf Tagesbeginn normiert) |
-| `value`       | Number   | Eingetragener Wert in der Einheit der Habit   |
-| `createdAt`   | Date     | —                                             |
+| Field          | Type     | Description                                         |
+|----------------|----------|-----------------------------------------------------|
+| `_id`          | ObjectId | Primary key                                         |
+| `userId`       | ObjectId | **→ User** owner (required)                        |
+| `habitId`      | ObjectId | **→ HabitDefinition** (required, populated)        |
+| `habitVersion` | Number   | HabitDefinition version at the time of logging     |
+| `date`         | Date     | Entry date (normalised to start of day)            |
+| `value`        | Number   | Logged value in the habit's unit                   |
+| `createdAt`    | Date     | —                                                   |
 
 **Index**: `{ userId, habitId, date }`
 
 ---
 
 ### WeightLog
-Gewichtseintrag des Benutzers.
+A user's weight entry.
 
-| Feld       | Typ      | Relation / Beschreibung             |
-|------------|----------|-------------------------------------|
-| `_id`      | ObjectId | Primärschlüssel                     |
-| `userId`   | ObjectId | **→ User** Eigentümer (required)   |
-| `date`     | Date     | Datum der Messung                   |
-| `weight`   | Number   | Gewicht                             |
-| `unit`     | String   | `'kg'` oder `'lbs'`                |
+| Field      | Type     | Description                        |
+|------------|----------|------------------------------------|
+| `_id`      | ObjectId | Primary key                        |
+| `userId`   | ObjectId | **→ User** owner (required)       |
+| `date`     | Date     | Date of the measurement            |
+| `weight`   | Number   | Weight value                       |
+| `unit`     | String   | `'kg'` or `'lbs'`                 |
 | `createdAt`| Date     | —                                   |
 
 **Index**: `{ userId, date }`
@@ -212,164 +212,164 @@ Gewichtseintrag des Benutzers.
 ---
 
 ### Goal
-Ein Ziel des Benutzers – periodisch oder langfristig, für Aktivitäten oder Gewohnheiten.
+A user goal – periodic or long-term, for activities or habits.
 
-| Feld                | Typ      | Relation / Beschreibung                                                          |
-|---------------------|----------|----------------------------------------------------------------------------------|
-| `_id`               | ObjectId | Primärschlüssel                                                                  |
-| `userId`            | ObjectId | **→ User** Eigentümer (required)                                                |
-| `name`              | String   | Bezeichnung des Ziels                                                            |
-| `description`       | String   | Optionale Beschreibung                                                           |
-| `type`              | String   | `'periodic-activity'` · `'periodic-habit'` · `'weekly-activity'` · etc.        |
-| `targetRef`         | Mixed    | **→ ActivityType oder HabitDefinition** (polymorphe Referenz, ObjectId)        |
-| `targetRefModel`    | String   | Bestimmt das Zielmodell: `'ActivityType'` oder `'HabitDefinition'`             |
-| `condition`         | String   | `'min'` · `'max'` · `'exact'`                                                   |
-| `targetValue`       | Number   | Zielwert                                                                         |
-| `unitSymbol`        | String   | Einheit (z.B. `Mal`, `g`, `h`)                                                  |
-| `conditions`        | Array    | Multi-Bedingungen mit `conditionOperator` (`AND`/`OR`)                          |
-| `startDate`         | Date     | Startdatum (nur langfristige Ziele)                                              |
-| `endDate`           | Date     | Enddatum (nur langfristige Ziele)                                                |
-| `startValue`        | Number   | Ausgangswert beim Start (optional)                                               |
-| `intermediateSteps` | Array    | Manuelle Zwischenziele `[{ date, targetValue, description }]`                   |
-| `isActive`          | Boolean  | Aktiv-Flag (soft delete über `isActive: false`)                                 |
-| `createdAt`         | Date     | —                                                                                |
+| Field               | Type     | Description                                                                           |
+|---------------------|----------|---------------------------------------------------------------------------------------|
+| `_id`               | ObjectId | Primary key                                                                           |
+| `userId`            | ObjectId | **→ User** owner (required)                                                          |
+| `name`              | String   | Goal label                                                                            |
+| `description`       | String   | Optional description                                                                  |
+| `type`              | String   | `'periodic-activity'` · `'periodic-habit'` · `'weekly-activity'` · etc.             |
+| `targetRef`         | Mixed    | **→ ActivityType or HabitDefinition** (polymorphic reference, ObjectId)             |
+| `targetRefModel`    | String   | Identifies the target model: `'ActivityType'` or `'HabitDefinition'`                |
+| `condition`         | String   | `'min'` · `'max'` · `'exact'`                                                        |
+| `targetValue`       | Number   | Target value                                                                          |
+| `unitSymbol`        | String   | Unit (e.g. `times`, `g`, `h`)                                                       |
+| `conditions`        | Array    | Multi-conditions with `conditionOperator` (`AND`/`OR`)                               |
+| `startDate`         | Date     | Start date (long-term goals only)                                                    |
+| `endDate`           | Date     | End date (long-term goals only)                                                      |
+| `startValue`        | Number   | Baseline value at start (optional)                                                   |
+| `intermediateSteps` | Array    | Manual milestones `[{ date, targetValue, description }]`                             |
+| `isActive`          | Boolean  | Active flag (soft delete via `isActive: false`)                                      |
+| `createdAt`         | Date     | —                                                                                     |
 
 **Index**: `{ userId, isActive }`
 
-Goals referenzieren ActivityType/HabitDefinition immer per ID und zeigen stets den
-aktuellen Namen – keine Versionshistorie bei Goals.
+Goals always reference ActivityType/HabitDefinition by ID and display the current name –
+no version history for goals.
 
 ---
 
-## Populate-Übersicht (Mongoose)
+## Populate Overview (Mongoose)
 
-| Route                        | populate()                                                        |
-|------------------------------|-------------------------------------------------------------------|
+| Route                        | populate()                                                              |
+|------------------------------|-------------------------------------------------------------------------|
 | `GET /api/activities`        | `activityTypeRef` → label, version, nameHistory, showDistance, customFields |
 | `GET /api/planner`           | `activityTypeRef` → label, version, nameHistory, showDistance, customFields |
-| `GET /api/habits/logs`       | `habitId` → name, version, nameHistory, unitSymbol, type         |
-| `GET /api/goals`             | manuell via `enrichGoal()` → `targetName` im Response            |
+| `GET /api/habits/logs`       | `habitId` → name, version, nameHistory, unitSymbol, type               |
+| `GET /api/goals`             | manually via `enrichGoal()` → `targetName` in response                 |
 
-`nameHistory` wird serverseitig verarbeitet und **nicht** an den Client weitergegeben.
-Stattdessen wird ggf. ein berechnetes `historicalLabel` zurückgegeben.
+`nameHistory` is processed server-side and **not** sent to the client.
+Instead, a computed `historicalLabel` is returned when applicable.
 
 ---
 
-## Indexierungsstrategie
+## Indexing Strategy
 
-Alle Queries nutzen `userId` als ersten Filterterm – daher ist `userId` in allen
-Compound-Indizes an erster Stelle. Zeitbasierte Sortierungen (`date: -1`, `scheduledDate: 1`)
-sind als sekundäres Feld enthalten, um Index-Scans ohne Collection-Scan zu ermöglichen.
+All queries use `userId` as the first filter term – therefore `userId` is the leading
+field in all compound indexes. Time-based sort fields (`date: -1`, `scheduledDate: 1`)
+are included as the secondary field to allow index scans without collection scans.
 
 ---
 
 ## Tools
 
+### Admin password reset – `scripts/reset-admin-password.js`
+
+Resets the admin password directly in the database without requiring the current
+password. Useful when the admin secret is lost.
+
+**What it does:**
+1. Connects to MongoDB using `MONGODB_URI` from `.env`
+2. Finds the admin account (`isAdmin: true`)
+3. Displays the found account's UUID and username for confirmation
+4. Prompts for the new password twice (no echo in the terminal)
+5. Hashes the password with bcrypt (12 rounds) and saves it as `adminSecretHash`
+
+**Usage:**
+
+```bash
+# Interactive (recommended) – password input is hidden
+node scripts/reset-admin-password.js
+
+# Via npm script
+npm run admin:reset-password
+
+# Non-interactive (scripts, pipelines)
+node scripts/reset-admin-password.js --password "NewPassword123"
+
+# Via stdin (password does not appear in process list)
+echo "NewPassword123" | node scripts/reset-admin-password.js
+```
+
+> **Note:** The script does **not** use the pepper – `adminSecretHash` is always hashed
+> with plain bcrypt (as expected by admin setup and admin auth). Only `passwordHash`
+> (regular users) includes the pepper. The script therefore works independently of
+> the pepper configuration.
+
+---
+
 ### Backup – `./backup.sh`
 
-Erstellt einen komprimierten Snapshot der MongoDB-Datenbank.
+Creates a compressed snapshot of the MongoDB database.
 
-**Was es tut:**
-1. Prüft, ob der MongoDB-Container (`habit-tracker-mongo`) läuft
-2. Setzt eine Lock-Datei (`.backup.lock`), die den Server veranlasst, alle Schreibzugriffe
-   mit HTTP 503 abzulehnen
-3. Wartet 2 Sekunden, damit laufende Requests abgeschlossen werden
-4. Führt `mongodump --gzip --archive` im Container aus
-5. Kopiert das Archiv nach `./backups/habit_tracker_<TIMESTAMP>.archive.gz`
-6. Entfernt die Lock-Datei
+**What it does:**
+1. Checks whether the MongoDB container (`habit-tracker-mongo`) is running
+2. Sets a lock file (`.backup.lock`) that causes the server to reject all write requests with HTTP 503
+3. Waits 2 seconds for in-flight requests to complete
+4. Runs `mongodump --gzip --archive` inside the container
+5. Copies the archive to `./backups/habit_tracker_<TIMESTAMP>.archive.gz`
+6. Removes the lock file
 
-**Verwendung:**
+**Usage:**
 ```bash
 ./backup.sh
 ```
 
-**Ausgabe:** Dateipfad und Größe des Backups sowie Wiederherstellungshinweis.
+**Output:** File path and size of the backup, plus a restore hint.
 
-> Das Backup lässt die App lesend erreichbar – nur Schreibzugriffe werden geblockt.
+> The backup keeps the app readable – only write access is blocked.
 
 ---
 
 ### Restore – `./restore.sh`
 
-Stellt einen Datenbankzustand aus einem Backup wieder her.
+Restores a database state from a backup.
 
-**Was es tut:**
-1. Ohne Argument: listet alle verfügbaren Backups in `./backups/` auf
-2. Mit Argument: stellt das angegebene Archiv wieder her
-   - Stoppt die App (MongoDB bleibt aktiv)
-   - Kopiert das Archiv in den Container
-   - Führt `mongorestore --drop` aus (überschreibt bestehende Daten!)
-   - Startet die App neu
+**What it does:**
+1. Without argument: lists all available backups in `./backups/`
+2. With argument: restores the specified archive
+   - Stops the app (MongoDB stays running)
+   - Copies the archive into the container
+   - Runs `mongorestore --drop` (overwrites existing data!)
+   - Restarts the app
 
-**Verwendung:**
+**Usage:**
 ```bash
-./restore.sh                                    # Backups auflisten
-./restore.sh backups/habit_tracker_XYZ.archive.gz  # Wiederherstellen
+./restore.sh                                        # list backups
+./restore.sh backups/habit_tracker_XYZ.archive.gz  # restore
 ```
 
-> **Warnung:** `--drop` löscht alle aktuellen Daten vor der Wiederherstellung.
-> Die Bestätigung mit `ja` ist erforderlich.
-
----
-
-### Admin-Passwort zurücksetzen – `scripts/reset-admin-password.js`
-
-Setzt das Admin-Passwort direkt in der Datenbank zurück, ohne dass das aktuelle Passwort
-bekannt sein muss. Nützlich bei vergessenem Admin-Secret.
-
-**Was es tut:**
-1. Verbindet sich mit MongoDB über `MONGODB_URI` aus `.env`
-2. Sucht den Admin-Account (Feld `isAdmin: true`)
-3. Zeigt UUID und Username des gefundenen Accounts zur Bestätigung an
-4. Fragt zweimal nach dem neuen Passwort (kein Echo im Terminal)
-5. Hasht das Passwort mit bcrypt (12 Runden) und speichert es als `adminSecretHash`
-
-**Verwendung:**
-
-```bash
-# Interaktiv (empfohlen) – Passwort wird versteckt eingegeben
-node scripts/reset-admin-password.js
-
-# Alternativ per npm-Script
-npm run admin:reset-password
-
-# Non-interaktiv (Skripte, Pipelines)
-node scripts/reset-admin-password.js --password "NeuesPasswort123"
-
-# Via stdin (Passwort taucht nicht in der Prozessliste auf)
-echo "NeuesPasswort123" | node scripts/reset-admin-password.js
-```
-
-> **Hinweis:** Das Skript nutzt **kein Pepper** – `adminSecretHash` wird immer ohne Pepper
-> gehasht, nur `passwordHash` (reguläre Nutzer) verwendet den konfigurierten Pepper.
-> Das Reset-Skript muss daher nicht angepasst werden, wenn sich der Pepper ändert.
+> **Warning:** `--drop` deletes all current data before restoring.
+> Confirmation with `yes` is required.
 
 ---
 
 ### Migration – `scripts/migrate-versioned-refs.js`
 
-Einmalig auszuführendes Skript, das bestehende Datenbankeinträge auf das Schema
-der versionierten Referenzen aktualisiert.
+A one-time script that updates existing database entries to the versioned-references
+schema.
 
-**Wann nötig:** Nach dem ersten Deployment der Namenshistorie-Funktion, oder wenn
-Einträge ohne `version`/`activityTypeVersion`/`habitVersion` vorhanden sind.
+**When needed:** After the first deployment of the name-history feature, or when
+entries without `version`/`activityTypeVersion`/`habitVersion` are present.
 
-**Was es tut:**
-1. Setzt `version=1` und `nameHistory=[]` auf allen ActivityTypes (falls fehlend)
-2. Setzt `version=1` und `nameHistory=[]` auf allen HabitDefinitions (falls fehlend)
-3. Setzt `activityTypeVersion=1` auf ActivityLogs mit vorhandener `activityTypeRef`
-4. Ordnet ActivityLogs ohne `activityTypeRef` per Namensabgleich einem ActivityType zu
-5. Dasselbe für ActivityPlans
-6. Setzt `habitVersion=1` auf allen HabitLogs (falls fehlend)
+**What it does:**
+1. Sets `version=1` and `nameHistory=[]` on all ActivityTypes (if missing)
+2. Sets `version=1` and `nameHistory=[]` on all HabitDefinitions (if missing)
+3. Sets `activityTypeVersion=1` on ActivityLogs that have an `activityTypeRef`
+4. Assigns ActivityLogs without `activityTypeRef` to an ActivityType by name match
+5. Same for ActivityPlans
+6. Sets `habitVersion=1` on all HabitLogs (if missing)
 
-**Verwendung:**
+**Usage:**
 ```bash
-# Erst Backup erstellen!
+# Create a backup first!
 ./backup.sh
 
-# Dann Migration ausführen
+# Then run the migration
 node scripts/migrate-versioned-refs.js
 ```
 
-**Sicher wiederholbar:** Das Skript prüft immer `$exists: false` vor dem Setzen –
-bereits migrierte Felder werden nicht überschrieben.
+**Safe to re-run:** The script always checks `$exists: false` before setting a field –
+already migrated fields are not overwritten.
