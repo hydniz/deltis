@@ -5,7 +5,7 @@ const mongoose = require('mongoose');
 // TTL index auto-expires the lock after 30 minutes so a crashed process never
 // dead-locks the system.
 const migrationLockSchema = new mongoose.Schema({
-  _id: { type: String, default: 'lock' },
+  _id: { type: String, default: 'lock', required: true },
   acquiredAt: { type: Date, default: Date.now, expires: 1800 },
   host: { type: String },
 });
