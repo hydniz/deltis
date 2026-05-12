@@ -111,6 +111,54 @@ Configure these repository secrets:
 
 ---
 
+## Database Migrations
+
+Schema and data migrations run **automatically on startup** before the Express server begins accepting traffic. No manual intervention is required in normal operation.
+
+### How it works
+
+1. The runner scans `server/migrations/` for files matching `NNN-*.js` (three-digit numeric prefix).
+2. Already-applied migrations are recorded in the `migrations` collection — those are skipped.
+3. Before applying any pending migration, a **pre-migration backup** is written to `backups/pre-migration/`.
+4. Migrations apply in numeric order. If one fails, the database is **automatically restored** from the backup and the process exits.
+5. A `migrationlocks` collection (TTL 30 min) prevents concurrent runs (e.g. multiple containers starting at the same time).
+
+### Diagnostics
+
+```bash
+# Show applied and pending migrations
+npm run migrate:status
+```
+
+### Manual rollback
+
+Pre-migration backups are kept on disk (last 5 retained):
+
+```bash
+npm run migrate:rollback                                  # list available backups
+npm run migrate:rollback backups/pre-migration/<file>     # restore a specific backup
+```
+
+### Adding a migration
+
+1. Pick the next free three-digit prefix (e.g. `003`).
+2. Create `server/migrations/003-short-description.js`:
+
+   ```javascript
+   module.exports = {
+     name: '003-short-description', // must match filename without .js
+     async up() {
+       // idempotent: safe to run on already-migrated data
+     },
+   };
+   ```
+
+3. Add a test case in `server/tests/migrations.test.js`.
+
+See [server/migrations/README.md](server/migrations/README.md) for full details.
+
+---
+
 ## Logs
 
 **Development:**
