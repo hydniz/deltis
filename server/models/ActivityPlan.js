@@ -1,20 +1,19 @@
 const mongoose = require('mongoose');
 
 const activityPlanSchema = new mongoose.Schema({
-  // Relation: Benutzer dem dieser Plan gehört
   userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
 
-  // Aktivitätsname als String (für Abwärtskompatibilität)
+  // Activity name as string (kept for backwards compatibility)
   activityType: { type: String, required: true },
 
-  // Relation: direkte Referenz auf den ActivityType-Datensatz (seit v2)
+  // Direct reference to the ActivityType document (since v2)
   activityTypeRef: { type: mongoose.Schema.Types.ObjectId, ref: 'ActivityType' },
-  // Version des ActivityType zum Zeitpunkt der Planung
+  // ActivityType version at the time of planning
   activityTypeVersion: { type: Number },
 
   scheduledDate: { type: Date, required: true },
-  duration: { type: Number },   // geplante Minuten
-  distance: { type: Number },   // geplante Kilometer
+  duration: { type: Number },   // planned minutes
+  distance: { type: Number },   // planned kilometres
   completed: { type: Boolean, default: false },
   notes: { type: String },
   customValues: { type: mongoose.Schema.Types.Mixed, default: {} },

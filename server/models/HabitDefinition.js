@@ -1,6 +1,6 @@
 const mongoose = require('mongoose');
 
-// Speichert den Zustand einer Version (Name + Einheit)
+// Stores the state of a version (name + unit)
 const nameHistorySchema = new mongoose.Schema({
   name: { type: String, required: true },
   unitSymbol: { type: String },
