@@ -1,16 +1,16 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import api from '../utils/api';
 import {
-  Settings as SettingsIcon, Copy, Check, LogOut, User, Save, KeyRound, Eye, EyeOff,
-  Download, Upload, AlertCircle
+  Check, LogOut, User, Save, Eye, EyeOff,
+  Download, Upload, AlertCircle, AtSign, Lock, Server, Monitor
 } from 'lucide-react';
 
 // ── Main page ─────────────────────────────────────────────────────────────
 
 export default function Settings() {
-  const { user, logout, updateUser } = useAuth();
+  const { user, logout, updateUser, setUsername, changePassword } = useAuth();
   const navigate = useNavigate();
 
   // Profil
@@ -18,8 +18,27 @@ export default function Settings() {
   const [weightUnit, setWeightUnit] = useState(user?.weightUnit || 'kg');
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
-  const [copied, setCopied] = useState(false);
-  const [showUuid, setShowUuid] = useState(false);
+
+  // Username
+  const [newUsername, setNewUsername] = useState('');
+  const [usernameError, setUsernameError] = useState('');
+  const [usernameSaving, setUsernameSaving] = useState(false);
+  const [usernameSaved, setUsernameSaved] = useState(false);
+
+  // Backend version
+  const [backendVersion, setBackendVersion] = useState(null);
+
+  // Sync form fields when user object loads (e.g. after page refresh)
+  useEffect(() => {
+    if (user) {
+      setName(user.name || '');
+      setWeightUnit(user.weightUnit || 'kg');
+    }
+  }, [user]);
+
+  useEffect(() => {
+    api.get('').then(res => setBackendVersion(res.data.version)).catch(() => setBackendVersion('–'));
+  }, []);
 
   const handleSaveProfile = async (e) => {
     e.preventDefault();
@@ -36,10 +55,25 @@ export default function Settings() {
     }
   };
 
-  const copyUuid = () => {
-    navigator.clipboard.writeText(user?.uuid || '');
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
+  const handleSaveUsername = async (e) => {
+    e.preventDefault();
+    const trimmed = newUsername.trim();
+    if (trimmed.length < 3) {
+      setUsernameError('Benutzername muss mindestens 3 Zeichen lang sein.');
+      return;
+    }
+    setUsernameSaving(true);
+    setUsernameError('');
+    try {
+      await setUsername(trimmed);
+      setNewUsername('');
+      setUsernameSaved(true);
+      setTimeout(() => setUsernameSaved(false), 2000);
+    } catch (err) {
+      setUsernameError(err.response?.data?.error || 'Fehler beim Speichern.');
+    } finally {
+      setUsernameSaving(false);
+    }
   };
 
   const handleLogout = () => {
@@ -48,93 +82,164 @@ export default function Settings() {
   };
 
   return (
-    <div className="space-y-6 max-w-lg">
+    <div className="space-y-6 max-w-4xl">
       <div>
         <h1 className="text-2xl font-bold text-white">Einstellungen</h1>
         <p className="text-slate-400 text-sm mt-0.5">Profil & Präferenzen</p>
       </div>
 
-      {/* Profil */}
-      <div className="card p-5">
-        <h2 className="font-semibold text-white mb-4 flex items-center gap-2">
-          <User size={16} className="text-brand-400" />
-          Profil
-        </h2>
-        <form onSubmit={handleSaveProfile} className="space-y-4">
-          <div>
-            <label className="label">Name</label>
-            <input className="input" value={name} onChange={e => setName(e.target.value)} placeholder="Dein Name" />
-          </div>
-          <div>
-            <label className="label">Gewichtseinheit</label>
-            <select className="input" value={weightUnit} onChange={e => setWeightUnit(e.target.value)}>
-              <option value="kg">Kilogramm (kg)</option>
-              <option value="lbs">Pfund (lbs)</option>
-            </select>
-          </div>
-          <button type="submit" disabled={saving} className="btn-primary flex items-center gap-2">
-            {saved ? <Check size={16} /> : <Save size={16} />}
-            {saved ? 'Gespeichert!' : saving ? 'Speichern...' : 'Speichern'}
-          </button>
-        </form>
-      </div>
+      {/* Desktop: 2-column grid; mobile: single column */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
 
-      {/* UUID */}
-      <div className="card p-5">
-        <h2 className="font-semibold text-white mb-4 flex items-center gap-2">
-          <SettingsIcon size={16} className="text-brand-400" />
-          Zugang
-        </h2>
-        <div>
-          <label className="label">Deine UUID (Zugangscode)</label>
-          <div className="flex gap-2">
-            <div className="relative flex-1">
-              <input
-                className={`input font-mono text-sm pr-10 ${showUuid ? '' : 'blur-sm select-none'}`}
-                value={user?.uuid || ''}
-                readOnly
-                tabIndex={showUuid ? 0 : -1}
-              />
-              <button
-                type="button"
-                onClick={() => setShowUuid(v => !v)}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-200 transition-colors"
-                title={showUuid ? 'UUID verbergen' : 'UUID anzeigen'}
-              >
-                {showUuid ? <EyeOff size={16} /> : <Eye size={16} />}
+        {/* ── Left column ── */}
+        <div className="space-y-6">
+
+          {/* Profil */}
+          <div className="card p-5">
+            <h2 className="font-semibold text-white mb-4 flex items-center gap-2">
+              <User size={16} className="text-brand-400" />
+              Profil
+            </h2>
+            <form onSubmit={handleSaveProfile} className="space-y-4">
+              <div>
+                <label className="label">Name</label>
+                <input
+                  className="input"
+                  value={name}
+                  onChange={e => setName(e.target.value)}
+                  placeholder="Dein Name"
+                />
+              </div>
+              <div>
+                <label className="label">Gewichtseinheit</label>
+                <select
+                  className="input"
+                  value={weightUnit}
+                  onChange={e => setWeightUnit(e.target.value)}
+                >
+                  <option value="kg">Kilogramm (kg)</option>
+                  <option value="lbs">Pfund (lbs)</option>
+                </select>
+              </div>
+              <button type="submit" disabled={saving} className="btn-primary flex items-center gap-2">
+                {saved ? <Check size={16} /> : <Save size={16} />}
+                {saved ? 'Gespeichert!' : saving ? 'Speichern...' : 'Speichern'}
               </button>
-            </div>
-            <button onClick={copyUuid} className="btn-secondary px-3 flex-shrink-0 flex items-center gap-1.5">
-              {copied ? <Check size={15} className="text-emerald-400" /> : <Copy size={15} />}
-              {copied ? 'Kopiert' : 'Kopieren'}
-            </button>
+            </form>
           </div>
-          <p className="text-xs text-slate-600 mt-1.5">
-            Bewahre diese UUID sicher auf – sie ist dein einziger Zugangscode.
-          </p>
+
+          {/* Benutzername */}
+          <div className="card p-5">
+            <h2 className="font-semibold text-white mb-4 flex items-center gap-2">
+              <AtSign size={16} className="text-brand-400" />
+              Benutzername
+            </h2>
+            {user?.username && (
+              <p className="text-sm text-slate-400 mb-4">
+                Aktuell: <span className="text-white font-mono">{user.username}</span>
+              </p>
+            )}
+            <form onSubmit={handleSaveUsername} className="space-y-3">
+              <div>
+                <label className="label">
+                  {user?.username ? 'Neuer Benutzername' : 'Benutzername wählen'}
+                </label>
+                <input
+                  className="input"
+                  value={newUsername}
+                  onChange={e => { setNewUsername(e.target.value); setUsernameError(''); }}
+                  placeholder="Mindestens 3 Zeichen"
+                  minLength={3}
+                  maxLength={30}
+                  autoComplete="username"
+                />
+              </div>
+              {usernameError && (
+                <div className="flex items-center gap-2 text-red-400 text-sm bg-red-900/20 border border-red-900/50 rounded-xl px-3 py-2">
+                  <AlertCircle size={14} />
+                  {usernameError}
+                </div>
+              )}
+              <button
+                type="submit"
+                disabled={usernameSaving || newUsername.trim().length < 3}
+                className="btn-primary flex items-center gap-2"
+              >
+                {usernameSaved ? <Check size={16} /> : <Save size={16} />}
+                {usernameSaved ? 'Gespeichert!' : usernameSaving ? 'Speichern...' : 'Benutzernamen speichern'}
+              </button>
+            </form>
+          </div>
+
+        </div>
+
+        {/* ── Right column ── */}
+        <div className="space-y-6">
+
+          {/* Passwort */}
+          {user?.username && user?.hasPassword && (
+            <UserPasswordForm changePassword={changePassword} />
+          )}
+
+          {/* Export / Import */}
+          <ExportImport />
+
         </div>
       </div>
 
-      {/* Export / Import */}
-      <ExportImport />
-
-      {/* Admin-Passwort */}
-      {user?.isAdmin && <ChangePasswordForm />}
-
-      {/* Konto */}
+      {/* ── Full-width footer row: Konto + Versionen ── */}
       <div className="card p-5">
-        <h2 className="font-semibold text-white mb-2">Konto</h2>
-        <p className="text-sm text-slate-400 mb-4">
-          Mitglied seit {user?.createdAt ? new Date(user.createdAt).toLocaleDateString('de-DE') : '–'}
-        </p>
-        <button onClick={handleLogout} className="flex items-center gap-2 text-red-400 hover:text-red-300 font-medium text-sm transition-colors">
-          <LogOut size={16} />
-          Abmelden
-        </button>
+        <div className="flex flex-wrap items-start justify-between gap-4">
+          <div>
+            <h2 className="font-semibold text-white mb-1">Konto</h2>
+            <p className="text-sm text-slate-400">
+              Mitglied seit {user?.createdAt ? new Date(user.createdAt).toLocaleDateString('de-DE') : '–'}
+            </p>
+          </div>
+          <button
+            onClick={handleLogout}
+            className="flex items-center gap-2 text-red-400 hover:text-red-300 font-medium text-sm transition-colors"
+          >
+            <LogOut size={16} />
+            Abmelden
+          </button>
+        </div>
+
+        <div className="mt-4 pt-4 border-t border-slate-800 grid grid-cols-2 sm:grid-cols-4 gap-3">
+          <VersionBadge
+            icon={<Monitor size={13} />}
+            label="Frontend"
+            version={__APP_VERSION__}
+          />
+          <VersionBadge
+            icon={<Server size={13} />}
+            label="Backend"
+            version={backendVersion}
+          />
+        </div>
       </div>
     </div>
   );
 }
+
+function VersionBadge({ icon, label, version }) {
+  return (
+    <div className="bg-slate-900 rounded-xl px-3 py-2.5">
+      <p className="text-xs text-slate-500 flex items-center gap-1.5 mb-1">
+        {icon}
+        {label}
+      </p>
+      <p
+        className="text-xs font-mono text-slate-300 truncate"
+        title={version ?? '…'}
+      >
+        {version ?? '…'}
+      </p>
+    </div>
+  );
+}
+
+// ── Export / Import ────────────────────────────────────────────────────────
 
 function ExportImport() {
   const [importing, setImporting] = useState(false);
@@ -244,7 +349,9 @@ function ExportImport() {
   );
 }
 
-function ChangePasswordForm() {
+// ── Passwort ändern ────────────────────────────────────────────────────────
+
+function UserPasswordForm({ changePassword }) {
   const [current, setCurrent] = useState('');
   const [next, setNext] = useState('');
   const [confirm, setConfirm] = useState('');
@@ -261,7 +368,7 @@ function ChangePasswordForm() {
     setError('');
     setSuccess(false);
     try {
-      await api.put('/admin/password', { currentPassword: current, newPassword: next });
+      await changePassword(current, next);
       setSuccess(true);
       setCurrent(''); setNext(''); setConfirm('');
     } catch (err) {
@@ -274,8 +381,8 @@ function ChangePasswordForm() {
   return (
     <div className="card p-5">
       <h2 className="font-semibold text-white mb-4 flex items-center gap-2">
-        <KeyRound size={16} className="text-brand-400" />
-        Admin-Passwort ändern
+        <Lock size={16} className="text-brand-400" />
+        Passwort ändern
       </h2>
       <form onSubmit={handleSubmit} className="space-y-3">
         <div>
