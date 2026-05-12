@@ -91,7 +91,7 @@ describe('Auth Middleware', () => {
   });
 
   describe('admin authentication', () => {
-    it('returns 401 when admin identifier is used without a secret', async () => {
+    it('returns 401 when admin UUID is used without a password', async () => {
       const { uuid } = await createAdminUser();
       const res = await request(app)
         .get('/api/auth/me')
@@ -99,15 +99,15 @@ describe('Auth Middleware', () => {
       expect(res.status).toBe(401);
     });
 
-    it('returns 401 for a wrong admin secret', async () => {
+    it('returns 401 for a wrong admin password', async () => {
       const { uuid } = await createAdminUser({ password: 'correct-secret1' });
       const res = await request(app)
         .get('/api/auth/me')
-        .set('Authorization', `Bearer ${uuid}:wrongsecret`);
+        .set('Authorization', `Bearer ${uuid}:wrongpassword`);
       expect(res.status).toBe(401);
     });
 
-    it('allows access with the correct UUID and admin secret', async () => {
+    it('allows access with the correct UUID and password', async () => {
       const { token } = await createAdminUser({ password: 'correct-secret1' });
       const res = await request(app)
         .get('/api/auth/me')
@@ -120,7 +120,7 @@ describe('Auth Middleware', () => {
 
 describe('Auth Routes', () => {
   describe('GET /api/auth/me', () => {
-    it('returns the current user profile', async () => {
+    it('returns the current user profile without sensitive fields', async () => {
       const { token } = await createUser({ name: 'Alice' });
       const res = await request(app)
         .get('/api/auth/me')
@@ -129,6 +129,33 @@ describe('Auth Routes', () => {
       expect(res.body.name).toBe('Alice');
       expect(res.body.adminSecretHash).toBeUndefined();
       expect(res.body.passwordHash).toBeUndefined();
+    });
+
+    it('includes hasPassword=false for migration user without credentials', async () => {
+      const { token } = await createUser();
+      const res = await request(app)
+        .get('/api/auth/me')
+        .set(authHeader(token));
+      expect(res.status).toBe(200);
+      expect(res.body.hasPassword).toBe(false);
+    });
+
+    it('includes hasPassword=true for user with password', async () => {
+      const { token } = await createUserWithPassword({ username: 'alice', password: 'pass1234' });
+      const res = await request(app)
+        .get('/api/auth/me')
+        .set(authHeader(token));
+      expect(res.status).toBe(200);
+      expect(res.body.hasPassword).toBe(true);
+    });
+
+    it('includes hasPassword=true for admin', async () => {
+      const { token } = await createAdminUser();
+      const res = await request(app)
+        .get('/api/auth/me')
+        .set(authHeader(token));
+      expect(res.status).toBe(200);
+      expect(res.body.hasPassword).toBe(true);
     });
   });
 
@@ -151,6 +178,7 @@ describe('Auth Routes', () => {
         .set(authHeader(token))
         .send({ name: 'Admin Updated' });
       expect(res.status).toBe(200);
+      expect(res.body.name).toBe('Admin Updated');
       expect(res.body.adminSecretHash).toBeUndefined();
       expect(res.body.passwordHash).toBeUndefined();
     });
@@ -168,7 +196,7 @@ describe('Auth Routes', () => {
       expect(res.body.passwordHash).toBeUndefined();
     });
 
-    it('allows admin to set username without providing a password', async () => {
+    it('allows user with existing passwordHash to set username without password', async () => {
       const { token } = await createAdminUser();
       const res = await request(app)
         .put('/api/auth/me/username')
@@ -275,13 +303,14 @@ describe('Auth Routes', () => {
       expect(res.body.ok).toBe(true);
     });
 
-    it('returns 400 for admin users', async () => {
-      const { token } = await createAdminUser();
+    it('allows admin to change password', async () => {
+      const { token } = await createAdminUser({ password: 'oldpass123' });
       const res = await request(app)
         .put('/api/auth/me/password')
         .set(authHeader(token))
-        .send({ currentPassword: 'anything', newPassword: 'newpass456' });
-      expect(res.status).toBe(400);
+        .send({ currentPassword: 'oldpass123', newPassword: 'newpass456' });
+      expect(res.status).toBe(200);
+      expect(res.body.ok).toBe(true);
     });
 
     it('returns 400 when currentPassword is missing', async () => {

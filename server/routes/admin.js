@@ -1,7 +1,6 @@
 const express = require('express');
 const router = express.Router();
 const crypto = require('crypto');
-const bcrypt = require('bcryptjs');
 const auth = require('../middleware/auth');
 const User = require('../models/User');
 const pw = require('../utils/password');
@@ -15,9 +14,9 @@ const adminOnly = (req, res, next) => {
 
 router.get('/setup-status', async (req, res) => {
   try {
-    const admin = await User.findOne({ isAdmin: true }).select('+adminSecretHash');
+    const admin = await User.findOne({ isAdmin: true }).select('+adminSecretHash +passwordHash');
     if (!admin) return res.json({ setupNeeded: false });
-    const setupNeeded = !admin.adminSecretHash;
+    const setupNeeded = !admin.passwordHash && !admin.adminSecretHash;
     res.json({ setupNeeded, adminUuid: setupNeeded ? admin.uuid : null });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -26,37 +25,15 @@ router.get('/setup-status', async (req, res) => {
 
 router.post('/setup', async (req, res) => {
   try {
-    const admin = await User.findOne({ isAdmin: true }).select('+adminSecretHash');
-    if (!admin || admin.adminSecretHash) {
+    const admin = await User.findOne({ isAdmin: true }).select('+adminSecretHash +passwordHash');
+    if (!admin || admin.passwordHash || admin.adminSecretHash) {
       return res.status(400).json({ error: 'Setup bereits abgeschlossen' });
     }
     const { password } = req.body;
     if (!password || password.length < 8) {
       return res.status(400).json({ error: 'Passwort muss mindestens 8 Zeichen haben' });
     }
-    admin.adminSecretHash = await bcrypt.hash(password, 12);
-    await admin.save();
-    res.json({ ok: true });
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-});
-
-router.put('/password', auth, adminOnly, async (req, res) => {
-  try {
-    const admin = await User.findById(req.user._id).select('+adminSecretHash');
-    const { currentPassword, newPassword } = req.body;
-    if (!currentPassword || !newPassword) {
-      return res.status(400).json({ error: 'Aktuelles und neues Passwort erforderlich' });
-    }
-    if (newPassword.length < 8) {
-      return res.status(400).json({ error: 'Neues Passwort muss mindestens 8 Zeichen haben' });
-    }
-    const valid = await bcrypt.compare(currentPassword, admin.adminSecretHash);
-    if (!valid) {
-      return res.status(401).json({ error: 'Aktuelles Passwort ist falsch' });
-    }
-    admin.adminSecretHash = await bcrypt.hash(newPassword, 12);
+    admin.passwordHash = await pw.hash(password);
     await admin.save();
     res.json({ ok: true });
   } catch (err) {
@@ -106,22 +83,14 @@ router.post('/users', auth, adminOnly, async (req, res) => {
       return res.status(400).json({ error: 'Temporäres Passwort muss mindestens 8 Zeichen lang sein.' });
     }
 
-    // Admin accounts use adminSecretHash (no pepper); regular accounts use passwordHash (pepper)
-    const userFields = {
+    const user = await User.create({
       uuid: crypto.randomUUID(),
       username: normalized,
+      passwordHash: await pw.hash(password),
       mustChangePassword: true,
       name: name?.trim() || normalized,
-    };
-
-    if (makeAdmin) {
-      userFields.isAdmin = true;
-      userFields.adminSecretHash = await bcrypt.hash(password, 12);
-    } else {
-      userFields.passwordHash = await pw.hash(password);
-    }
-
-    const user = await User.create(userFields);
+      isAdmin: !!makeAdmin,
+    });
 
     res.status(201).json({
       _id: user._id,
@@ -136,7 +105,7 @@ router.post('/users', auth, adminOnly, async (req, res) => {
   }
 });
 
-// Edit a user: change username and/or reset password
+// Edit a user: change username, name and/or reset password
 router.put('/users/:id', auth, adminOnly, async (req, res) => {
   try {
     const user = await User.findById(req.params.id);
@@ -172,12 +141,7 @@ router.put('/users/:id', auth, adminOnly, async (req, res) => {
       if (password.length < 8) {
         return res.status(400).json({ error: 'Passwort muss mindestens 8 Zeichen lang sein.' });
       }
-      // Admin accounts use adminSecretHash; regular accounts use passwordHash
-      if (user.isAdmin) {
-        update.adminSecretHash = await bcrypt.hash(password, 12);
-      } else {
-        update.passwordHash = await pw.hash(password);
-      }
+      update.passwordHash = await pw.hash(password);
       update.mustChangePassword = true;
     }
 
