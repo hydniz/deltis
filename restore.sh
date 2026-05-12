@@ -4,6 +4,10 @@
 # Stops the app, restores a backup, then restarts the app.
 # MongoDB stays running throughout.
 #
+# Supports two backup formats:
+#   *.archive.gz   – mongodump archives created by backup.sh
+#   *.ejson.gz     – EJSON snapshots created automatically before each migration
+#
 # Usage:
 #   ./restore.sh                      – list available backups
 #   ./restore.sh backups/<file>       – restore from backup
@@ -12,7 +16,10 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 CONTAINER_NAME="habit-tracker-mongo"
+APP_CONTAINER="habit-tracker-app"
+APP_IMAGE="habit-tracker:latest"
 BACKUP_DIR="$SCRIPT_DIR/backups"
+PRE_MIGRATION_DIR="$BACKUP_DIR/pre-migration"
 PID_FILE="$SCRIPT_DIR/.run.pid"
 LOG_FILE="$SCRIPT_DIR/.run.log"
 LOCK_FILE="$BACKUP_DIR/.backup.lock"
@@ -47,7 +54,12 @@ if [ -z "${1:-}" ]; then
   echo ""
   echo -e "${BOLD}=== Available Backups ===${NC}"
   echo ""
+
+  HAS_ANY=false
+
   if ls "$BACKUP_DIR"/*.archive.gz 2>/dev/null | head -1 > /dev/null 2>&1; then
+    HAS_ANY=true
+    echo -e "  ${BOLD}Regular backups (mongodump):${NC}"
     echo -e "  ${CYAN}Size    File${NC}"
     echo -e "  ──────────────────────────────────────────────────────"
     while IFS= read -r f; do
@@ -56,10 +68,26 @@ if [ -z "${1:-}" ]; then
       echo -e "  ${SIZE}\t${NAME}"
     done < <(ls -1t "$BACKUP_DIR"/*.archive.gz)
     echo ""
-    echo -e "  Usage: ${BOLD}./restore.sh backups/<filename>${NC}"
-  else
+  fi
+
+  if ls "$PRE_MIGRATION_DIR"/*.ejson.gz 2>/dev/null | head -1 > /dev/null 2>&1; then
+    HAS_ANY=true
+    echo -e "  ${BOLD}Pre-migration snapshots (EJSON):${NC}"
+    echo -e "  ${CYAN}Size    File${NC}"
+    echo -e "  ──────────────────────────────────────────────────────"
+    while IFS= read -r f; do
+      SIZE=$(du -sh "$f" | cut -f1)
+      NAME="pre-migration/$(basename "$f")"
+      echo -e "  ${SIZE}\t${NAME}"
+    done < <(ls -1t "$PRE_MIGRATION_DIR"/*.ejson.gz)
+    echo ""
+  fi
+
+  if ! $HAS_ANY; then
     warn "No backups found in ./backups/"
     echo -e "  Create one first with: ${BOLD}./backup.sh${NC}"
+  else
+    echo -e "  Usage: ${BOLD}./restore.sh backups/<filename>${NC}"
   fi
   echo ""
   exit 0
@@ -76,9 +104,20 @@ fi
 
 if ! $RUNTIME container inspect "$CONTAINER_NAME" --format '{{.State.Running}}' 2>/dev/null | grep -q true; then
   err "MongoDB container '$CONTAINER_NAME' is not running."
-  echo -e "  Start it first with: ${BOLD}./run.sh start${NC}"
+  echo -e "  Start it first with: ${BOLD}docker compose up -d mongo${NC}"
   exit 1
 fi
+
+# Detect format
+case "$BACKUP_FILE" in
+  *.ejson.gz) FORMAT="ejson" ;;
+  *.archive.gz) FORMAT="archive" ;;
+  *)
+    err "Unrecognised backup format: $BACKUP_FILE"
+    err "Expected *.ejson.gz (pre-migration) or *.archive.gz (regular)"
+    exit 1
+    ;;
+esac
 
 SIZE=$(du -sh "$BACKUP_FILE" | cut -f1)
 
@@ -88,6 +127,7 @@ echo ""
 echo -e "${BOLD}=== Habit Tracker – Restore Database ===${NC}"
 echo ""
 echo -e "  ${CYAN}Backup file:${NC}  $BACKUP_FILE"
+echo -e "  ${CYAN}Format:${NC}       $FORMAT"
 echo -e "  ${CYAN}Size:${NC}         $SIZE"
 echo ""
 warn "WARNING: All current data will be permanently overwritten!"
@@ -105,15 +145,14 @@ echo ""
 
 # ── Stop app (keep MongoDB running) ──────────────────────────────────────────
 
-# Detect compose mode: is the app container present?
 COMPOSE_MODE=false
-if $RUNTIME container inspect habit-tracker-app >/dev/null 2>&1; then
+if $RUNTIME container inspect "$APP_CONTAINER" >/dev/null 2>&1; then
   COMPOSE_MODE=true
 fi
 
 info "Stopping app (MongoDB stays active)..."
 if $COMPOSE_MODE; then
-  $RUNTIME stop habit-tracker-app 2>/dev/null || true
+  $RUNTIME stop "$APP_CONTAINER" 2>/dev/null || true
   ok "App container stopped"
 elif [ -f "$PID_FILE" ]; then
   PID=$(cat "$PID_FILE")
@@ -135,17 +174,37 @@ fi
 
 # ── Restore data ─────────────────────────────────────────────────────────────
 
-info "Copying backup into container..."
 touch "$LOCK_FILE"
-$RUNTIME cp "$BACKUP_FILE" "${CONTAINER_NAME}:/tmp/restore.archive"
 
-info "Restoring database (existing data will be dropped)..."
-$RUNTIME exec "$CONTAINER_NAME" mongorestore \
-  --db habit_tracker \
-  --archive=/tmp/restore.archive \
-  --gzip \
-  --drop \
-  --quiet
+if [ "$FORMAT" = "archive" ]; then
+  info "Restoring from mongodump archive..."
+  $RUNTIME cp "$BACKUP_FILE" "${CONTAINER_NAME}:/tmp/restore.archive"
+  $RUNTIME exec "$CONTAINER_NAME" mongorestore \
+    --db habit_tracker \
+    --archive=/tmp/restore.archive \
+    --gzip \
+    --drop \
+    --quiet
+
+elif [ "$FORMAT" = "ejson" ]; then
+  info "Restoring from EJSON pre-migration snapshot..."
+
+  # Run a one-off app container sharing the mongo container's network stack
+  # so Node.js can reach MongoDB on 127.0.0.1:27017.
+  BACKUP_ABS="$(realpath "$BACKUP_FILE")"
+  $RUNTIME run --rm \
+    --network "container:${CONTAINER_NAME}" \
+    -v "${BACKUP_ABS}:/tmp/restore.ejson.gz:ro" \
+    "$APP_IMAGE" \
+    node -e "
+      const mongoose = require('mongoose');
+      const { restoreBackup } = require('./server/migrations/backup');
+      mongoose.connect('mongodb://127.0.0.1:27017/habit_tracker')
+        .then(() => restoreBackup({ db: mongoose.connection.db, file: '/tmp/restore.ejson.gz' }))
+        .then(() => { console.log('Restore complete.'); process.exit(0); })
+        .catch(err => { console.error(err.message); process.exit(1); });
+    "
+fi
 
 ok "Data restored successfully"
 rm -f "$LOCK_FILE"
@@ -154,13 +213,13 @@ rm -f "$LOCK_FILE"
 
 info "Restarting app..."
 if $COMPOSE_MODE; then
-  $RUNTIME start habit-tracker-app 2>/dev/null
+  $RUNTIME start "$APP_CONTAINER" 2>/dev/null
   sleep 2
-  if $RUNTIME container inspect habit-tracker-app --format '{{.State.Running}}' 2>/dev/null | grep -q true; then
+  if $RUNTIME container inspect "$APP_CONTAINER" --format '{{.State.Running}}' 2>/dev/null | grep -q true; then
     ok "App container is running again"
   else
     warn "Container could not be started automatically."
-    echo -e "  Start manually with: ${BOLD}./run.sh compose:up${NC}"
+    echo -e "  Start manually with: ${BOLD}docker compose up -d${NC}"
   fi
 else
   cd "$SCRIPT_DIR"
