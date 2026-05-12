@@ -37,7 +37,7 @@ function ask(prompt) {
 }
 
 async function postRestoreRecovery() {
-  const MigrationLock = mongoose.models.MigrationLock || require('../server/models/MigrationLock');
+  const MigrationLock = require('../server/models/MigrationLock');
   await MigrationLock.deleteMany({});
 
   for (const model of Object.values(mongoose.models)) {
@@ -102,7 +102,7 @@ async function main() {
   try {
     console.log('→ Restoring …');
     await restoreBackup({ db: mongoose.connection.db, file: target });
-    console.log('→ Rebuilding indexes …');
+    console.log('→ Indexe werden neu erstellt …');
     await postRestoreRecovery();
     console.log('✓ Database restored.');
     console.log('');
