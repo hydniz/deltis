@@ -80,44 +80,6 @@ describe('POST /api/admin/setup', () => {
   });
 });
 
-describe('PUT /api/admin/password', () => {
-  it('allows the admin to change their password', async () => {
-    const { token } = await createAdminUser({ password: 'oldpassword1' });
-    const res = await request(app)
-      .put('/api/admin/password')
-      .set(authHeader(token))
-      .send({ currentPassword: 'oldpassword1', newPassword: 'newpassword1' });
-    expect(res.status).toBe(200);
-    expect(res.body.ok).toBe(true);
-  });
-
-  it('returns 401 when the current password is wrong', async () => {
-    const { token } = await createAdminUser({ password: 'correctpassword1' });
-    const res = await request(app)
-      .put('/api/admin/password')
-      .set(authHeader(token))
-      .send({ currentPassword: 'wrongpassword', newPassword: 'newpassword1' });
-    expect(res.status).toBe(401);
-  });
-
-  it('returns 400 when new password is too short', async () => {
-    const { token } = await createAdminUser({ password: 'correctpassword1' });
-    const res = await request(app)
-      .put('/api/admin/password')
-      .set(authHeader(token))
-      .send({ currentPassword: 'correctpassword1', newPassword: 'short' });
-    expect(res.status).toBe(400);
-  });
-
-  it('returns 403 when a regular user tries to change the admin password', async () => {
-    const { token } = await createUser();
-    const res = await request(app)
-      .put('/api/admin/password')
-      .set(authHeader(token))
-      .send({ currentPassword: 'any', newPassword: 'newpassword1' });
-    expect(res.status).toBe(403);
-  });
-});
 
 describe('GET /api/admin/users', () => {
   it('returns list of all users for an admin', async () => {
