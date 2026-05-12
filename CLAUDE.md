@@ -9,6 +9,9 @@ Later the Frontend will be supplemented with an android app as well as an ios ap
 - **User Interface (UI):** All user-facing strings (labels, buttons, toast messages, tooltips) MUST be in **German**.
 - **Communication:** Chat interactions should remain direct, technical, and concise.
 
+## Coding Styles
+- The application needs a 100% test coverange at all components.
+
 ## Tech Stack
 - **Frontend:** React (Vite), TailwindCSS, PWA.
 - **Backend:** Node.js, Express.
