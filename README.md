@@ -121,7 +121,7 @@ Schema and data migrations run **automatically on startup** before the Express s
 2. Already-applied migrations are recorded in the `migrations` collection — those are skipped.
 3. Before applying any pending migration, a **pre-migration backup** is written to `backups/pre-migration/`.
 4. Migrations apply in numeric order. If one fails, the database is **automatically restored** from the backup and the process exits.
-5. A `migrationlocks` collection (TTL 30 min) prevents concurrent runs (e.g. multiple containers starting at the same time).
+5. A `migrationlocks` collection (TTL 24 hours) prevents concurrent runs (e.g. multiple containers starting at the same time).
 
 ### Diagnostics
 
