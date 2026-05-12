@@ -34,12 +34,13 @@ function timestamp() {
 }
 
 // Lists all collections that should be included in a backup. System collections
-// (system.*) and views are skipped.
+// (system.*), views, and internal migration lock state are skipped.
 async function listUserCollections(db) {
   const all = await db.listCollections({}, { nameOnly: false }).toArray();
   return all
     .filter(c => c.type !== 'view')
     .filter(c => !c.name.startsWith('system.'))
+    .filter(c => c.name !== 'migrationlocks')
     .map(c => c.name);
 }
 
