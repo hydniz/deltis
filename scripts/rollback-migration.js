@@ -102,7 +102,7 @@ async function main() {
   try {
     console.log('→ Restoring …');
     await restoreBackup({ db: mongoose.connection.db, file: target });
-    console.log('→ Indexe werden neu erstellt …');
+    console.log('→ Indizes werden neu erstellt …');
     await postRestoreRecovery();
     console.log('✓ Database restored.');
     console.log('');
