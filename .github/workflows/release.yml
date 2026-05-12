@@ -1,4 +1,4 @@
-name: Create GitHub Release files
+name: Create GitHub Release
 
 on:
   push:
@@ -29,8 +29,8 @@ jobs:
 
       - name: Run tests
         run: |
-          npm test
-          npm test --prefix client
+          npm run server:test
+          npm run client:test
 
   create-release:
     name: Build & Release Assets
@@ -42,18 +42,44 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Build & Save App Image
-        run: |
-          docker build -t habit-tracker:${{ github.ref_name }} .
-          docker save habit-tracker:${{ github.ref_name }} | gzip > habit-tracker-app.tar.gz
+      - name: Build Docker image
+        run: docker build -t habit-tracker:${{ github.ref_name }} .
 
-      - name: Upload Assets to GitHub Release
+      - name: Prepare release assets
+        run: |
+          mkdir release
+
+          # Save the versioned app image as a tar.gz
+          docker save habit-tracker:${{ github.ref_name }} \
+            | gzip > release/habit-tracker-${{ github.ref_name }}.tar.gz
+
+          # Generate a release-ready docker-compose.yml:
+          #   - remove "build: ." so no source code is needed
+          #   - pin the image to the released version tag
+          sed \
+            -e '/^\s*build:/d' \
+            -e 's|image: habit-tracker:latest|image: habit-tracker:${{ github.ref_name }}|g' \
+            docker-compose.yml > release/docker-compose.yml
+
+      - name: Upload assets to GitHub Release
         uses: softprops/action-gh-release@v2
         with:
           files: |
-            deltis-app.tar.gz
-            docker-compose.yml
-          body: "Automated Release for version ${{ github.ref_name }}"
+            release/habit-tracker-${{ github.ref_name }}.tar.gz
+            release/docker-compose.yml
+          body: |
+            ## Installation
+
+            1. Lade beide Dateien herunter.
+            2. Lade das Docker-Image:
+               ```sh
+               docker load < habit-tracker-${{ github.ref_name }}.tar.gz
+               ```
+            3. Erstelle eine `.env.production`-Datei (Vorlage im Repository).
+            4. Starte die Anwendung:
+               ```sh
+               docker compose up -d
+               ```
           draft: false
           prerelease: false
         env:
