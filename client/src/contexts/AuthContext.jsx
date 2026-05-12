@@ -20,17 +20,9 @@ export function AuthProvider({ children }) {
   }, []);
 
   // identifier: username or UUID
-  // password: regular user password (null for UUID-only migration login or admin)
-  // adminSecret: only for admin login
-  const login = async (identifier, password = null, adminSecret = null) => {
-    let token;
-    if (adminSecret) {
-      token = `${identifier}:${adminSecret}`;
-    } else if (password) {
-      token = `${identifier}:${password}`;
-    } else {
-      token = identifier;
-    }
+  // password: user password (null for UUID-only migration login)
+  const login = async (identifier, password = null) => {
+    const token = password ? `${identifier}:${password}` : identifier;
     localStorage.setItem('auth_token', token);
     try {
       const res = await api.get('/auth/me');
@@ -49,7 +41,7 @@ export function AuthProvider({ children }) {
 
   const updateUser = (data) => setUser(prev => ({ ...prev, ...data }));
 
-  // Sets username (and password for non-admin initial setup).
+  // Sets username (and password for users without credentials yet).
   // Updates localStorage token so future requests use the new credentials.
   const setUsername = async (username, password = null) => {
     const res = await api.put('/auth/me/username', { username, password });
@@ -60,7 +52,7 @@ export function AuthProvider({ children }) {
     const colonIdx = currentToken.indexOf(':');
     const existingSecret = colonIdx !== -1 ? currentToken.slice(colonIdx + 1) : null;
 
-    // Use new password if provided (initial setup), otherwise keep existing secret (admin or username change)
+    // Use new password if provided (initial setup), otherwise keep existing secret (username rename)
     const secret = password || existingSecret;
     const newToken = secret
       ? `${updatedUser.username}:${secret}`

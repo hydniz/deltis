@@ -16,6 +16,7 @@ import AdminSetup from './pages/AdminSetup';
 import api from './utils/api';
 import { User, AlertCircle, Lock, Eye, EyeOff, KeyRound } from 'lucide-react';
 
+
 function Spinner() {
   return (
     <div className="min-h-screen bg-slate-950 flex items-center justify-center">
@@ -35,7 +36,8 @@ function UsernameSetupModal() {
 
   if (!user || user.username) return null;
 
-  const isAdmin = user.isAdmin;
+  // Password required only when user has no credentials yet
+  const needsPassword = !user.hasPassword;
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -44,7 +46,7 @@ function UsernameSetupModal() {
       setError('Benutzername muss mindestens 3 Zeichen lang sein.');
       return;
     }
-    if (!isAdmin) {
+    if (needsPassword) {
       if (password.length < 8) {
         setError('Passwort muss mindestens 8 Zeichen lang sein.');
         return;
@@ -57,7 +59,7 @@ function UsernameSetupModal() {
     setLoading(true);
     setError('');
     try {
-      await setUsername(trimmedName, isAdmin ? null : password);
+      await setUsername(trimmedName, needsPassword ? password : null);
     } catch (err) {
       setError(err.response?.data?.error || 'Fehler beim Speichern.');
     } finally {
@@ -79,7 +81,7 @@ function UsernameSetupModal() {
         </div>
 
         <p className="text-slate-400 text-sm">
-          Wähle einen Benutzernamen{isAdmin ? '' : ' und ein Passwort'}.
+          Wähle einen Benutzernamen{needsPassword ? ' und ein Passwort' : ''}.
           {' '}Danach ist deine UUID dauerhaft gesperrt.
         </p>
 
@@ -99,7 +101,7 @@ function UsernameSetupModal() {
             />
           </div>
 
-          {!isAdmin && (
+          {needsPassword && (
             <>
               <div>
                 <label className="label">
@@ -152,7 +154,7 @@ function UsernameSetupModal() {
             disabled={
               loading ||
               username.trim().length < 3 ||
-              (!isAdmin && (password.length < 8 || password !== passwordConfirm))
+              (needsPassword && (password.length < 8 || password !== passwordConfirm))
             }
             className="btn-primary w-full py-2.5 flex items-center justify-center gap-2"
           >
