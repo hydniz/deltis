@@ -24,7 +24,9 @@ const { createBackup, restoreBackup, pruneOldBackups, defaultDir: defaultBackupD
 
 const MIGRATION_FILE_PATTERN = /^(\d{3,})-[A-Za-z0-9_-]+\.js$/;
 const LOCK_POLL_INTERVAL_MS = 1000;
-const LOCK_POLL_MAX_ATTEMPTS = 30;
+// MongoDB's TTL monitor runs about once a minute, so allow enough retries for
+// an expired lock document to be deleted before giving up.
+const LOCK_POLL_MAX_ATTEMPTS = 90;
 const BACKUP_RETENTION = 5;
 
 function log(msg) {
