@@ -6,6 +6,7 @@ export const mockUser = {
   username: 'testuser',
   name: 'Test User',
   isAdmin: false,
+  hasPassword: true,
   mustChangePassword: false,
   weightUnit: 'kg',
 };
@@ -15,10 +16,15 @@ export const mockAdminUser = {
   uuid: 'admin-uuid-1234',
   name: 'Admin',
   isAdmin: true,
+  hasPassword: true,
   weightUnit: 'kg',
 };
 
 export const handlers = [
+  http.get('/api', () => {
+    return HttpResponse.json({ version: '1.0.0+test123' });
+  }),
+
   http.get('/api/auth/me', ({ request }) => {
     const auth = request.headers.get('Authorization') || '';
     if (!auth.startsWith('Bearer ')) {
