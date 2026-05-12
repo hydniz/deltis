@@ -26,6 +26,8 @@ services:
     volumes:
       # Mount backups dir so backup.sh and restore.sh can access it from the host
       - ./backups:/app/backups
+      # Mount pepper file read-only into the container
+      - /etc/deltis/pepper.txt:/etc/deltis/pepper.txt:ro
     env_file:
       - .env.production
     environment:
