@@ -10,6 +10,9 @@ RUN npm run build
 FROM node:20-alpine
 WORKDIR /app
 
+ARG GIT_COMMIT=unknown
+ENV GIT_COMMIT=$GIT_COMMIT
+
 # Server dependencies only (no devDependencies)
 COPY package*.json ./
 RUN npm ci --omit=dev
