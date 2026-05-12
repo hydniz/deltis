@@ -3,7 +3,7 @@ const mongoose = require('mongoose');
 const habitPlanSchema = new mongoose.Schema({
   userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
   habitId: { type: mongoose.Schema.Types.ObjectId, ref: 'HabitDefinition', required: true },
-  // Snapshots zum Zeitpunkt der Planung
+  // Snapshots of habit metadata at planning time
   habitName: { type: String },
   unitSymbol: { type: String },
   habitType: { type: String },

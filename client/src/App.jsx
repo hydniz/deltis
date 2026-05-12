@@ -14,11 +14,256 @@ import Settings from './pages/Settings';
 import Admin from './pages/Admin';
 import AdminSetup from './pages/AdminSetup';
 import api from './utils/api';
+import { User, AlertCircle, Lock, Eye, EyeOff, KeyRound } from 'lucide-react';
+
 
 function Spinner() {
   return (
     <div className="min-h-screen bg-slate-950 flex items-center justify-center">
       <div className="w-8 h-8 border-2 border-brand-500 border-t-transparent rounded-full animate-spin" />
+    </div>
+  );
+}
+
+function UsernameSetupModal() {
+  const { user, setUsername } = useAuth();
+  const [username, setUsernameValue] = useState('');
+  const [password, setPassword] = useState('');
+  const [passwordConfirm, setPasswordConfirm] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
+  const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
+
+  if (!user || user.username) return null;
+
+  // Password required only when user has no credentials yet
+  const needsPassword = !user.hasPassword;
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    const trimmedName = username.trim();
+    if (trimmedName.length < 3) {
+      setError('Benutzername muss mindestens 3 Zeichen lang sein.');
+      return;
+    }
+    if (needsPassword) {
+      if (password.length < 8) {
+        setError('Passwort muss mindestens 8 Zeichen lang sein.');
+        return;
+      }
+      if (password !== passwordConfirm) {
+        setError('Passwörter stimmen nicht überein.');
+        return;
+      }
+    }
+    setLoading(true);
+    setError('');
+    try {
+      await setUsername(trimmedName, needsPassword ? password : null);
+    } catch (err) {
+      setError(err.response?.data?.error || 'Fehler beim Speichern.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 bg-slate-950/90 backdrop-blur-sm flex items-center justify-center p-4">
+      <div className="card p-6 w-full max-w-sm space-y-4">
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 bg-brand-600 rounded-xl flex items-center justify-center flex-shrink-0">
+            <User size={18} className="text-white" />
+          </div>
+          <div>
+            <h2 className="text-white font-semibold text-lg">Zugangsdaten einrichten</h2>
+            <p className="text-slate-400 text-sm">Einmalige Einrichtung erforderlich</p>
+          </div>
+        </div>
+
+        <p className="text-slate-400 text-sm">
+          Wähle einen Benutzernamen{needsPassword ? ' und ein Passwort' : ''}.
+          {' '}Danach ist deine UUID dauerhaft gesperrt.
+        </p>
+
+        <form onSubmit={handleSubmit} className="space-y-3">
+          <div>
+            <label className="label">Benutzername</label>
+            <input
+              type="text"
+              value={username}
+              onChange={e => { setUsernameValue(e.target.value); setError(''); }}
+              className="input"
+              placeholder="Mindestens 3 Zeichen (a–z, 0–9, .-_)"
+              autoFocus
+              autoComplete="username"
+              minLength={3}
+              maxLength={30}
+            />
+          </div>
+
+          {needsPassword && (
+            <>
+              <div>
+                <label className="label">
+                  <Lock size={13} className="inline mr-1" />
+                  Passwort
+                </label>
+                <div className="relative">
+                  <input
+                    type={showPassword ? 'text' : 'password'}
+                    value={password}
+                    onChange={e => { setPassword(e.target.value); setError(''); }}
+                    className="input pr-10"
+                    placeholder="Mindestens 8 Zeichen"
+                    autoComplete="new-password"
+                    minLength={8}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(v => !v)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-200 transition-colors"
+                    tabIndex={-1}
+                  >
+                    {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                  </button>
+                </div>
+              </div>
+              <div>
+                <label className="label">Passwort bestätigen</label>
+                <input
+                  type={showPassword ? 'text' : 'password'}
+                  value={passwordConfirm}
+                  onChange={e => { setPasswordConfirm(e.target.value); setError(''); }}
+                  className="input"
+                  placeholder="Passwort wiederholen"
+                  autoComplete="new-password"
+                />
+              </div>
+            </>
+          )}
+
+          {error && (
+            <div className="flex items-center gap-2 text-red-400 text-sm bg-red-900/20 border border-red-900/50 rounded-xl px-3 py-2">
+              <AlertCircle size={14} />
+              {error}
+            </div>
+          )}
+
+          <button
+            type="submit"
+            disabled={
+              loading ||
+              username.trim().length < 3 ||
+              (needsPassword && (password.length < 8 || password !== passwordConfirm))
+            }
+            className="btn-primary w-full py-2.5 flex items-center justify-center gap-2"
+          >
+            {loading && <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />}
+            Zugangsdaten speichern
+          </button>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+function MustChangePasswordModal() {
+  const { user, forceChangePassword } = useAuth();
+  const [password, setPassword] = useState('');
+  const [confirm, setConfirm] = useState('');
+  const [showPw, setShowPw] = useState(false);
+  const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
+
+  if (!user || !user.mustChangePassword) return null;
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    if (password.length < 8) { setError('Passwort muss mindestens 8 Zeichen lang sein.'); return; }
+    if (password !== confirm) { setError('Passwörter stimmen nicht überein.'); return; }
+    setLoading(true);
+    setError('');
+    try {
+      await forceChangePassword(password);
+    } catch (err) {
+      setError(err.response?.data?.error || 'Fehler beim Speichern.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 bg-slate-950/90 backdrop-blur-sm flex items-center justify-center p-4">
+      <div className="card p-6 w-full max-w-sm space-y-4">
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 bg-amber-600 rounded-xl flex items-center justify-center flex-shrink-0">
+            <KeyRound size={18} className="text-white" />
+          </div>
+          <div>
+            <h2 className="text-white font-semibold text-lg">Passwort ändern</h2>
+            <p className="text-slate-400 text-sm">Du musst dein Passwort jetzt ändern.</p>
+          </div>
+        </div>
+
+        <p className="text-slate-400 text-sm">
+          Wähle ein neues persönliches Passwort (mindestens 8 Zeichen).
+        </p>
+
+        <form onSubmit={handleSubmit} className="space-y-3">
+          <div>
+            <label className="label">
+              <Lock size={13} className="inline mr-1" />
+              Neues Passwort
+            </label>
+            <div className="relative">
+              <input
+                type={showPw ? 'text' : 'password'}
+                value={password}
+                onChange={e => { setPassword(e.target.value); setError(''); }}
+                className="input pr-10"
+                placeholder="Mindestens 8 Zeichen"
+                autoFocus
+                autoComplete="new-password"
+              />
+              <button
+                type="button"
+                onClick={() => setShowPw(v => !v)}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-200 transition-colors"
+                tabIndex={-1}
+              >
+                {showPw ? <EyeOff size={16} /> : <Eye size={16} />}
+              </button>
+            </div>
+          </div>
+          <div>
+            <label className="label">Passwort bestätigen</label>
+            <input
+              type={showPw ? 'text' : 'password'}
+              value={confirm}
+              onChange={e => { setConfirm(e.target.value); setError(''); }}
+              className="input"
+              placeholder="Passwort wiederholen"
+              autoComplete="new-password"
+            />
+          </div>
+
+          {error && (
+            <div className="flex items-center gap-2 text-red-400 text-sm bg-red-900/20 border border-red-900/50 rounded-xl px-3 py-2">
+              <AlertCircle size={14} />
+              {error}
+            </div>
+          )}
+
+          <button
+            type="submit"
+            disabled={loading || password.length < 8 || password !== confirm}
+            className="btn-primary w-full py-2.5 flex items-center justify-center gap-2"
+          >
+            {loading && <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />}
+            Passwort speichern
+          </button>
+        </form>
+      </div>
     </div>
   );
 }
@@ -66,6 +311,8 @@ export default function App() {
   return (
     <AuthProvider>
       <BrowserRouter>
+        <UsernameSetupModal />
+        <MustChangePasswordModal />
         <Routes>
           {/* Public routes */}
           <Route path="/" element={<RootRoute />} />

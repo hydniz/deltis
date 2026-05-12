@@ -30,86 +30,143 @@ function renderLogin() {
   );
 }
 
-// Helper: the exact "Anmelden" submit button (not "Als Admin anmelden")
 function getSubmitButton() {
   return screen.getByRole('button', { name: /^Anmelden$/i });
 }
 
-describe('Login page', () => {
-  it('renders the UUID input and submit button', () => {
+describe('Login page – initial render', () => {
+  it('renders the username input', () => {
     renderLogin();
-    expect(screen.getByPlaceholderText(/xxxx/)).toBeInTheDocument();
+    expect(screen.getByPlaceholderText(/Dein Benutzername/i)).toBeInTheDocument();
+  });
+
+  it('renders the password input', () => {
+    renderLogin();
+    expect(screen.getByPlaceholderText(/^Passwort$/i)).toBeInTheDocument();
+  });
+
+  it('renders the submit button', () => {
+    renderLogin();
     expect(getSubmitButton()).toBeInTheDocument();
   });
 
-  it('disables the submit button when UUID field is empty', () => {
+  it('disables the submit button when username is empty', () => {
     renderLogin();
     expect(getSubmitButton()).toBeDisabled();
   });
 
-  it('enables the submit button after typing a UUID', async () => {
+  it('enables the submit button when username is filled (password can be empty for migration)', async () => {
     const user = userEvent.setup();
     renderLogin();
-    await user.type(screen.getByPlaceholderText(/xxxx/), 'some-uuid');
+    await user.type(screen.getByPlaceholderText(/Dein Benutzername/i), 'alice');
     expect(getSubmitButton()).not.toBeDisabled();
   });
+});
 
-  it('navigates to /dashboard on successful login', async () => {
+describe('Login page – normal login flow', () => {
+  it('navigates to /dashboard on successful login with username and password', async () => {
     const user = userEvent.setup();
     renderLogin();
-    await user.type(screen.getByPlaceholderText(/xxxx/), 'valid-uuid');
+    await user.type(screen.getByPlaceholderText(/Dein Benutzername/i), 'alice');
+    await user.type(screen.getByPlaceholderText(/^Passwort$/i), 'mypassword');
     await user.click(getSubmitButton());
     await waitFor(() => expect(mockNavigate).toHaveBeenCalledWith('/dashboard'));
   });
 
-  it('shows an error message when login fails', async () => {
+  it('navigates to /dashboard on migration login (username only, no password)', async () => {
+    const user = userEvent.setup();
+    renderLogin();
+    await user.type(screen.getByPlaceholderText(/Dein Benutzername/i), 'old-uuid');
+    await user.click(getSubmitButton());
+    await waitFor(() => expect(mockNavigate).toHaveBeenCalledWith('/dashboard'));
+  });
+
+  it('shows loading spinner while request is in flight', async () => {
+    server.use(
+      http.get('/api/auth/me', async () => {
+        await new Promise(() => {}); // never resolves
+      })
+    );
+    const user = userEvent.setup();
+    renderLogin();
+    await user.type(screen.getByPlaceholderText(/Dein Benutzername/i), 'alice');
+    await user.click(getSubmitButton());
+    expect(document.querySelector('.animate-spin')).toBeInTheDocument();
+  });
+});
+
+describe('Login page – password visibility toggle', () => {
+  it('toggles password field between password and text type', async () => {
+    const user = userEvent.setup();
+    renderLogin();
+    const passwordInput = screen.getByPlaceholderText(/^Passwort$/i);
+    expect(passwordInput).toHaveAttribute('type', 'password');
+
+    const toggleBtn = passwordInput.closest('div').querySelector('button');
+    await user.click(toggleBtn);
+    expect(passwordInput).toHaveAttribute('type', 'text');
+
+    await user.click(toggleBtn);
+    expect(passwordInput).toHaveAttribute('type', 'password');
+  });
+});
+
+describe('Login page – error messages', () => {
+  it('shows "Falsches Passwort" error', async () => {
     server.use(
       http.get('/api/auth/me', () =>
-        HttpResponse.json({ error: 'Ungültige UUID' }, { status: 401 })
+        HttpResponse.json({ error: 'Falsches Passwort' }, { status: 401 })
       )
     );
     const user = userEvent.setup();
     renderLogin();
-    await user.type(screen.getByPlaceholderText(/xxxx/), 'bad-uuid');
+    await user.type(screen.getByPlaceholderText(/Dein Benutzername/i), 'alice');
+    await user.type(screen.getByPlaceholderText(/^Passwort$/i), 'wrongpass');
     await user.click(getSubmitButton());
-    await waitFor(() => expect(screen.getByText(/Ungültige UUID/i)).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText(/Falsches Passwort/)).toBeInTheDocument());
   });
 
-  it('toggles to admin login mode when "Als Admin anmelden" is clicked', async () => {
+  it('shows "Bitte Passwort eingeben" for PASSWORD_REQUIRED code', async () => {
+    server.use(
+      http.get('/api/auth/me', () =>
+        HttpResponse.json({ error: 'Passwort erforderlich', code: 'PASSWORD_REQUIRED' }, { status: 401 })
+      )
+    );
     const user = userEvent.setup();
     renderLogin();
-    await user.click(screen.getByRole('button', { name: /Als Admin anmelden/i }));
-    expect(screen.getByPlaceholderText(/Admin-Secret/i)).toBeInTheDocument();
+    await user.type(screen.getByPlaceholderText(/Dein Benutzername/i), 'alice');
+    await user.click(getSubmitButton());
+    await waitFor(() => expect(screen.getByText(/Bitte Passwort eingeben/i)).toBeInTheDocument());
   });
 
-  it('disables submit in admin mode when the secret field is empty', async () => {
+  it('shows UUID-blocked error for UUID_BLOCKED code', async () => {
+    server.use(
+      http.get('/api/auth/me', () =>
+        HttpResponse.json({ code: 'UUID_BLOCKED' }, { status: 401 })
+      )
+    );
     const user = userEvent.setup();
     renderLogin();
-    await user.click(screen.getByRole('button', { name: /Als Admin anmelden/i }));
-    await user.type(screen.getByPlaceholderText(/xxxx/), 'admin-uuid');
-    expect(getSubmitButton()).toBeDisabled();
+    await user.type(screen.getByPlaceholderText(/Dein Benutzername/i), 'some-old-uuid');
+    await user.click(getSubmitButton());
+    await waitFor(() =>
+      expect(screen.getByText(/UUID ist gesperrt/i)).toBeInTheDocument()
+    );
   });
 
-  it('toggles admin secret visibility when the eye button is clicked', async () => {
+  it('shows generic error for unknown username', async () => {
+    server.use(
+      http.get('/api/auth/me', () =>
+        HttpResponse.json({ error: 'Unbekannter Benutzer' }, { status: 401 })
+      )
+    );
     const user = userEvent.setup();
     renderLogin();
-    await user.click(screen.getByRole('button', { name: /Als Admin anmelden/i }));
-
-    const secretInput = screen.getByPlaceholderText(/Admin-Secret/i);
-    expect(secretInput).toHaveAttribute('type', 'password');
-
-    const toggleBtn = secretInput.closest('div').querySelector('button');
-    await user.click(toggleBtn);
-    expect(secretInput).toHaveAttribute('type', 'text');
-  });
-
-  it('goes back to normal mode when "← Normale Anmeldung" is clicked', async () => {
-    const user = userEvent.setup();
-    renderLogin();
-    await user.click(screen.getByRole('button', { name: /Als Admin anmelden/i }));
-    expect(screen.queryByPlaceholderText(/Admin-Secret/i)).toBeInTheDocument();
-
-    await user.click(screen.getByRole('button', { name: /Normale Anmeldung/i }));
-    expect(screen.queryByPlaceholderText(/Admin-Secret/i)).not.toBeInTheDocument();
+    await user.type(screen.getByPlaceholderText(/Dein Benutzername/i), 'nobody');
+    await user.click(getSubmitButton());
+    await waitFor(() =>
+      expect(screen.getByText(/Unbekannter Benutzername/i)).toBeInTheDocument()
+    );
   });
 });
+

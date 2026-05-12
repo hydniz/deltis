@@ -3,6 +3,7 @@ const router = express.Router();
 const AdmZip = require('adm-zip');
 const multer = require('multer');
 const auth = require('../middleware/auth');
+const UserHabitSettings = require('../models/UserHabitSettings');
 const User = require('../models/User');
 const WeightLog = require('../models/WeightLog');
 const HabitLog = require('../models/HabitLog');
@@ -125,15 +126,18 @@ router.get('/export', auth, async (req, res) => {
     ].join('\n');
 
     // ── settings.json ─────────────────────────────────────────────────────
-    const userDoc = await User.findById(userId).populate('selectedHabitIds', 'name');
+    const [userDoc, habitSettingsDoc] = await Promise.all([
+      User.findById(userId),
+      UserHabitSettings.findOne({ userId }).populate('selectedHabitIds', 'name'),
+    ]);
     const habitSettingsResolved = {};
-    for (const [idStr, val] of Object.entries(userDoc.habitSettings || {})) {
+    for (const [idStr, val] of Object.entries(habitSettingsDoc?.habitSettings || {})) {
       const habit = habitById.get(idStr);
       if (habit) habitSettingsResolved[habit.name] = val;
     }
     const settingsJson = JSON.stringify({
       weightUnit: userDoc.weightUnit,
-      selectedHabits: (userDoc.selectedHabitIds || []).map(h => h.name),
+      selectedHabits: (habitSettingsDoc?.selectedHabitIds || []).map(h => h.name),
       habitSettings: habitSettingsResolved
     }, null, 2);
 
@@ -304,13 +308,15 @@ router.post('/import', auth, upload.single('file'), async (req, res) => {
           const update = {};
           if (s.weightUnit) update.weightUnit = s.weightUnit;
 
+          const habitSettingsUpdate = {};
+
           if (Array.isArray(s.selectedHabits) && s.selectedHabits.length > 0) {
             const ids = [];
             for (const name of s.selectedHabits) {
               const h = await resolveHabit(name, '');
               ids.push(h._id);
             }
-            update.selectedHabitIds = ids;
+            habitSettingsUpdate.selectedHabitIds = ids;
           }
 
           if (s.habitSettings && typeof s.habitSettings === 'object') {
@@ -319,13 +325,20 @@ router.post('/import', auth, upload.single('file'), async (req, res) => {
               const h = await resolveHabit(name, '');
               resolvedSettings[h._id.toString()] = val;
             }
-            update.habitSettings = resolvedSettings;
+            habitSettingsUpdate.habitSettings = resolvedSettings;
           }
 
           if (Object.keys(update).length > 0) {
             await User.findByIdAndUpdate(userId, { $set: update });
-            results.settings = true;
           }
+          if (Object.keys(habitSettingsUpdate).length > 0) {
+            await UserHabitSettings.findOneAndUpdate(
+              { userId },
+              { $set: habitSettingsUpdate },
+              { upsert: true }
+            );
+          }
+          results.settings = Object.keys(update).length > 0 || Object.keys(habitSettingsUpdate).length > 0;
         } catch (e) { results.errors.push(`settings: ${e.message}`); }
       }
     }
