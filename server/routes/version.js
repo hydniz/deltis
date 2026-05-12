@@ -1,10 +1,16 @@
-const { execSync } = require('child_process');
 const { version } = require('../../package.json');
 
-let commitHash = 'unknown';
-try {
-  commitHash = execSync('git rev-parse --short HEAD', { cwd: __dirname }).toString().trim();
-} catch {}
+// GIT_COMMIT is injected at image build time via --build-arg.
+// Falls back to 'unknown' when running outside Docker (e.g. local dev).
+const commitHash = process.env.GIT_COMMIT || (() => {
+  try {
+    return require('child_process')
+      .execSync('git rev-parse --short HEAD', { cwd: __dirname })
+      .toString().trim();
+  } catch {
+    return 'unknown';
+  }
+})();
 
 const apiVersion = `${version}+${commitHash}`;
 
