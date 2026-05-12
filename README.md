@@ -192,8 +192,10 @@ Backups are stored in `./backups/` (excluded from git). Write access to the app 
 
 ## Authentication
 
-- **Regular users** log in with their **username + password**.
-- **Admin** logs in with username + admin secret via the *"Als Admin anmelden"* toggle on the login page.
+- **Users and admins** sign in through the same login form using an **identifier + password** flow.
+- There is **no separate "Als Admin anmelden" toggle** on the login page.
+- Regular users typically log in with their username and password.
+- Admins log in through the same page with their admin credentials.
 - The admin can create and delete user accounts from the admin panel (`/admin`).
 - The admin can change their password in the settings (`/settings`).
 
