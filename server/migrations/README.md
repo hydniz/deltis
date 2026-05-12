@@ -16,7 +16,7 @@ and executes before the Express server starts accepting traffic.
    and exits with code `1`. If the restore itself fails, the runner exits with
    code `2` and the backup path is logged for manual recovery.
 
-A `migrationlocks` collection (TTL 30 min) prevents concurrent runs.
+A `migrationlocks` collection (TTL 24h) prevents concurrent runs.
 
 ## Adding a new migration
 
