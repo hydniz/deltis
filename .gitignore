@@ -12,3 +12,5 @@ backups/
 habit-tracker-*.tar.gz
 .claude/
 TODO.md
+.claude/
+.run.pid

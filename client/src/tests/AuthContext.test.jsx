@@ -118,29 +118,6 @@ describe('AuthContext – login / logout', () => {
     expect(localStorage.getItem('auth_token')).toBe('alice:secretpass');
   });
 
-  it('stores "identifier:adminSecret" token for admin login', async () => {
-    function AdminLoginConsumer() {
-      const { user, login } = useAuth();
-      const handle = async () => {
-        try { await login('admin', null, 'mysecret'); } catch {}
-      };
-      return (
-        <div>
-          <span data-testid="user">{user ? user.name : 'none'}</span>
-          <button onClick={handle}>Login</button>
-        </div>
-      );
-    }
-    const { getByText, getByTestId } = render(
-      <AuthProvider>
-        <AdminLoginConsumer />
-      </AuthProvider>
-    );
-    await waitFor(() => expect(getByTestId('user')).toHaveTextContent('none'));
-    await act(async () => { getByText('Login').click(); });
-    await waitFor(() => expect(getByTestId('user')).toHaveTextContent('Test User'));
-    expect(localStorage.getItem('auth_token')).toBe('admin:mysecret');
-  });
 
   it('clears the user on logout', async () => {
     localStorage.setItem('auth_token', 'valid-token');

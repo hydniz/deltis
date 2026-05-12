@@ -1,11 +1,14 @@
 const express = require('express');
 const router = express.Router();
+const bcrypt = require('bcryptjs');
 const auth = require('../middleware/auth');
 const User = require('../models/User');
 const pw = require('../utils/password');
 
 router.get('/me', auth, (req, res) => {
-  res.json(req.user);
+  const data = req.user.toJSON();
+  data.hasPassword = req.user._hasPassword;
+  res.json(data);
 });
 
 router.put('/me', auth, async (req, res) => {
@@ -23,8 +26,7 @@ router.put('/me', auth, async (req, res) => {
 });
 
 // Initial migration setup OR username change.
-// For non-admin users without passwordHash: password is required.
-// For admin users or users already having a passwordHash: password is optional.
+// Password required when user has neither passwordHash nor adminSecretHash.
 router.put('/me/username', auth, async (req, res) => {
   try {
     const { username, password } = req.body;
@@ -48,20 +50,19 @@ router.put('/me/username', auth, async (req, res) => {
       return res.status(409).json({ error: 'Benutzername bereits vergeben.' });
     }
 
-    const currentUser = await User.findById(req.user._id).select('+passwordHash');
+    const currentUser = await User.findById(req.user._id).select('+passwordHash +adminSecretHash');
     const update = { username: normalized };
 
-    if (!currentUser.isAdmin) {
-      const needsPassword = !currentUser.passwordHash;
-      if (needsPassword) {
-        if (!password || typeof password !== 'string') {
-          return res.status(400).json({ error: 'Passwort erforderlich.' });
-        }
-        if (password.length < 8) {
-          return res.status(400).json({ error: 'Passwort muss mindestens 8 Zeichen lang sein.' });
-        }
-        update.passwordHash = await pw.hash(password);
+    // Password required only when user has no credentials at all (first-time setup)
+    const needsPassword = !currentUser.passwordHash && !currentUser.adminSecretHash;
+    if (needsPassword) {
+      if (!password || typeof password !== 'string') {
+        return res.status(400).json({ error: 'Passwort erforderlich.' });
       }
+      if (password.length < 8) {
+        return res.status(400).json({ error: 'Passwort muss mindestens 8 Zeichen lang sein.' });
+      }
+      update.passwordHash = await pw.hash(password);
     }
 
     const user = await User.findByIdAndUpdate(req.user._id, update, { new: true });
@@ -71,12 +72,11 @@ router.put('/me/username', auth, async (req, res) => {
   }
 });
 
-// Change password for regular (non-admin) users
+// Change password for all users (admin and regular).
+// Supports backward compat: admins with adminSecretHash can verify against it,
+// then migrate to passwordHash.
 router.put('/me/password', auth, async (req, res) => {
   try {
-    if (req.user.isAdmin) {
-      return res.status(400).json({ error: 'Admins nutzen /admin/password zum Ändern des Passworts.' });
-    }
     const { currentPassword, newPassword } = req.body;
     if (!currentPassword || !newPassword) {
       return res.status(400).json({ error: 'Aktuelles und neues Passwort erforderlich.' });
@@ -85,12 +85,14 @@ router.put('/me/password', auth, async (req, res) => {
       return res.status(400).json({ error: 'Neues Passwort muss mindestens 8 Zeichen lang sein.' });
     }
 
-    const user = await User.findById(req.user._id).select('+passwordHash');
-    if (!user.passwordHash) {
+    const user = await User.findById(req.user._id).select('+passwordHash +adminSecretHash');
+    if (!user.passwordHash && !user.adminSecretHash) {
       return res.status(400).json({ error: 'Noch kein Passwort gesetzt. Bitte erst Benutzernamen und Passwort einrichten.' });
     }
 
-    const valid = await pw.verify(currentPassword, user.passwordHash);
+    const valid = user.passwordHash
+      ? await pw.verify(currentPassword, user.passwordHash)
+      : await bcrypt.compare(currentPassword, user.adminSecretHash);
     if (!valid) {
       return res.status(401).json({ error: 'Aktuelles Passwort ist falsch.' });
     }
@@ -115,14 +117,8 @@ router.put('/me/password/forced', auth, async (req, res) => {
     if (!newPassword || newPassword.length < 8) {
       return res.status(400).json({ error: 'Passwort muss mindestens 8 Zeichen lang sein.' });
     }
-    const user = await User.findById(req.user._id).select('+adminSecretHash +passwordHash');
-    // Admin accounts use adminSecretHash (no pepper); regular accounts use passwordHash (pepper)
-    if (user.isAdmin) {
-      const bcrypt = require('bcryptjs');
-      user.adminSecretHash = await bcrypt.hash(newPassword, 12);
-    } else {
-      user.passwordHash = await pw.hash(newPassword);
-    }
+    const user = await User.findById(req.user._id);
+    user.passwordHash = await pw.hash(newPassword);
     user.mustChangePassword = false;
     await user.save();
     res.json({ ok: true });
