@@ -38,11 +38,11 @@ function readSecret(prompt) {
           process.stdout.write('\n');
           resolve(value);
           break;
-        case '': // Ctrl+C
+        case '\u0003': // Ctrl+C
           process.stdout.write('\n');
           process.exit(1);
           break;
-        case '': // Backspace
+        case '\u007f': // Backspace
         case '\b':
           if (value.length > 0) value = value.slice(0, -1);
           break;
