@@ -2,7 +2,6 @@ const express = require('express');
 const { MongoMemoryServer } = require('mongodb-memory-server');
 const mongoose = require('mongoose');
 const crypto = require('crypto');
-const bcrypt = require('bcryptjs');
 
 let mongod;
 
@@ -27,6 +26,7 @@ function buildApp() {
   const app = express();
   app.use(express.json());
 
+  app.use('/api', require('../../routes/version'));
   app.use('/api/auth', require('../../routes/auth'));
   app.use('/api/admin', require('../../routes/admin'));
   app.use('/api/data', require('../../routes/data'));
@@ -47,11 +47,23 @@ async function createUser({ name = 'Test User', isAdmin = false } = {}) {
   return { user, token: uuid };
 }
 
+// Creates a regular user who has completed migration (username + password set).
+async function createUserWithPassword({ name = 'Test User', username = 'testuser', password = 'testpass123', mustChangePassword = false } = {}) {
+  const User = require('../../models/User');
+  const pw = require('../../utils/password');
+  const uuid = crypto.randomUUID();
+  const passwordHash = await pw.hash(password);
+  const user = await User.create({ uuid, name, username, passwordHash, mustChangePassword });
+  return { user, token: `${username}:${password}`, uuid, username, password };
+}
+
+// Creates an admin user with passwordHash (same auth flow as regular users).
 async function createAdminUser({ password = 'adminpassword123' } = {}) {
   const User = require('../../models/User');
+  const pw = require('../../utils/password');
   const uuid = crypto.randomUUID();
-  const adminSecretHash = await bcrypt.hash(password, 12);
-  const user = await User.create({ uuid, name: 'Admin', isAdmin: true, adminSecretHash });
+  const passwordHash = await pw.hash(password);
+  const user = await User.create({ uuid, name: 'Admin', isAdmin: true, passwordHash });
   return { user, token: `${uuid}:${password}`, uuid, password };
 }
 
@@ -59,4 +71,4 @@ function authHeader(token) {
   return { Authorization: `Bearer ${token}` };
 }
 
-module.exports = { startDb, stopDb, clearDb, buildApp, createUser, createAdminUser, authHeader };
+module.exports = { startDb, stopDb, clearDb, buildApp, createUser, createUserWithPassword, createAdminUser, authHeader };

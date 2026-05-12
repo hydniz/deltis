@@ -9,7 +9,7 @@ const customFieldSchema = new mongoose.Schema({
   showInPreview: { type: Boolean, default: true },
 }, { _id: false });
 
-// Speichert den vollständigen Zustand einer Version (Name + Felderdefinitionen)
+// Stores the complete state of a version (name + field definitions)
 const nameHistorySchema = new mongoose.Schema({
   name: { type: String, required: true },
   customFields: { type: mongoose.Schema.Types.Mixed, default: [] },
