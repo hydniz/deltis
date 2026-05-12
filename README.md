@@ -9,8 +9,8 @@ A self-hosted personal habit and activity tracking PWA. Multi-user, Docker-ready
 - **Habit tracking** – track daily habits (sleep, water intake, screen time, …) with charts
 - **Weight log** – visualize weight trends over time
 - **Goals** – set weekly and long-term goals with milestones
-- **Multi-user** – admin creates UUID-based accounts for each user
-- **Admin panel** – manage users, generate login UUIDs, change admin password
+- **Multi-user** – admin creates accounts; users log in with username + password
+- **Admin panel** – manage users, change admin password
 - **PWA** – installable as a native app on mobile and desktop
 
 ## Tech Stack
@@ -18,7 +18,7 @@ A self-hosted personal habit and activity tracking PWA. Multi-user, Docker-ready
 - **Backend**: Node.js / Express
 - **Database**: MongoDB
 - **Frontend**: React + Vite + TailwindCSS
-- **Auth**: UUID-only for regular users; UUID + password for admin
+- **Auth**: username + password for all users (bcrypt + pepper); admin secret for admin actions
 
 ---
 
@@ -63,6 +63,9 @@ npm run dev
 3. Your admin UUID is displayed on the setup page. **Copy and save it.**
 4. Set your admin password to complete setup.
 5. Log in at `/login` → click *"Als Admin anmelden"* → enter UUID + password.
+6. After logging in, a prompt will appear to choose a **username**. Once set, the UUID is disabled as a login method.
+
+> **Tip:** Set up a pepper before creating any user accounts. See [SECURITY.md](SECURITY.md).
 
 ---
 
@@ -108,6 +111,54 @@ Configure these repository secrets:
 
 ---
 
+## Database Migrations
+
+Schema and data migrations run **automatically on startup** before the Express server begins accepting traffic. No manual intervention is required in normal operation.
+
+### How it works
+
+1. The runner scans `server/migrations/` for files matching `NNN-*.js` (three-digit numeric prefix).
+2. Already-applied migrations are recorded in the `migrations` collection — those are skipped.
+3. Before applying any pending migration, a **pre-migration backup** is written to `backups/pre-migration/`.
+4. Migrations apply in numeric order. If one fails, the database is **automatically restored** from the backup and the process exits.
+5. A `migrationlocks` collection (TTL 24 hours) prevents concurrent runs (e.g. multiple containers starting at the same time).
+
+### Diagnostics
+
+```bash
+# Show applied and pending migrations
+npm run migrate:status
+```
+
+### Manual rollback
+
+Pre-migration backups are kept on disk (last 5 retained):
+
+```bash
+npm run migrate:rollback                                  # list available backups
+npm run migrate:rollback backups/pre-migration/<file>     # restore a specific backup
+```
+
+### Adding a migration
+
+1. Pick the next free three-digit prefix (e.g. `003`).
+2. Create `server/migrations/003-short-description.js`:
+
+   ```javascript
+   module.exports = {
+     name: '003-short-description', // must match filename without .js
+     async up() {
+       // idempotent: safe to run on already-migrated data
+     },
+   };
+   ```
+
+3. Add a test case in `server/tests/migrations.test.js`.
+
+See [server/migrations/README.md](server/migrations/README.md) for full details.
+
+---
+
 ## Logs
 
 **Development:**
@@ -141,13 +192,35 @@ Backups are stored in `./backups/` (excluded from git). Write access to the app 
 
 ## Authentication
 
-- **Regular users** log in with their UUID (no password).
-- **Admin** logs in with UUID + password via the *"Als Admin anmelden"* toggle on the login page.
+- **Users and admins** sign in through the same login form using an **identifier + password** flow.
+- There is **no separate "Als Admin anmelden" toggle** on the login page.
+- Regular users typically log in with their username and password.
+- Admins log in through the same page with their admin credentials.
 - The admin can create and delete user accounts from the admin panel (`/admin`).
 - The admin can change their password in the settings (`/settings`).
+
+### Migration from UUID-only
+
+Existing UUID-based accounts are migrated on first login: users enter their UUID, are prompted to choose a username and password, and the UUID is permanently disabled as a login method afterwards. The UUID remains stored in the database for reference but can no longer be used to authenticate.
+
+### Password security (Pepper)
+
+User passwords are hashed with bcrypt (12 rounds) plus a server-side **pepper** – a secret key stored outside the database. This means a leaked database alone is not sufficient for offline password cracking. See [SECURITY.md](SECURITY.md) for setup instructions.
+
+### Admin password reset
+
+If the admin password is lost, it can be reset directly against the database:
+
+```bash
+node scripts/reset-admin-password.js
+# or:
+npm run admin:reset-password
+```
+
+See [SECURITY.md](SECURITY.md) for details.
 
 ---
 
 ## License
 
-MIT – see [LICENCE](LICENCE) for details.
+PolyForm Noncommercial License 1.0.0 – see [LICENCE](LICENCE) for details. Short: Use, modify, and share the software for personal or educational purposes but the use is not intended for commercial advantage or monetary compensation
