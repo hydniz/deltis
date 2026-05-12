@@ -36,6 +36,15 @@ function ask(prompt) {
   return new Promise(resolve => rl.question(prompt, ans => { rl.close(); resolve(ans); }));
 }
 
+async function postRestoreRecovery() {
+  const MigrationLock = mongoose.models.MigrationLock || require('../server/models/MigrationLock');
+  await MigrationLock.deleteMany({});
+
+  for (const model of Object.values(mongoose.models)) {
+    await model.syncIndexes();
+  }
+}
+
 async function main() {
   const target = process.argv[2];
 
@@ -93,6 +102,8 @@ async function main() {
   try {
     console.log('→ Restoring …');
     await restoreBackup({ db: mongoose.connection.db, file: target });
+    console.log('→ Rebuilding indexes …');
+    await postRestoreRecovery();
     console.log('✓ Database restored.');
     console.log('');
   } finally {
@@ -100,7 +111,11 @@ async function main() {
   }
 }
 
-main().catch(err => {
-  console.error('Rollback failed:', err.message);
-  process.exit(1);
-});
+if (require.main === module) {
+  main().catch(err => {
+    console.error('Rollback failed:', err.message);
+    process.exit(1);
+  });
+}
+
+module.exports = { postRestoreRecovery };
