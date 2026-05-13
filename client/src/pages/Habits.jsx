@@ -470,10 +470,10 @@ function HabitCard({ habit, todayLog, onLog }) {
           value={selectedDate}
           max={todayStr}
           onChange={e => handleDateChange(e.target.value)}
-          className={`text-sm rounded-lg px-2 py-2 border transition-colors bg-slate-800 ${
+          className={`text-sm rounded-lg px-2 py-2 border transition-colors bg-white/[.07] ${
             isToday
-              ? 'border-white/[.15] text-white/35 w-auto'
-              : 'border-brand-600 text-slate-200 flex-1'
+              ? 'border-white/[.12] text-white/35 w-auto'
+              : 'border-brand-500/60 text-white/80 flex-1'
           }`}
         />
         {!isToday && (
