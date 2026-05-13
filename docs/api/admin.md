@@ -54,8 +54,8 @@ Sets the initial admin password. Can only be called once; fails if setup is alre
 
 ## Protected admin routes
 
-All routes below require `Authorization: Bearer <admin-identifier>:<admin-password>`.  
-Attempting to call them as a regular user returns `403 Forbidden`.
+All routes below require a valid `auth_token` httpOnly cookie (same as every other protected route — see [README.md](README.md)).  
+Attempting to call them as a non-admin user returns `403 Forbidden`.
 
 ---
 
