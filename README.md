@@ -18,7 +18,13 @@ A self-hosted personal habit and activity tracking PWA. Multi-user, Docker-ready
 - **Backend**: Node.js / Express
 - **Database**: MongoDB
 - **Frontend**: React + Vite + TailwindCSS
-- **Auth**: username + password for all users (bcrypt + pepper); admin secret for admin actions
+- **Auth**: httpOnly JWT cookies (30 days); bcrypt + pepper for password hashing
+
+---
+
+## Quick start
+
+→ **[SETUP.md](SETUP.md)** — full setup guide (local dev + Docker/NAS deployment)
 
 ---
 
