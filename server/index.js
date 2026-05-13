@@ -27,7 +27,8 @@ app.use((req, res, next) => {
   next();
 });
 
-app.use('/api', require('./routes/version'));
+const { router: versionRouter, API_VERSION } = require('./routes/version');
+app.use('/api', versionRouter);
 app.use('/api/branding', require('./routes/branding'));
 app.use('/api/auth', require('./routes/auth'));
 app.use('/api/admin', require('./routes/admin'));
@@ -112,7 +113,10 @@ async function start() {
   await seedPredefinedData();
 
   const PORT = process.env.PORT || 3001;
-  app.listen(PORT, () => console.log(`✓ ${branding.name} server running on port ${PORT}`));
+  app.listen(PORT, () => {
+    console.log(`✓ ${branding.name} server running on port ${PORT}`);
+    console.log(`  API version: ${API_VERSION} | ENV: ${process.env.NODE_ENV || 'development'}`);
+  });
 }
 
 start().catch(err => {
