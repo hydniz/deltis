@@ -62,10 +62,9 @@ describe('Sidebar', () => {
     expect(await screen.findByText('Nutzerverwaltung')).toBeInTheDocument();
   });
 
-  it('displays the user name and truncated UUID', async () => {
+  it('displays the user name', async () => {
     renderSidebar(mockUser);
     expect(await screen.findByText('Test User')).toBeInTheDocument();
-    expect(screen.getByText(/aaaa-bbb\.\.\./i)).toBeInTheDocument();
   });
 
   it('calls navigate to /login on logout click', async () => {

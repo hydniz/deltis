@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import api from '../utils/api';
 import { format, parseISO, subWeeks, startOfWeek, endOfWeek } from 'date-fns';
 import { de } from 'date-fns/locale';
-import { Plus, Trash2, Dumbbell, X, TrendingUp, Settings as SettingsIcon, Pencil, ChevronDown, ChevronUp } from 'lucide-react';
+import { Plus, Trash2, Dumbbell, X, TrendingUp, Settings as SettingsIcon, Pencil, Check } from 'lucide-react';
 import {
   ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid
 } from 'recharts';
@@ -35,10 +35,10 @@ function OptionsInput({ options, onChange }) {
 
 function CustomFieldEditor({ field, onChange, onRemove }) {
   return (
-    <div className="bg-slate-800 rounded-xl p-3 space-y-2">
+    <div className="bg-white/[.06] border border-white/[.09] rounded-xl p-3 space-y-2">
       <div className="flex items-center justify-between">
-        <span className="text-xs font-semibold text-slate-400 uppercase tracking-wide">Feld</span>
-        <button type="button" onClick={onRemove} className="text-slate-600 hover:text-red-400 transition-colors">
+        <span className="text-xs font-semibold text-white/40 uppercase tracking-wide">Feld</span>
+        <button type="button" onClick={onRemove} className="text-white/30 hover:text-red-400 transition-colors">
           <X size={14} />
         </button>
       </div>
@@ -90,7 +90,7 @@ function CustomFieldEditor({ field, onChange, onRemove }) {
           type="checkbox"
           checked={field.showInPreview !== false}
           onChange={e => onChange({ ...field, showInPreview: e.target.checked })}
-          className="w-4 h-4 accent-violet-600"
+          className="w-4 h-4 accent-brand-500"
         />
         <span className="text-xs text-slate-400">In Aktivitätenvorschau anzeigen</span>
       </label>
@@ -98,156 +98,249 @@ function CustomFieldEditor({ field, onChange, onRemove }) {
   );
 }
 
-// ── ActivityTypesModal ─────────────────────────────────────────────────────
+// ── ActivityTypeWizard ─────────────────────────────────────────────────────
+// Shared create/edit wizard for activity types (2 steps).
 
-function ActivityTypeCard({ type, onSave, onDelete }) {
-  const [editing, setEditing] = useState(false);
-  const [form, setForm] = useState({ ...type });
+function ActivityTypeWizard({ initialForm, title, submitLabel, onSubmit, onClose, originalFieldCount = 0 }) {
+  const [form, setForm] = useState({ ...initialForm });
+  const [step, setStep] = useState(1);
   const [saving, setSaving] = useState(false);
-  // Anzahl der Felder bei Beginn der Bearbeitung – bestehende Felder behalten ihren key
-  const originalFieldCount = useRef((type.customFields || []).length);
+  const STEPS = 2;
+  const stepTitles = ['Grundlagen', 'Eigene Felder'];
 
   const setField = (k, v) => setForm(f => ({ ...f, [k]: v }));
 
-  const addCustomField = () => {
-    setForm(f => ({
-      ...f,
-      customFields: [...(f.customFields || []), { key: '', label: '', type: 'number', unit: '', options: [] }]
-    }));
-  };
+  const addCustomField = () => setForm(f => ({
+    ...f,
+    customFields: [...(f.customFields || []), { key: '', label: '', type: 'number', unit: '', options: [] }]
+  }));
 
-  const updateCustomField = (i, updatedField) => {
-    setForm(f => ({
-      ...f,
-      customFields: f.customFields.map((cf, idx) => {
-        if (idx !== i) return cf;
-        // Existing fields: keep key immutable
-        if (idx < originalFieldCount.current) return { ...updatedField, key: cf.key };
-        return updatedField;
-      })
-    }));
-  };
+  const updateCustomField = (i, updatedField) => setForm(f => ({
+    ...f,
+    customFields: f.customFields.map((cf, idx) => {
+      if (idx !== i) return cf;
+      if (idx < originalFieldCount) return { ...updatedField, key: cf.key };
+      return updatedField;
+    })
+  }));
 
-  const removeCustomField = (i) => {
-    setForm(f => ({ ...f, customFields: f.customFields.filter((_, idx) => idx !== i) }));
-  };
+  const removeCustomField = (i) => setForm(f => ({
+    ...f,
+    customFields: f.customFields.filter((_, idx) => idx !== i)
+  }));
 
-  const handleSave = async () => {
+  const handleSubmit = async () => {
+    if (!form.label.trim()) return;
     setSaving(true);
     try {
-      await api.put(`/activity-types/${type._id}`, form);
-      await onSave();
-      setEditing(false);
+      await onSubmit(form);
     } catch (err) {
       alert('Fehler: ' + err.message);
-    } finally {
       setSaving(false);
     }
   };
 
-  const handleCancel = () => {
-    setForm({ ...type });
-    setEditing(false);
+  return (
+    <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-end sm:items-center justify-center z-[60]">
+      <div
+        className="bg-[#1e1a14]/95 backdrop-blur-2xl border border-white/[.1] w-full max-w-lg rounded-t-2xl sm:rounded-2xl flex flex-col"
+        style={{ maxHeight: '92dvh' }}
+      >
+        <div className="w-10 h-1 bg-white/15 rounded-full mx-auto mt-3 sm:hidden flex-shrink-0" />
+
+        {/* Header */}
+        <div className="flex items-center justify-between px-5 pt-4 pb-3 border-b border-white/[.08] flex-shrink-0">
+          <div>
+            <h2 className="text-base font-semibold text-white">{title}</h2>
+            <p className="text-xs text-white/35 mt-0.5">{stepTitles[step - 1]}</p>
+          </div>
+          <div className="flex items-center gap-3">
+            <div className="flex items-center gap-1.5">
+              {Array.from({ length: STEPS }).map((_, i) => (
+                <div key={i} className={`rounded-full transition-all duration-200 ${
+                  i + 1 === step ? 'w-5 h-1.5 bg-brand-500' :
+                  i + 1 < step  ? 'w-1.5 h-1.5 bg-brand-600' :
+                                  'w-1.5 h-1.5 bg-white/15'
+                }`} />
+              ))}
+            </div>
+            <button type="button" onClick={onClose} className="text-white/40 hover:text-white/80 p-1 -mr-1">
+              <X size={20} />
+            </button>
+          </div>
+        </div>
+
+        {/* Scrollable content */}
+        <div className="flex-1 overflow-y-auto px-5 py-5 space-y-4">
+
+          {/* Step 1: Grundlagen */}
+          {step === 1 && (<>
+            <div>
+              <label className="label">Name des Aktivitätstyps</label>
+              <input
+                className="input text-base"
+                value={form.label}
+                onChange={e => setField('label', e.target.value)}
+                placeholder="z.B. Joggen, Krafttraining, Klettern …"
+                autoFocus
+              />
+            </div>
+
+            <div className="bg-white/[.05] border border-white/[.09] rounded-2xl p-4 space-y-3">
+              <p className="label mb-0">Standard-Felder</p>
+              <label className="flex items-center gap-3 cursor-pointer">
+                <div className={`w-5 h-5 rounded-md border-2 flex items-center justify-center flex-shrink-0 transition-colors ${
+                  form.showDuration ? 'bg-brand-600 border-brand-600' : 'border-white/30'
+                }`}>
+                  {form.showDuration && <Check size={12} className="text-white" strokeWidth={3} />}
+                </div>
+                <input type="checkbox" checked={form.showDuration} onChange={e => setField('showDuration', e.target.checked)} className="sr-only" />
+                <div>
+                  <p className="text-sm font-medium text-white/80">Dauer</p>
+                  <p className="text-xs text-white/35">Dauer der Aktivität in Minuten</p>
+                </div>
+              </label>
+              <label className="flex items-center gap-3 cursor-pointer">
+                <div className={`w-5 h-5 rounded-md border-2 flex items-center justify-center flex-shrink-0 transition-colors ${
+                  form.showDistance ? 'bg-brand-600 border-brand-600' : 'border-white/30'
+                }`}>
+                  {form.showDistance && <Check size={12} className="text-white" strokeWidth={3} />}
+                </div>
+                <input type="checkbox" checked={form.showDistance} onChange={e => setField('showDistance', e.target.checked)} className="sr-only" />
+                <div>
+                  <p className="text-sm font-medium text-white/80">Distanz</p>
+                  <p className="text-xs text-white/35">Zurückgelegte Distanz in km</p>
+                </div>
+              </label>
+            </div>
+          </>)}
+
+          {/* Step 2: Eigene Felder */}
+          {step === 2 && (<>
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-semibold text-white">Eigene Felder</p>
+                <p className="text-xs text-white/35 mt-0.5">Optionale Felder, die du selbst definierst</p>
+              </div>
+              <button
+                type="button"
+                onClick={addCustomField}
+                className="flex items-center gap-1.5 text-xs text-brand-400 hover:text-brand-300 transition-colors"
+              >
+                <Plus size={14} /> Feld hinzufügen
+              </button>
+            </div>
+
+            {(form.customFields || []).length === 0 ? (
+              <button
+                type="button"
+                onClick={addCustomField}
+                className="w-full border-2 border-dashed border-white/15 hover:border-brand-400/50 rounded-2xl py-8 text-white/35 hover:text-brand-400 transition-colors flex flex-col items-center gap-2"
+              >
+                <Plus size={22} />
+                <span className="text-sm">Erstes Feld hinzufügen</span>
+              </button>
+            ) : (
+              <div className="space-y-2">
+                {(form.customFields || []).map((field, i) => (
+                  <CustomFieldEditor
+                    key={i}
+                    field={field}
+                    onChange={updated => updateCustomField(i, updated)}
+                    onRemove={() => removeCustomField(i)}
+                  />
+                ))}
+              </div>
+            )}
+          </>)}
+        </div>
+
+        {/* Footer */}
+        <div className="flex gap-3 px-5 py-4 border-t border-white/[.08] flex-shrink-0">
+          {step > 1
+            ? <button type="button" onClick={() => setStep(s => s - 1)} className="btn-secondary flex-1">Zurück</button>
+            : <button type="button" onClick={onClose} className="btn-secondary flex-1">Abbrechen</button>
+          }
+          {step < STEPS ? (
+            <button
+              type="button"
+              onClick={() => setStep(s => s + 1)}
+              disabled={!form.label.trim()}
+              className="btn-primary flex-1 disabled:opacity-40 disabled:cursor-not-allowed"
+            >Weiter</button>
+          ) : (
+            <button
+              type="button"
+              onClick={handleSubmit}
+              disabled={saving || !form.label.trim()}
+              className="btn-primary flex-1 disabled:opacity-40 disabled:cursor-not-allowed"
+            >{saving ? 'Speichern...' : submitLabel}</button>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── ActivityTypeCard ───────────────────────────────────────────────────────
+
+function ActivityTypeCard({ type, onSave, onDelete }) {
+  const [showEdit, setShowEdit] = useState(false);
+  const originalFieldCount = useRef((type.customFields || []).length);
+
+  const handleEdit = async (form) => {
+    await api.put(`/activity-types/${type._id}`, form);
+    await onSave();
+    setShowEdit(false);
   };
 
   return (
-    <div className="bg-white/[.05] border border-white/[.09] rounded-2xl overflow-hidden">
-      <div className="flex items-center gap-3 px-4 py-3">
+    <>
+      <div className="bg-white/[.05] border border-white/[.09] rounded-2xl px-4 py-3 flex items-center gap-3">
         <Dumbbell size={15} className="text-brand-400 flex-shrink-0" />
-        <span className="flex-1 font-medium text-slate-200 text-sm">{type.label}</span>
-        <div className="flex items-center gap-1">
+        <span className="flex-1 font-medium text-white/80 text-sm">{type.label}</span>
+        <div className="flex items-center gap-1.5 flex-wrap justify-end">
+          {type.showDuration && <span className="badge bg-white/[.07] text-white/40 text-xs">Dauer</span>}
+          {type.showDistance && <span className="badge bg-white/[.07] text-white/40 text-xs">Distanz</span>}
           {type.customFields?.length > 0 && (
-            <span className="badge bg-slate-700 text-slate-400 text-xs">
+            <span className="badge bg-white/[.07] text-white/40 text-xs">
               {type.customFields.length} Feld{type.customFields.length !== 1 ? 'er' : ''}
             </span>
           )}
-          {type.showDistance && <span className="badge bg-slate-700 text-slate-400 text-xs">Distanz</span>}
           <button
-            onClick={() => setEditing(v => !v)}
-            className="text-slate-500 hover:text-brand-400 transition-colors ml-1 p-1"
+            onClick={() => setShowEdit(true)}
+            className="text-white/30 hover:text-brand-400 transition-colors p-1"
           >
-            {editing ? <ChevronUp size={16} /> : <Pencil size={14} />}
+            <Pencil size={14} />
           </button>
           <button
             onClick={() => onDelete(type._id)}
-            className="text-slate-600 hover:text-red-400 transition-colors p-1"
+            className="text-white/30 hover:text-red-400 transition-colors p-1"
           >
             <Trash2 size={14} />
           </button>
         </div>
       </div>
 
-      {editing && (
-        <form onSubmit={e => { e.preventDefault(); handleSave(); }} className="px-4 pb-4 space-y-3 border-t border-slate-700 pt-3">
-          <div>
-            <label className="label text-xs">Name des Aktivitätstyps</label>
-            <input className="input text-sm" value={form.label} onChange={e => setField('label', e.target.value)} autoFocus />
-          </div>
-
-          <div className="flex gap-4">
-            <label className="flex items-center gap-2 cursor-pointer">
-              <input
-                type="checkbox"
-                checked={form.showDuration}
-                onChange={e => setField('showDuration', e.target.checked)}
-                className="w-4 h-4 accent-violet-600"
-              />
-              <span className="text-sm text-slate-300">Dauer-Feld</span>
-            </label>
-            <label className="flex items-center gap-2 cursor-pointer">
-              <input
-                type="checkbox"
-                checked={form.showDistance}
-                onChange={e => setField('showDistance', e.target.checked)}
-                className="w-4 h-4 accent-violet-600"
-              />
-              <span className="text-sm text-slate-300">Distanz-Feld</span>
-            </label>
-          </div>
-
-          <div>
-            <div className="flex items-center justify-between mb-2">
-              <label className="label text-xs mb-0">Eigene Felder</label>
-              <button
-                type="button"
-                onClick={addCustomField}
-                className="text-xs text-brand-400 hover:text-brand-300 flex items-center gap-1"
-              >
-                <Plus size={12} /> Feld hinzufügen
-              </button>
-            </div>
-            <div className="space-y-2">
-              {(form.customFields || []).map((field, i) => (
-                <CustomFieldEditor
-                  key={i}
-                  field={field}
-                  onChange={updated => updateCustomField(i, updated)}
-                  onRemove={() => removeCustomField(i)}
-                />
-              ))}
-              {form.customFields?.length === 0 && (
-                <p className="text-xs text-slate-600 py-1">Keine eigenen Felder</p>
-              )}
-            </div>
-          </div>
-
-          <div className="flex gap-2 pt-1">
-            <button type="button" onClick={handleCancel} className="btn-secondary flex-1 text-sm py-1.5">Abbrechen</button>
-            <button type="submit" disabled={saving} className="btn-primary flex-1 text-sm py-1.5">
-              {saving ? 'Speichern...' : 'Speichern'}
-            </button>
-          </div>
-        </form>
+      {showEdit && (
+        <ActivityTypeWizard
+          title="Typ bearbeiten"
+          submitLabel="Speichern"
+          initialForm={{ ...type }}
+          originalFieldCount={originalFieldCount.current}
+          onSubmit={handleEdit}
+          onClose={() => setShowEdit(false)}
+        />
       )}
-    </div>
+    </>
   );
 }
 
+// ── ActivityTypesModal ─────────────────────────────────────────────────────
+
 function ActivityTypesModal({ onClose, onUpdate }) {
   const [types, setTypes] = useState([]);
-  const [showNewForm, setShowNewForm] = useState(false);
-  const [newForm, setNewForm] = useState({ label: '', showDuration: true, showDistance: false, customFields: [] });
-  const [saving, setSaving] = useState(false);
+  const [showCreate, setShowCreate] = useState(false);
 
   const loadTypes = useCallback(async () => {
     const res = await api.get('/activity-types');
@@ -256,41 +349,11 @@ function ActivityTypesModal({ onClose, onUpdate }) {
 
   useEffect(() => { loadTypes(); }, [loadTypes]);
 
-  const setNewField = (k, v) => setNewForm(f => ({ ...f, [k]: v }));
-
-  const addNewCustomField = () => {
-    setNewForm(f => ({
-      ...f,
-      customFields: [...f.customFields, { key: '', label: '', type: 'number', unit: '', options: [] }]
-    }));
-  };
-
-  const updateNewCustomField = (i, updatedField) => {
-    setNewForm(f => ({
-      ...f,
-      customFields: f.customFields.map((cf, idx) => idx === i ? updatedField : cf)
-    }));
-  };
-
-  const removeNewCustomField = (i) => {
-    setNewForm(f => ({ ...f, customFields: f.customFields.filter((_, idx) => idx !== i) }));
-  };
-
-  const handleCreate = async (e) => {
-    e.preventDefault();
-    if (!newForm.label.trim()) return;
-    setSaving(true);
-    try {
-      await api.post('/activity-types', newForm);
-      setNewForm({ label: '', showDuration: true, showDistance: false, customFields: [] });
-      setShowNewForm(false);
-      await loadTypes();
-      onUpdate();
-    } catch (err) {
-      alert('Fehler: ' + err.message);
-    } finally {
-      setSaving(false);
-    }
+  const handleCreate = async (form) => {
+    await api.post('/activity-types', form);
+    await loadTypes();
+    onUpdate();
+    setShowCreate(false);
   };
 
   const handleDelete = async (id) => {
@@ -306,97 +369,63 @@ function ActivityTypesModal({ onClose, onUpdate }) {
   };
 
   return (
-    <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-end sm:items-center justify-center z-50 p-4 overflow-y-auto">
-      <div className="card w-full max-w-lg p-6 my-4">
-        <div className="flex items-center justify-between mb-5">
-          <h2 className="text-lg font-semibold text-white flex items-center gap-2">
-            <Dumbbell size={18} className="text-brand-400" />
-            Aktivitätstypen
-          </h2>
-          <button onClick={onClose} className="text-slate-400 hover:text-slate-200"><X size={20} /></button>
-        </div>
+    <>
+      <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-end sm:items-center justify-center z-50">
+        <div
+          className="bg-[#1e1a14]/95 backdrop-blur-2xl border border-white/[.1] w-full max-w-lg rounded-t-2xl sm:rounded-2xl flex flex-col"
+          style={{ maxHeight: '92dvh' }}
+        >
+          <div className="w-10 h-1 bg-white/15 rounded-full mx-auto mt-3 sm:hidden flex-shrink-0" />
 
-        <div className="space-y-2 mb-4">
-          {types.map(type => (
-            <ActivityTypeCard
-              key={type._id}
-              type={type}
-              onSave={handleSave}
-              onDelete={handleDelete}
-            />
-          ))}
-          {types.length === 0 && (
-            <p className="text-sm text-slate-500 py-2">Noch keine Aktivitätstypen</p>
-          )}
-        </div>
-
-        {showNewForm ? (
-          <div className="bg-white/[.06] border border-white/[.1] rounded-2xl p-4">
-            <h3 className="text-sm font-semibold text-white mb-3">Neuer Aktivitätstyp</h3>
-            <form onSubmit={handleCreate} className="space-y-3">
-              <div>
-                <label className="label text-xs">Name</label>
-                <input
-                  className="input text-sm"
-                  value={newForm.label}
-                  onChange={e => setNewField('label', e.target.value)}
-                  placeholder="z.B. Joggen 5k, Klettern …"
-                  autoFocus
-                  required
-                />
-              </div>
-              <div className="flex gap-4">
-                <label className="flex items-center gap-2 cursor-pointer">
-                  <input type="checkbox" checked={newForm.showDuration} onChange={e => setNewField('showDuration', e.target.checked)} className="w-4 h-4 accent-violet-600" />
-                  <span className="text-sm text-slate-300">Dauer</span>
-                </label>
-                <label className="flex items-center gap-2 cursor-pointer">
-                  <input type="checkbox" checked={newForm.showDistance} onChange={e => setNewField('showDistance', e.target.checked)} className="w-4 h-4 accent-violet-600" />
-                  <span className="text-sm text-slate-300">Distanz</span>
-                </label>
-              </div>
-
-              <div>
-                <div className="flex items-center justify-between mb-2">
-                  <label className="label text-xs mb-0">Eigene Felder</label>
-                  <button
-                    type="button"
-                    onClick={addNewCustomField}
-                    className="text-xs text-brand-400 hover:text-brand-300 flex items-center gap-1"
-                  >
-                    <Plus size={12} /> Feld hinzufügen
-                  </button>
-                </div>
-                <div className="space-y-2">
-                  {newForm.customFields.map((field, i) => (
-                    <CustomFieldEditor
-                      key={i}
-                      field={field}
-                      onChange={updated => updateNewCustomField(i, updated)}
-                      onRemove={() => removeNewCustomField(i)}
-                    />
-                  ))}
-                </div>
-              </div>
-
-              <div className="flex gap-2">
-                <button type="button" onClick={() => setShowNewForm(false)} className="btn-secondary flex-1 text-sm py-1.5">Abbrechen</button>
-                <button type="submit" disabled={saving} className="btn-primary flex-1 text-sm py-1.5">
-                  {saving ? 'Erstellen...' : 'Erstellen'}
-                </button>
-              </div>
-            </form>
+          {/* Header */}
+          <div className="flex items-center justify-between px-5 pt-4 pb-4 border-b border-white/[.08] flex-shrink-0">
+            <h2 className="text-base font-semibold text-white flex items-center gap-2">
+              <Dumbbell size={17} className="text-brand-400" />
+              Aktivitätstypen verwalten
+            </h2>
+            <button onClick={onClose} className="text-white/40 hover:text-white/80"><X size={20} /></button>
           </div>
-        ) : (
-          <button
-            onClick={() => setShowNewForm(true)}
-            className="btn-primary w-full flex items-center justify-center gap-2 text-sm"
-          >
-            <Plus size={16} /> Neuer Typ
-          </button>
-        )}
+
+          {/* List */}
+          <div className="flex-1 overflow-y-auto px-5 py-4 space-y-2">
+            {types.map(type => (
+              <ActivityTypeCard
+                key={type._id}
+                type={type}
+                onSave={handleSave}
+                onDelete={handleDelete}
+              />
+            ))}
+            {types.length === 0 && (
+              <div className="text-center py-10">
+                <Dumbbell size={28} className="text-white/15 mx-auto mb-2" />
+                <p className="text-sm text-white/30">Noch keine Aktivitätstypen</p>
+              </div>
+            )}
+          </div>
+
+          {/* Footer */}
+          <div className="px-5 py-4 border-t border-white/[.08] flex-shrink-0">
+            <button
+              onClick={() => setShowCreate(true)}
+              className="btn-primary w-full flex items-center justify-center gap-2"
+            >
+              <Plus size={16} /> Neuer Typ
+            </button>
+          </div>
+        </div>
       </div>
-    </div>
+
+      {showCreate && (
+        <ActivityTypeWizard
+          title="Neuer Aktivitätstyp"
+          submitLabel="Erstellen"
+          initialForm={{ label: '', showDuration: true, showDistance: false, customFields: [] }}
+          onSubmit={handleCreate}
+          onClose={() => setShowCreate(false)}
+        />
+      )}
+    </>
   );
 }
 
@@ -510,7 +539,7 @@ function ActivityForm({ activityTypes, onSave, onClose }) {
                           const cur = customValues[field.key] || [];
                           setCustomField(field.key, e.target.checked ? [...cur, opt] : cur.filter(v => v !== opt));
                         }}
-                        className="w-4 h-4 accent-violet-600"
+                        className="w-4 h-4 accent-brand-500"
                       />
                       <span className="text-sm text-slate-300">{opt}</span>
                     </label>
@@ -528,7 +557,7 @@ function ActivityForm({ activityTypes, onSave, onClose }) {
                     placeholder={field.unit ? `in ${field.unit}` : ''}
                   />
                   {field.unit && (
-                    <span className="flex items-center px-3 bg-slate-700 rounded-xl text-slate-400 text-sm whitespace-nowrap">
+                    <span className="flex items-center px-3 bg-white/[.08] border border-white/[.1] rounded-xl text-white/50 text-sm whitespace-nowrap">
                       {field.unit}
                     </span>
                   )}
@@ -709,7 +738,7 @@ function EditActivityModal({ activity, onSave, onClose }) {
                           const cur = customValues[field.key] || [];
                           setCustomField(field.key, e.target.checked ? [...cur, opt] : cur.filter(v => v !== opt));
                         }}
-                        className="w-4 h-4 accent-violet-600"
+                        className="w-4 h-4 accent-brand-500"
                       />
                       <span className="text-sm text-slate-300">{opt}</span>
                     </label>
@@ -725,7 +754,7 @@ function EditActivityModal({ activity, onSave, onClose }) {
                     placeholder={field.unit ? `in ${field.unit}` : ''}
                   />
                   {field.unit && (
-                    <span className="flex items-center px-3 bg-slate-700 rounded-xl text-slate-400 text-sm whitespace-nowrap">
+                    <span className="flex items-center px-3 bg-white/[.08] border border-white/[.1] rounded-xl text-white/50 text-sm whitespace-nowrap">
                       {field.unit}
                     </span>
                   )}
