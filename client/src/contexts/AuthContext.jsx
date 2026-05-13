@@ -7,78 +7,47 @@ export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
 
+  // Restore session from httpOnly cookie on mount.
+  // If the cookie is missing or expired the server returns 401 — stay logged out.
   useEffect(() => {
-    const token = localStorage.getItem('auth_token');
-    if (token) {
-      api.get('/auth/me')
-        .then(res => setUser(res.data))
-        .catch(() => localStorage.removeItem('auth_token'))
-        .finally(() => setLoading(false));
-    } else {
-      setLoading(false);
-    }
+    api.get('/auth/me')
+      .then(res => setUser(res.data))
+      .catch(() => {})
+      .finally(() => setLoading(false));
   }, []);
 
-  // identifier: username or UUID
-  // password: user password (null for UUID-only migration login)
+  // Verifies credentials once server-side and receives a 30-day httpOnly JWT cookie.
   const login = async (identifier, password = null) => {
-    const token = password ? `${identifier}:${password}` : identifier;
-    localStorage.setItem('auth_token', token);
-    try {
-      const res = await api.get('/auth/me');
-      setUser(res.data);
-      return res.data;
-    } catch (err) {
-      localStorage.removeItem('auth_token');
-      throw err;
-    }
+    const res = await api.post('/auth/login', { identifier, password });
+    setUser(res.data);
+    return res.data;
   };
 
+  // Clears user state immediately; asks server to clear the cookie in the background.
   const logout = () => {
-    localStorage.removeItem('auth_token');
+    api.post('/auth/logout').catch(() => {});
     setUser(null);
   };
 
   const updateUser = (data) => setUser(prev => ({ ...prev, ...data }));
 
-  // Sets username (and password for users without credentials yet).
-  // Updates localStorage token so future requests use the new credentials.
+  // Sets username (and password for first-time setup).
+  // The JWT stays valid — it is tied to userId, not the identifier.
   const setUsername = async (username, password = null) => {
     const res = await api.put('/auth/me/username', { username, password });
-    const updatedUser = res.data;
-    setUser(updatedUser);
-
-    const currentToken = localStorage.getItem('auth_token') || '';
-    const colonIdx = currentToken.indexOf(':');
-    const existingSecret = colonIdx !== -1 ? currentToken.slice(colonIdx + 1) : null;
-
-    // Use new password if provided (initial setup), otherwise keep existing secret (username rename)
-    const secret = password || existingSecret;
-    const newToken = secret
-      ? `${updatedUser.username}:${secret}`
-      : updatedUser.username;
-    localStorage.setItem('auth_token', newToken);
-    return updatedUser;
+    setUser(res.data);
+    return res.data;
   };
 
-  // Changes the password (requires current password) and updates the localStorage token
+  // Changes the password. The existing JWT remains valid.
   const changePassword = async (currentPassword, newPassword) => {
     await api.put('/auth/me/password', { currentPassword, newPassword });
-    const currentToken = localStorage.getItem('auth_token') || '';
-    const colonIdx = currentToken.indexOf(':');
-    const identifier = colonIdx !== -1 ? currentToken.slice(0, colonIdx) : currentToken;
-    localStorage.setItem('auth_token', `${identifier}:${newPassword}`);
   };
 
   // Forced password change: only callable when user.mustChangePassword is true.
-  // Does not require current password.
   const forceChangePassword = async (newPassword) => {
     await api.put('/auth/me/password/forced', { newPassword });
     setUser(prev => ({ ...prev, mustChangePassword: false }));
-    const currentToken = localStorage.getItem('auth_token') || '';
-    const colonIdx = currentToken.indexOf(':');
-    const identifier = colonIdx !== -1 ? currentToken.slice(0, colonIdx) : currentToken;
-    localStorage.setItem('auth_token', `${identifier}:${newPassword}`);
   };
 
   return (
