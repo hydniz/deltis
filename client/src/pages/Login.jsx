@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { APP_NAME, APP_SLOGAN } from '../config/branding';
-import { Activity, User, AlertCircle, Eye, EyeOff, Lock } from 'lucide-react';
+import { Activity, AlertCircle, Eye, EyeOff } from 'lucide-react';
 
 export default function Login() {
   const [identifier, setIdentifier] = useState('');
@@ -41,23 +41,27 @@ export default function Login() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-950 flex items-center justify-center p-4">
+    <div className="min-h-screen flex items-center justify-center p-4">
       <div className="w-full max-w-sm">
-        <div className="text-center mb-10">
-          <div className="inline-flex items-center justify-center w-16 h-16 bg-brand-600 rounded-2xl mb-5 shadow-lg shadow-brand-600/30">
+
+        {/* Branding */}
+        <div className="text-center mb-8">
+          <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-gradient-to-br from-brand-500 to-brand-700 mb-5 shadow-2xl shadow-brand-900/50">
             <Activity size={28} className="text-white" />
           </div>
-          <h1 className="text-3xl font-bold text-white mb-2">{APP_NAME}</h1>
-          <p className="text-slate-400">{APP_SLOGAN}</p>
+          <h1 className="text-3xl font-bold text-white mb-1">
+            <span className="bg-gradient-to-r from-brand-300 via-amber-200 to-orange-300 bg-clip-text text-transparent">
+              {APP_NAME}
+            </span>
+          </h1>
+          <p className="text-white/45 text-sm">{APP_SLOGAN}</p>
         </div>
 
+        {/* Glass form card */}
         <div className="card p-6">
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>
-              <label className="label">
-                <User size={14} className="inline mr-1" />
-                Benutzername
-              </label>
+              <label className="label">Benutzername</label>
               <input
                 type="text"
                 value={identifier}
@@ -70,10 +74,7 @@ export default function Login() {
             </div>
 
             <div>
-              <label className="label">
-                <Lock size={14} className="inline mr-1" />
-                Passwort
-              </label>
+              <label className="label">Passwort</label>
               <div className="relative">
                 <input
                   type={showPassword ? 'text' : 'password'}
@@ -86,20 +87,20 @@ export default function Login() {
                 <button
                   type="button"
                   onClick={() => setShowPassword(v => !v)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-200 transition-colors"
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-white/30 hover:text-white/70 transition-colors"
                   tabIndex={-1}
                 >
                   {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
                 </button>
               </div>
-              <p className="text-xs text-slate-600 mt-1">
-                Noch kein Passwort? Gib deine UUID ein und lasse das Feld leer.
+              <p className="text-xs text-white/25 mt-1.5">
+                Noch kein Passwort? Lass das Feld leer.
               </p>
             </div>
 
             {error && (
-              <div className="flex items-center gap-2 text-red-400 text-sm bg-red-900/20 border border-red-900/50 rounded-xl px-3 py-2">
-                <AlertCircle size={15} />
+              <div className="flex items-center gap-2 text-red-300 text-sm bg-red-500/10 border border-red-400/20 rounded-xl px-3 py-2.5">
+                <AlertCircle size={14} className="flex-shrink-0" />
                 {error}
               </div>
             )}
@@ -107,11 +108,11 @@ export default function Login() {
             <button
               type="submit"
               disabled={loading || !identifier.trim()}
-              className="btn-primary w-full py-3 flex items-center justify-center gap-2"
+              className="btn-primary w-full py-2.5 flex items-center justify-center gap-2 mt-1"
             >
-              {loading ? (
-                <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-              ) : null}
+              {loading && (
+                <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+              )}
               Anmelden
             </button>
           </form>

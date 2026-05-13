@@ -71,21 +71,24 @@ export default function AdminSetup() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-slate-950 flex items-center justify-center">
-        <div className="w-8 h-8 border-2 border-brand-500 border-t-transparent rounded-full animate-spin" />
+      <div className="min-h-screen bg-transparent flex items-center justify-center">
+        <div className="w-8 h-8 border-2 border-zinc-700 border-t-brand-500 rounded-full animate-spin" />
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-slate-950 flex items-center justify-center p-4">
+    <div className="min-h-screen bg-transparent flex items-center justify-center p-4">
       <div className="w-full max-w-md">
         <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center w-16 h-16 bg-brand-600 rounded-2xl mb-5 shadow-lg shadow-brand-600/30">
-            <Activity size={28} className="text-white" />
+          <div className="flex items-center justify-center gap-2.5 mb-6">
+            <div className="w-5 h-5 rounded bg-brand-600 flex items-center justify-center">
+              <Activity size={12} className="text-white" />
+            </div>
+            <span className="font-semibold text-zinc-100 text-sm">{APP_NAME}</span>
           </div>
-          <h1 className="text-2xl font-bold text-white mb-1">{APP_NAME}</h1>
-          <p className="text-slate-400 text-sm">Ersteinrichtung des Admin-Kontos</p>
+          <h1 className="text-2xl font-semibold text-zinc-100 mb-1">Admin einrichten</h1>
+          <p className="text-zinc-500 text-sm">Ersteinrichtung des Admin-Kontos</p>
         </div>
 
         {!done ? (

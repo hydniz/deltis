@@ -16,6 +16,25 @@ const navItems = [
   { to: '/settings', icon: Settings, label: 'Einstellungen' },
 ];
 
+function NavItem({ to, icon: Icon, label, end }) {
+  return (
+    <NavLink
+      to={to}
+      end={end}
+      className={({ isActive }) =>
+        `flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all ${
+          isActive
+            ? 'nav-active'
+            : 'text-white/50 hover:text-white/80 hover:bg-white/[.06]'
+        }`
+      }
+    >
+      <Icon size={17} />
+      {label}
+    </NavLink>
+  );
+}
+
 export default function Sidebar() {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
@@ -26,72 +45,51 @@ export default function Sidebar() {
   };
 
   return (
-    <aside className="hidden lg:flex flex-col w-60 bg-slate-900 border-r border-slate-800 min-h-screen fixed left-0 top-0 bottom-0 z-30">
-      <div className="p-5 border-b border-slate-800">
-        <div className="flex items-center gap-3">
-          <div className="w-9 h-9 bg-brand-600 rounded-xl flex items-center justify-center">
-            <Activity size={18} className="text-white" />
+    <aside className="hidden lg:flex flex-col w-60 bg-white/[.04] backdrop-blur-xl border-r border-white/[.07] min-h-screen fixed left-0 top-0 bottom-0 z-30">
+      {/* Logo */}
+      <div className="px-5 py-5 border-b border-white/[.07]">
+        <div className="flex items-center gap-2.5">
+          <div className="w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0"
+            style={{ background: 'linear-gradient(135deg, #c4623a, #8a3c1e)', boxShadow: '0 2px 8px rgba(60,22,10,0.4)' }}>
+            <Activity size={16} className="text-white" />
           </div>
-          <span className="font-semibold text-white">{APP_NAME}</span>
+          <span className="font-semibold text-white tracking-tight">{APP_NAME}</span>
         </div>
       </div>
 
-      <nav className="flex-1 p-3 space-y-0.5 overflow-y-auto">
-        {navItems.map(({ to, icon: Icon, label, end }) => (
-          <NavLink
-            key={to}
-            to={to}
-            end={end}
-            className={({ isActive }) =>
-              `flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-colors ${
-                isActive
-                  ? 'bg-brand-600 text-white'
-                  : 'text-slate-400 hover:text-slate-100 hover:bg-slate-800'
-              }`
-            }
-          >
-            <Icon size={18} />
-            {label}
-          </NavLink>
+      {/* Navigation */}
+      <nav className="flex-1 px-3 py-4 overflow-y-auto space-y-0.5">
+        {navItems.map(item => (
+          <NavItem key={item.to} {...item} />
         ))}
 
         {user?.isAdmin && (
           <>
-            <div className="pt-2 pb-1 px-3">
-              <div className="border-t border-slate-800" />
-            </div>
-            <NavLink
-              to="/admin"
-              className={({ isActive }) =>
-                `flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-colors ${
-                  isActive
-                    ? 'bg-brand-600 text-white'
-                    : 'text-slate-400 hover:text-slate-100 hover:bg-slate-800'
-                }`
-              }
-            >
-              <ShieldCheck size={18} />
-              Nutzerverwaltung
-            </NavLink>
+            <div className="mx-2 my-2 border-t border-white/[.07]" />
+            <NavItem to="/admin" icon={ShieldCheck} label="Nutzerverwaltung" />
           </>
         )}
       </nav>
 
-      <div className="p-3 border-t border-slate-800">
+      {/* User + Logout */}
+      <div className="px-3 py-4 border-t border-white/[.07]">
         <div className="flex items-center gap-3 px-3 py-2 mb-1">
-          <div className="w-8 h-8 bg-slate-700 rounded-full flex items-center justify-center text-sm font-semibold text-slate-300">
-            {user?.name?.charAt(0)?.toUpperCase() || 'N'}
+          <div
+            className="w-8 h-8 rounded-full border border-white/15 flex items-center justify-center text-sm font-semibold text-white flex-shrink-0"
+            style={{ background: 'linear-gradient(135deg, rgba(196,98,58,0.6), rgba(138,60,30,0.6))' }}
+          >
+            {user?.name?.charAt(0)?.toUpperCase() || 'U'}
           </div>
           <div className="flex-1 min-w-0">
-            <p className="text-sm font-medium text-slate-200 truncate">{user?.name}</p>
-            <p className="text-xs text-slate-500 truncate">{user?.uuid?.slice(0, 8)}...</p>
+            <p className="text-sm font-medium text-white/90 truncate">{user?.name}</p>
+            <p className="text-xs text-white/35 truncate">{user?.uuid?.slice(0, 8)}...</p>
           </div>
         </div>
         <button
           onClick={handleLogout}
-          className="flex items-center gap-3 px-3 py-2.5 w-full rounded-xl text-sm font-medium text-slate-400 hover:text-red-400 hover:bg-slate-800 transition-colors"
+          className="flex items-center gap-3 px-3 py-2.5 w-full rounded-xl text-sm font-medium text-white/40 hover:text-red-300 hover:bg-red-500/10 transition-colors"
         >
-          <LogOut size={18} />
+          <LogOut size={16} />
           Abmelden
         </button>
       </div>
