@@ -1,8 +1,7 @@
-import { Outlet, NavLink, useNavigate } from 'react-router-dom';
-import { useAuth } from '../contexts/AuthContext';
+import { Outlet, NavLink } from 'react-router-dom';
 import Sidebar from './Sidebar';
 import {
-  LayoutDashboard, Dumbbell, CalendarDays, Sparkles,
+  LayoutDashboard, Dumbbell, Sparkles,
   Scale, Target, Settings
 } from 'lucide-react';
 
@@ -16,17 +15,17 @@ const mobileNav = [
 
 export default function Layout({ children }) {
   return (
-    <div className="min-h-screen bg-slate-950">
+    <div className="min-h-screen">
       <Sidebar />
 
-      <main className="lg:pl-60 pb-20 lg:pb-0 min-h-screen">
-        <div className="max-w-5xl mx-auto p-4 lg:p-8">
+      <main className="lg:pl-60 pb-24 lg:pb-0 min-h-screen">
+        <div className="max-w-4xl mx-auto p-4 lg:p-8">
           {children ?? <Outlet />}
         </div>
       </main>
 
-      {/* Mobile bottom navigation */}
-      <nav className="lg:hidden fixed bottom-0 left-0 right-0 bg-slate-900 border-t border-slate-800 z-30">
+      {/* Glass bottom nav – mobile */}
+      <nav className="lg:hidden fixed bottom-0 left-0 right-0 bg-white/[.08] backdrop-blur-xl border-t border-white/[.1] z-30 safe-area-inset-bottom">
         <div className="flex items-stretch">
           {mobileNav.map(({ to, icon: Icon, label, end }) => (
             <NavLink
@@ -35,7 +34,7 @@ export default function Layout({ children }) {
               end={end}
               className={({ isActive }) =>
                 `flex-1 flex flex-col items-center gap-1 py-3 px-1 text-xs font-medium transition-colors ${
-                  isActive ? 'text-brand-400' : 'text-slate-500'
+                  isActive ? 'text-brand-300' : 'text-white/30 hover:text-white/55'
                 }`
               }
             >
@@ -47,7 +46,7 @@ export default function Layout({ children }) {
             to="/settings"
             className={({ isActive }) =>
               `flex-1 flex flex-col items-center gap-1 py-3 px-1 text-xs font-medium transition-colors ${
-                isActive ? 'text-brand-400' : 'text-slate-500'
+                isActive ? 'text-brand-300' : 'text-white/30 hover:text-white/55'
               }`
             }
           >

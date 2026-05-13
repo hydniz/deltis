@@ -4,63 +4,134 @@
 
 @layer base {
   body {
-    @apply bg-slate-950 text-slate-100 font-sans antialiased;
+    @apply text-white font-sans antialiased;
+    background-color: #1d1912;
   }
 
-  /* Sichtbarer Fokusring für Tastaturnavigation (alle interaktiven Elemente) */
+  /* Warmer Erd-Gradient — bleibt fix während der Inhalt scrollt */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    z-index: -1;
+    background:
+      radial-gradient(ellipse 90% 70% at 5% 5%,  rgba(196, 98,  58,  0.20) 0%, transparent 60%),
+      radial-gradient(ellipse 70% 65% at 95% 95%, rgba(160, 78,  42,  0.16) 0%, transparent 60%),
+      radial-gradient(ellipse 55% 40% at 50% 50%, rgba(95,  133, 86,  0.07) 0%, transparent 55%),
+      #1d1912;
+  }
+
   button:focus-visible,
   [role="button"]:focus-visible,
   a:focus-visible,
   input:focus-visible,
   select:focus-visible,
   textarea:focus-visible {
-    outline: 2px solid theme('colors.violet.400');
+    outline: 2px solid rgba(196, 98, 58, 0.7);
     outline-offset: 2px;
   }
-  /* Inputs nutzen bereits ring via .input – kein doppelter Rand */
   input.input:focus-visible,
   select.input:focus-visible,
   textarea.input:focus-visible {
     outline: none;
   }
 
-  ::-webkit-scrollbar {
-    width: 4px;
-    height: 4px;
-  }
-  ::-webkit-scrollbar-track {
-    @apply bg-transparent;
-  }
+  ::-webkit-scrollbar { width: 4px; height: 4px; }
+  ::-webkit-scrollbar-track { background: transparent; }
   ::-webkit-scrollbar-thumb {
-    @apply bg-slate-700 rounded-full;
+    background: rgba(255, 255, 255, 0.12);
+    border-radius: 9999px;
   }
 }
 
 @layer components {
+  /* ── Glasskarte ─────────────────────────────────── */
   .card {
-    @apply bg-slate-900 border border-slate-800 rounded-2xl;
+    @apply bg-white/[.06] backdrop-blur-xl border border-white/[.09] rounded-2xl;
   }
 
+  /* ── Primär-Button: Terrakotta von oben nach unten, mit Tiefe ── */
   .btn-primary {
-    @apply bg-brand-600 hover:bg-brand-700 text-white px-4 py-2 rounded-xl font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed;
+    @apply text-white px-4 py-2 rounded-xl font-semibold text-sm tracking-wide
+      transition-all disabled:opacity-40 disabled:cursor-not-allowed;
+    background-image: linear-gradient(
+      to bottom,
+      theme('colors.brand.400'),
+      theme('colors.brand.700')
+    );
+    border: 1px solid rgba(168, 78, 42, 0.55);
+    box-shadow:
+      inset 0 1px 0 rgba(232, 158, 112, 0.30), /* obere Lichtreflexion */
+      0 4px 14px rgba(60, 22, 10, 0.45);
+  }
+  .btn-primary:hover:not(:disabled) {
+    background-image: linear-gradient(
+      to bottom,
+      theme('colors.brand.300'),
+      theme('colors.brand.600')
+    );
+    box-shadow:
+      inset 0 1px 0 rgba(232, 158, 112, 0.40),
+      0 6px 18px rgba(60, 22, 10, 0.55);
+  }
+  .btn-primary:active:not(:disabled) {
+    background-image: linear-gradient(
+      to bottom,
+      theme('colors.brand.600'),
+      theme('colors.brand.800')
+    );
+    box-shadow: inset 0 2px 4px rgba(60, 22, 10, 0.30);
   }
 
+  /* ── Sekundär-Button: warme Erd-Glasoptik ───────── */
   .btn-secondary {
-    @apply bg-slate-800 hover:bg-slate-700 text-slate-200 px-4 py-2 rounded-xl font-medium transition-colors;
+    @apply text-white/80 hover:text-white px-4 py-2 rounded-xl
+      font-medium text-sm tracking-wide transition-all;
+    background-color: rgba(196, 98, 58, 0.10);
+    border: 1px solid rgba(196, 98, 58, 0.22);
+  }
+  .btn-secondary:hover {
+    background-color: rgba(196, 98, 58, 0.18);
+    border-color: rgba(196, 98, 58, 0.35);
+  }
+  .btn-secondary:active {
+    background-color: rgba(196, 98, 58, 0.07);
   }
 
+  /* ── Danger-Button ───────────────────────────────── */
   .btn-danger {
-    @apply bg-red-900/50 hover:bg-red-900 text-red-400 hover:text-red-300 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors;
+    @apply text-red-300/70 hover:text-red-300 hover:bg-red-500/15
+      px-3 py-1.5 rounded-lg text-sm font-medium transition-colors;
   }
 
+  /* ── Aktives Sidebar-Element ─────────────────────── */
+  /* Eigene Klasse, um JIT-Probleme mit custom-color/opacity zu vermeiden */
+  .nav-active {
+    color: theme('colors.brand.200');
+    background-color: rgba(196, 98, 58, 0.20);
+    box-shadow: inset 3px 0 0 theme('colors.brand.400');
+  }
+
+  /* ── Glas-Input ──────────────────────────────────── */
+  /* focus:border-brand-* schlägt in @apply fehl → CSS :focus */
   .input {
-    @apply bg-slate-800 border border-slate-700 text-slate-100 rounded-xl px-3 py-2 w-full focus:outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500 placeholder-slate-500 transition-colors;
+    @apply bg-white/[.07] border border-white/[.11] text-white
+      rounded-xl px-3 py-2 w-full focus:outline-none
+      placeholder-white/25 transition-colors text-sm;
+  }
+  .input:hover {
+    border-color: rgba(255, 255, 255, 0.22);
+  }
+  .input:focus {
+    border-color: rgba(216, 124, 78, 0.65);
   }
 
+  /* ── Label ───────────────────────────────────────── */
   .label {
-    @apply block text-sm font-medium text-slate-400 mb-1;
+    @apply block text-xs font-medium text-white/40 mb-1.5 uppercase tracking-wider;
   }
 
+  /* ── Badge ───────────────────────────────────────── */
   .badge {
     @apply inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium;
   }
