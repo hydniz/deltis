@@ -1,9 +1,10 @@
-// Must be set before any module that reads JWT_SECRET is required.
-process.env.JWT_SECRET = 'test-jwt-secret-do-not-use-in-production';
+// jwtSecret.js provides a deterministic default when NODE_ENV=test (set by Jest).
+// No explicit JWT_SECRET assignment needed here.
 
 const express = require('express');
 const cookieParser = require('cookie-parser');
 const jwt = require('jsonwebtoken');
+const JWT_SECRET = require('../../utils/jwtSecret');
 const { MongoMemoryServer } = require('mongodb-memory-server');
 const mongoose = require('mongoose');
 const crypto = require('crypto');
@@ -47,7 +48,7 @@ function buildApp() {
 }
 
 function signToken(userId) {
-  return jwt.sign({ userId }, process.env.JWT_SECRET, { expiresIn: '1h' });
+  return jwt.sign({ userId }, JWT_SECRET, { expiresIn: '1h' });
 }
 
 // Migration user: no username, no password set yet
