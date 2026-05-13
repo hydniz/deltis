@@ -82,7 +82,6 @@ export default function Sidebar() {
           </div>
           <div className="flex-1 min-w-0">
             <p className="text-sm font-medium text-white/90 truncate">{user?.name}</p>
-            <p className="text-xs text-white/35 truncate">{user?.uuid?.slice(0, 8)}...</p>
           </div>
         </div>
         <button
