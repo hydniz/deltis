@@ -14,8 +14,46 @@ import Settings from './pages/Settings';
 import Admin from './pages/Admin';
 import AdminSetup from './pages/AdminSetup';
 import api from './utils/api';
-import { User, AlertCircle, Lock, Eye, EyeOff, KeyRound } from 'lucide-react';
+import { User, AlertCircle, Lock, Eye, EyeOff, KeyRound, AlertTriangle } from 'lucide-react';
+import { REQUIRED_API_VERSION } from './config/compatibility';
 
+
+// ── CompatibilityCheck ────────────────────────────────────────────────────
+// Fetches backend API version on mount, logs the result, and renders a
+// persistent warning banner if frontend and backend are incompatible.
+
+function CompatibilityCheck({ children }) {
+  const [mismatch, setMismatch] = useState(null); // null | { backendV: number }
+
+  useEffect(() => {
+    api.get('').then(res => {
+      const backendV = res.data.apiVersion ?? 1;
+      const compatible = backendV === REQUIRED_API_VERSION;
+      if (!compatible) setMismatch({ backendV });
+      console.log(
+        `[Deltis] Compatibility check — client requires API v${REQUIRED_API_VERSION} | ` +
+        `backend reports API v${backendV} | ${compatible ? '✓ compatible' : '✗ INCOMPATIBLE'}`
+      );
+    }).catch(() => {
+      // Backend unreachable — auth flow will handle this, skip compat warning.
+      console.warn('[Deltis] Compatibility check skipped — backend unreachable.');
+    });
+  }, []);
+
+  return (
+    <>
+      {mismatch && (
+        <div className="fixed top-0 left-0 right-0 z-[200] flex items-center justify-center gap-2.5 px-4 py-2.5 bg-amber-500/15 backdrop-blur-sm border-b border-amber-500/30">
+          <AlertTriangle size={15} className="text-amber-400 flex-shrink-0" />
+          <span className="text-amber-200 text-sm">
+            Versions-Konflikt: Frontend erwartet API&nbsp;v{REQUIRED_API_VERSION}, Backend meldet API&nbsp;v{mismatch.backendV}. Bitte Frontend oder Backend aktualisieren.
+          </span>
+        </div>
+      )}
+      {children}
+    </>
+  );
+}
 
 function Spinner() {
   return (
@@ -291,7 +329,7 @@ function AdminPage() {
   return <Navigate to="/login" replace />;
 }
 
-export default function App() {
+function AppInner() {
   return (
     <AuthProvider>
       <BrowserRouter>
@@ -327,5 +365,13 @@ export default function App() {
         </Routes>
       </BrowserRouter>
     </AuthProvider>
+  );
+}
+
+export default function App() {
+  return (
+    <CompatibilityCheck>
+      <AppInner />
+    </CompatibilityCheck>
   );
 }
