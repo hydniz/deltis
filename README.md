@@ -18,7 +18,13 @@ A self-hosted personal habit and activity tracking PWA. Multi-user, Docker-ready
 - **Backend**: Node.js / Express
 - **Database**: MongoDB
 - **Frontend**: React + Vite + TailwindCSS
-- **Auth**: username + password for all users (bcrypt + pepper); admin secret for admin actions
+- **Auth**: httpOnly JWT cookies (30 days); bcrypt + pepper for password hashing
+
+---
+
+## Quick start
+
+→ **[SETUP.md](SETUP.md)** — full setup guide (local dev + Docker/NAS deployment)
 
 ---
 
@@ -218,6 +224,58 @@ npm run admin:reset-password
 ```
 
 See [SECURITY.md](SECURITY.md) for details.
+
+---
+
+## API Documentation
+
+The full backend API reference lives in [`docs/api/`](docs/api/README.md).
+
+| Resource | Path |
+|---|---|
+| Overview, auth & versioning | [docs/api/README.md](docs/api/README.md) |
+| Auth | [docs/api/auth.md](docs/api/auth.md) |
+| Activities & Types | [docs/api/activities.md](docs/api/activities.md) |
+| Habits | [docs/api/habits.md](docs/api/habits.md) |
+| Goals | [docs/api/goals.md](docs/api/goals.md) |
+| Planner | [docs/api/planner.md](docs/api/planner.md) |
+| Weight | [docs/api/weight.md](docs/api/weight.md) |
+| Data export/import | [docs/api/data.md](docs/api/data.md) |
+| Admin | [docs/api/admin.md](docs/api/admin.md) |
+
+---
+
+## Version Compatibility
+
+Frontend and backend version numbers are **independent** and may drift apart. API compatibility is tracked via a dedicated integer (`apiVersion`), separate from the semver version.
+
+### How it works
+
+- `apiVersion` in root `package.json` — the current backend API contract version.
+- `REQUIRED_API_VERSION` in `client/src/config/compatibility.js` — what this frontend build requires.
+- On every page load the frontend fetches `GET /api` and compares the two values.
+  - **Match** → `✓ compatible` logged to the browser console, app runs normally.
+  - **Mismatch** → `✗ INCOMPATIBLE` logged, an amber warning banner is shown to all users.
+
+The backend logs its API version at startup:
+```
+✓ Deltis server running on port 3001
+  API version: 1 | ENV: production
+```
+
+### When to bump
+
+| Situation | Action |
+|---|---|
+| UI-only change, non-breaking backend addition | Nothing |
+| Breaking change (removed/renamed endpoint or field) | Bump `apiVersion` in `package.json` **and** `REQUIRED_API_VERSION` in `compatibility.js` |
+| Frontend requires a new backend feature | Bump `REQUIRED_API_VERSION` only |
+
+### Release stage
+
+Both `package.json` files (root + `client/`) have a `"stage"` field:
+- `""` → stable release, commit hash hidden in production builds
+- `"alpha"` / `"beta"` → label appended to the displayed version string
 
 ---
 

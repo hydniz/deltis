@@ -8,10 +8,7 @@ import Login from '../pages/Login';
 import { AuthProvider } from '../contexts/AuthContext';
 
 beforeAll(() => server.listen());
-afterEach(() => {
-  server.resetHandlers();
-  localStorage.clear();
-});
+afterEach(() => server.resetHandlers());
 afterAll(() => server.close());
 
 const mockNavigate = vi.fn();
@@ -81,9 +78,9 @@ describe('Login page – normal login flow', () => {
     await waitFor(() => expect(mockNavigate).toHaveBeenCalledWith('/dashboard'));
   });
 
-  it('shows loading spinner while request is in flight', async () => {
+  it('shows loading spinner while login request is in flight', async () => {
     server.use(
-      http.get('/api/auth/me', async () => {
+      http.post('/api/auth/login', async () => {
         await new Promise(() => {}); // never resolves
       })
     );
@@ -114,7 +111,7 @@ describe('Login page – password visibility toggle', () => {
 describe('Login page – error messages', () => {
   it('shows "Falsches Passwort" error', async () => {
     server.use(
-      http.get('/api/auth/me', () =>
+      http.post('/api/auth/login', () =>
         HttpResponse.json({ error: 'Falsches Passwort' }, { status: 401 })
       )
     );
@@ -128,7 +125,7 @@ describe('Login page – error messages', () => {
 
   it('shows "Bitte Passwort eingeben" for PASSWORD_REQUIRED code', async () => {
     server.use(
-      http.get('/api/auth/me', () =>
+      http.post('/api/auth/login', () =>
         HttpResponse.json({ error: 'Passwort erforderlich', code: 'PASSWORD_REQUIRED' }, { status: 401 })
       )
     );
@@ -141,7 +138,7 @@ describe('Login page – error messages', () => {
 
   it('shows UUID-blocked error for UUID_BLOCKED code', async () => {
     server.use(
-      http.get('/api/auth/me', () =>
+      http.post('/api/auth/login', () =>
         HttpResponse.json({ code: 'UUID_BLOCKED' }, { status: 401 })
       )
     );
@@ -156,7 +153,7 @@ describe('Login page – error messages', () => {
 
   it('shows generic error for unknown username', async () => {
     server.use(
-      http.get('/api/auth/me', () =>
+      http.post('/api/auth/login', () =>
         HttpResponse.json({ error: 'Unbekannter Benutzer' }, { status: 401 })
       )
     );
@@ -169,4 +166,3 @@ describe('Login page – error messages', () => {
     );
   });
 });
-

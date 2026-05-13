@@ -52,7 +52,7 @@ function NewUserModal({ onClose, onCreate }) {
   const canSubmit = username.trim().length >= 3 && password.length >= 8 && !loading;
 
   return (
-    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+    <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4">
       <div className="card p-6 w-full max-w-md">
         <div className="flex items-center justify-between mb-5">
           <h2 className="text-lg font-semibold text-white flex items-center gap-2">
@@ -210,7 +210,7 @@ function EditUserModal({ user, onClose, onSave }) {
   const canSubmit = username.trim().length >= 3 && (!password || password.length >= 8) && !loading;
 
   return (
-    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+    <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4">
       <div className="card p-6 w-full max-w-md">
         <div className="flex items-center justify-between mb-5">
           <h2 className="text-lg font-semibold text-white flex items-center gap-2">
@@ -372,7 +372,7 @@ export default function Admin() {
 
       {loading ? (
         <div className="flex justify-center py-12">
-          <div className="w-6 h-6 border-2 border-brand-500 border-t-transparent rounded-full animate-spin" />
+          <div className="w-6 h-6 border-2 border-zinc-700 border-t-brand-500 rounded-full animate-spin" />
         </div>
       ) : (
         <div className="card overflow-hidden">

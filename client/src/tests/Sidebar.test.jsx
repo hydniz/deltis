@@ -9,10 +9,7 @@ import { mockUser, mockAdminUser } from './mocks/handlers';
 import { http, HttpResponse } from 'msw';
 
 beforeAll(() => server.listen());
-afterEach(() => {
-  server.resetHandlers();
-  localStorage.clear();
-});
+afterEach(() => server.resetHandlers());
 afterAll(() => server.close());
 
 const mockNavigate = vi.fn();
@@ -25,7 +22,6 @@ function renderSidebar(user = mockUser) {
   server.use(
     http.get('/api/auth/me', () => HttpResponse.json(user))
   );
-  localStorage.setItem('auth_token', 'valid-token');
   return render(
     <AuthProvider>
       <MemoryRouter>
@@ -62,10 +58,9 @@ describe('Sidebar', () => {
     expect(await screen.findByText('Nutzerverwaltung')).toBeInTheDocument();
   });
 
-  it('displays the user name and truncated UUID', async () => {
+  it('displays the user name', async () => {
     renderSidebar(mockUser);
     expect(await screen.findByText('Test User')).toBeInTheDocument();
-    expect(screen.getByText(/aaaa-bbb\.\.\./i)).toBeInTheDocument();
   });
 
   it('calls navigate to /login on logout click', async () => {
@@ -73,7 +68,6 @@ describe('Sidebar', () => {
     renderSidebar();
     const logoutBtn = await screen.findByText('Abmelden');
     await user.click(logoutBtn);
-    expect(localStorage.getItem('auth_token')).toBeNull();
     expect(mockNavigate).toHaveBeenCalledWith('/login');
   });
 });

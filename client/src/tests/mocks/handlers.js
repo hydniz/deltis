@@ -22,22 +22,31 @@ export const mockAdminUser = {
 
 export const handlers = [
   http.get('/api', () => {
-    return HttpResponse.json({ version: '1.0.0+test123' });
+    return HttpResponse.json({ version: '1.0.0+test123', apiVersion: 2 });
   }),
 
-  http.get('/api/auth/me', ({ request }) => {
-    const auth = request.headers.get('Authorization') || '';
-    if (!auth.startsWith('Bearer ')) {
-      return HttpResponse.json({ error: 'Nicht autorisiert' }, { status: 401 });
+  // Session restore — returns mockUser when a valid cookie is present (simulated by default).
+  // Override to HttpResponse.json({ error: '...' }, { status: 401 }) in tests that need no session.
+  http.get('/api/auth/me', () => {
+    return HttpResponse.json(mockUser);
+  }),
+
+  http.post('/api/auth/login', async ({ request }) => {
+    const { identifier, password } = await request.json();
+    if (!identifier) {
+      return HttpResponse.json({ error: 'Benutzername erforderlich.' }, { status: 400 });
     }
-    const token = auth.slice(7);
-    if (token === 'invalid-token') {
-      return HttpResponse.json({ error: 'Ungültige UUID' }, { status: 401 });
+    if (identifier === 'wronguser') {
+      return HttpResponse.json({ error: 'Unbekannter Benutzername' }, { status: 401 });
     }
-    if (token.includes(':admin')) {
-      return HttpResponse.json(mockAdminUser);
+    if (password === 'wrongpassword') {
+      return HttpResponse.json({ error: 'Falsches Passwort' }, { status: 401 });
     }
     return HttpResponse.json(mockUser);
+  }),
+
+  http.post('/api/auth/logout', () => {
+    return HttpResponse.json({ ok: true });
   }),
 
   http.put('/api/auth/me', async ({ request }) => {

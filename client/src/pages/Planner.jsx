@@ -122,8 +122,8 @@ function AddPlanModal({ date, activityTypes, habits, onSave, onClose }) {
   };
 
   return (
-    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-end sm:items-center justify-center z-50">
-      <div className="bg-slate-900 border border-slate-700/50 w-full max-w-md rounded-t-2xl sm:rounded-2xl flex flex-col" style={{ maxHeight: '90dvh' }}>
+    <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-end sm:items-center justify-center z-50">
+      <div className="bg-[#1e1e30]/95 backdrop-blur-2xl border border-white/[.1] w-full max-w-md rounded-t-2xl sm:rounded-2xl flex flex-col" style={{ maxHeight: '90dvh' }}>
         <div className="w-10 h-1 bg-slate-700 rounded-full mx-auto mt-3 sm:hidden flex-shrink-0" />
 
         <div className="flex items-center justify-between px-5 pt-4 pb-3 border-b border-slate-800 flex-shrink-0">
@@ -261,8 +261,8 @@ function CompleteActivityModal({ plan, onSave, onClose }) {
   };
 
   return (
-    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-end sm:items-center justify-center z-50">
-      <div className="bg-slate-900 border border-slate-700/50 w-full max-w-md rounded-t-2xl sm:rounded-2xl flex flex-col" style={{ maxHeight: '90dvh' }}>
+    <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-end sm:items-center justify-center z-50">
+      <div className="bg-[#1e1e30]/95 backdrop-blur-2xl border border-white/[.1] w-full max-w-md rounded-t-2xl sm:rounded-2xl flex flex-col" style={{ maxHeight: '90dvh' }}>
         <div className="w-10 h-1 bg-slate-700 rounded-full mx-auto mt-3 sm:hidden flex-shrink-0" />
         <div className="flex items-center justify-between px-5 pt-4 pb-3 border-b border-slate-800 flex-shrink-0">
           <div>
@@ -338,8 +338,8 @@ function CompleteHabitModal({ plan, onSave, onClose }) {
   };
 
   return (
-    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-end sm:items-center justify-center z-50">
-      <div className="bg-slate-900 border border-slate-700/50 w-full max-w-sm rounded-t-2xl sm:rounded-2xl flex flex-col">
+    <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-end sm:items-center justify-center z-50">
+      <div className="bg-[#1e1e30]/95 backdrop-blur-2xl border border-white/[.1] w-full max-w-sm rounded-t-2xl sm:rounded-2xl flex flex-col">
         <div className="w-10 h-1 bg-slate-700 rounded-full mx-auto mt-3 sm:hidden flex-shrink-0" />
         <div className="flex items-center justify-between px-5 pt-4 pb-3 border-b border-slate-800 flex-shrink-0">
           <div>
@@ -467,7 +467,7 @@ export default function Planner() {
 
       {loading ? (
         <div className="flex items-center justify-center py-16">
-          <div className="w-8 h-8 border-2 border-brand-500 border-t-transparent rounded-full animate-spin" />
+          <div className="w-8 h-8 border-2 border-zinc-700 border-t-brand-500 rounded-full animate-spin" />
         </div>
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-7 gap-3">
