@@ -7,6 +7,235 @@ import {
   Download, Upload, AlertCircle, AtSign, Lock, Server, Monitor
 } from 'lucide-react';
 
+// ── VersionBadge ──────────────────────────────────────────────────────────
+
+function VersionBadge({ icon, label, version }) {
+  return (
+    <div className="bg-white/[.05] border border-white/[.08] rounded-xl px-3 py-2.5">
+      <p className="text-xs text-slate-500 flex items-center gap-1.5 mb-1">
+        {icon}
+        {label}
+      </p>
+      <p
+        className="text-xs font-mono text-slate-300 truncate"
+        title={version ?? '…'}
+      >
+        {version ?? '…'}
+      </p>
+    </div>
+  );
+}
+
+// ── ExportImport ──────────────────────────────────────────────────────────
+
+function ExportImport() {
+  const [importing, setImporting] = useState(false);
+  const [exporting, setExporting] = useState(false);
+  const [result, setResult] = useState(null);
+  const [error, setError] = useState('');
+
+  const handleExport = async () => {
+    setExporting(true);
+    setError('');
+    try {
+      const res = await api.get('/data/export', { responseType: 'blob' });
+      const url = URL.createObjectURL(new Blob([res.data], { type: 'application/zip' }));
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `habit-tracker-export-${new Date().toISOString().slice(0, 10)}.zip`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch {
+      setError('Export fehlgeschlagen.');
+    } finally {
+      setExporting(false);
+    }
+  };
+
+  const handleImport = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    e.target.value = '';
+    setImporting(true);
+    setResult(null);
+    setError('');
+    try {
+      const form = new FormData();
+      form.append('file', file);
+      const res = await api.post('/data/import', form);
+      setResult(res.data);
+    } catch (err) {
+      setError(err.response?.data?.error || 'Import fehlgeschlagen.');
+    } finally {
+      setImporting(false);
+    }
+  };
+
+  return (
+    <div className="card p-5">
+      <h2 className="font-semibold text-white mb-1 flex items-center gap-2">
+        <Download size={16} className="text-brand-400" />
+        Daten exportieren & importieren
+      </h2>
+      <p className="text-xs text-slate-500 mb-4">
+        Exportiert Gewicht, Gewohnheiten und Aktivitäten als ZIP mit CSV-Dateien.
+      </p>
+
+      <div className="flex flex-wrap gap-3">
+        <button
+          onClick={handleExport}
+          disabled={exporting}
+          className="btn-primary flex items-center gap-2"
+        >
+          {exporting
+            ? <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+            : <Download size={15} />}
+          Exportieren
+        </button>
+
+        <label className={`btn-secondary flex items-center gap-2 cursor-pointer ${importing ? 'opacity-50 pointer-events-none' : ''}`}>
+          {importing
+            ? <div className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin" />
+            : <Upload size={15} />}
+          Importieren
+          <input type="file" accept=".zip" className="hidden" onChange={handleImport} />
+        </label>
+      </div>
+
+      {error && (
+        <div className="mt-3 flex items-center gap-2 text-red-400 text-sm bg-red-900/20 border border-red-900/50 rounded-xl px-3 py-2">
+          <AlertCircle size={14} />
+          {error}
+        </div>
+      )}
+
+      {result && (
+        <div className="mt-3 bg-green-900/20 border border-green-700/50 rounded-xl px-4 py-3 space-y-1">
+          <p className="text-green-400 text-sm font-medium">Import abgeschlossen!</p>
+          <ul className="text-slate-400 text-xs space-y-0.5">
+            <li>• {result.weight} Gewichtseinträge</li>
+            <li>• {result.habits} Gewohnheitseinträge</li>
+            <li>• {result.activities} Aktivitäten</li>
+            <li>• {result.plans} Planereinträge</li>
+            <li>• {result.goals} Ziele</li>
+            {result.settings && <li>• Einstellungen wiederhergestellt</li>}
+          </ul>
+          {result.errors?.length > 0 && (
+            <details className="mt-2">
+              <summary className="text-yellow-500 text-xs cursor-pointer">
+                {result.errors.length} Fehler
+              </summary>
+              <ul className="mt-1 text-xs text-slate-500 space-y-0.5">
+                {result.errors.map((e, i) => <li key={i}>• {e}</li>)}
+              </ul>
+            </details>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── UserPasswordForm ──────────────────────────────────────────────────────
+
+function UserPasswordForm({ changePassword }) {
+  const [current, setCurrent] = useState('');
+  const [next, setNext] = useState('');
+  const [confirm, setConfirm] = useState('');
+  const [showPw, setShowPw] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+  const [success, setSuccess] = useState(false);
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    if (next.length < 8) { setError('Neues Passwort muss mindestens 8 Zeichen haben.'); return; }
+    if (next !== confirm) { setError('Passwörter stimmen nicht überein.'); return; }
+    setLoading(true);
+    setError('');
+    setSuccess(false);
+    try {
+      await changePassword(current, next);
+      setSuccess(true);
+      setCurrent(''); setNext(''); setConfirm('');
+    } catch (err) {
+      setError(err.response?.data?.error || 'Fehler beim Ändern.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="card p-5">
+      <h2 className="font-semibold text-white mb-4 flex items-center gap-2">
+        <Lock size={16} className="text-brand-400" />
+        Passwort ändern
+      </h2>
+      <form onSubmit={handleSubmit} className="space-y-3">
+        <div>
+          <label className="label">Aktuelles Passwort</label>
+          <div className="relative">
+            <input
+              type={showPw ? 'text' : 'password'}
+              value={current}
+              onChange={e => setCurrent(e.target.value)}
+              className="input pr-10"
+              autoComplete="current-password"
+            />
+            <button
+              type="button"
+              onClick={() => setShowPw(v => !v)}
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-200 transition-colors"
+              tabIndex={-1}
+            >
+              {showPw ? <EyeOff size={16} /> : <Eye size={16} />}
+            </button>
+          </div>
+        </div>
+        <div>
+          <label className="label">Neues Passwort</label>
+          <input
+            type={showPw ? 'text' : 'password'}
+            value={next}
+            onChange={e => setNext(e.target.value)}
+            className="input"
+            placeholder="Mindestens 8 Zeichen"
+            autoComplete="new-password"
+          />
+        </div>
+        <div>
+          <label className="label">Neues Passwort bestätigen</label>
+          <input
+            type={showPw ? 'text' : 'password'}
+            value={confirm}
+            onChange={e => setConfirm(e.target.value)}
+            className="input"
+            autoComplete="new-password"
+          />
+        </div>
+
+        {error && <p className="text-red-400 text-sm">{error}</p>}
+        {success && (
+          <p className="text-green-400 text-sm flex items-center gap-1.5">
+            <Check size={14} /> Passwort erfolgreich geändert.
+          </p>
+        )}
+
+        <button
+          type="submit"
+          disabled={loading || !current || !next || !confirm}
+          className="btn-primary flex items-center gap-2"
+        >
+          {loading
+            ? <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+            : <Save size={15} />}
+          Passwort ändern
+        </button>
+      </form>
+    </div>
+  );
+}
+
 // ── Main page ─────────────────────────────────────────────────────────────
 
 export default function Settings() {
@@ -28,7 +257,6 @@ export default function Settings() {
   // Backend version
   const [backendVersion, setBackendVersion] = useState(null);
 
-  // Sync form fields when user object loads (e.g. after page refresh)
   useEffect(() => {
     if (user) {
       setName(user.name || '');
@@ -218,233 +446,6 @@ export default function Settings() {
           />
         </div>
       </div>
-    </div>
-  );
-}
-
-function VersionBadge({ icon, label, version }) {
-  return (
-    <div className="bg-slate-900 rounded-xl px-3 py-2.5">
-      <p className="text-xs text-slate-500 flex items-center gap-1.5 mb-1">
-        {icon}
-        {label}
-      </p>
-      <p
-        className="text-xs font-mono text-slate-300 truncate"
-        title={version ?? '…'}
-      >
-        {version ?? '…'}
-      </p>
-    </div>
-  );
-}
-
-// ── Export / Import ────────────────────────────────────────────────────────
-
-function ExportImport() {
-  const [importing, setImporting] = useState(false);
-  const [exporting, setExporting] = useState(false);
-  const [result, setResult] = useState(null);
-  const [error, setError] = useState('');
-
-  const handleExport = async () => {
-    setExporting(true);
-    setError('');
-    try {
-      const res = await api.get('/data/export', { responseType: 'blob' });
-      const url = URL.createObjectURL(new Blob([res.data], { type: 'application/zip' }));
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `habit-tracker-export-${new Date().toISOString().slice(0, 10)}.zip`;
-      a.click();
-      URL.revokeObjectURL(url);
-    } catch {
-      setError('Export fehlgeschlagen.');
-    } finally {
-      setExporting(false);
-    }
-  };
-
-  const handleImport = async (e) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    e.target.value = '';
-    setImporting(true);
-    setResult(null);
-    setError('');
-    try {
-      const form = new FormData();
-      form.append('file', file);
-      const res = await api.post('/data/import', form);
-      setResult(res.data);
-    } catch (err) {
-      setError(err.response?.data?.error || 'Import fehlgeschlagen.');
-    } finally {
-      setImporting(false);
-    }
-  };
-
-  return (
-    <div className="card p-5">
-      <h2 className="font-semibold text-white mb-1 flex items-center gap-2">
-        <Download size={16} className="text-brand-400" />
-        Daten exportieren & importieren
-      </h2>
-      <p className="text-xs text-slate-500 mb-4">
-        Exportiert Gewicht, Gewohnheiten und Aktivitäten als ZIP mit CSV-Dateien.
-      </p>
-
-      <div className="flex flex-wrap gap-3">
-        <button
-          onClick={handleExport}
-          disabled={exporting}
-          className="btn-primary flex items-center gap-2"
-        >
-          {exporting
-            ? <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-            : <Download size={15} />}
-          Exportieren
-        </button>
-
-        <label className={`btn-secondary flex items-center gap-2 cursor-pointer ${importing ? 'opacity-50 pointer-events-none' : ''}`}>
-          {importing
-            ? <div className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin" />
-            : <Upload size={15} />}
-          Importieren
-          <input type="file" accept=".zip" className="hidden" onChange={handleImport} />
-        </label>
-      </div>
-
-      {error && (
-        <div className="mt-3 flex items-center gap-2 text-red-400 text-sm bg-red-900/20 border border-red-900/50 rounded-xl px-3 py-2">
-          <AlertCircle size={14} />
-          {error}
-        </div>
-      )}
-
-      {result && (
-        <div className="mt-3 bg-green-900/20 border border-green-700/50 rounded-xl px-4 py-3 space-y-1">
-          <p className="text-green-400 text-sm font-medium">Import abgeschlossen!</p>
-          <ul className="text-slate-400 text-xs space-y-0.5">
-            <li>• {result.weight} Gewichtseinträge</li>
-            <li>• {result.habits} Gewohnheitseinträge</li>
-            <li>• {result.activities} Aktivitäten</li>
-            <li>• {result.plans} Planereinträge</li>
-            <li>• {result.goals} Ziele</li>
-            {result.settings && <li>• Einstellungen wiederhergestellt</li>}
-          </ul>
-          {result.errors?.length > 0 && (
-            <details className="mt-2">
-              <summary className="text-yellow-500 text-xs cursor-pointer">
-                {result.errors.length} Fehler
-              </summary>
-              <ul className="mt-1 text-xs text-slate-500 space-y-0.5">
-                {result.errors.map((e, i) => <li key={i}>• {e}</li>)}
-              </ul>
-            </details>
-          )}
-        </div>
-      )}
-    </div>
-  );
-}
-
-// ── Passwort ändern ────────────────────────────────────────────────────────
-
-function UserPasswordForm({ changePassword }) {
-  const [current, setCurrent] = useState('');
-  const [next, setNext] = useState('');
-  const [confirm, setConfirm] = useState('');
-  const [showPw, setShowPw] = useState(false);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
-  const [success, setSuccess] = useState(false);
-
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    if (next.length < 8) { setError('Neues Passwort muss mindestens 8 Zeichen haben.'); return; }
-    if (next !== confirm) { setError('Passwörter stimmen nicht überein.'); return; }
-    setLoading(true);
-    setError('');
-    setSuccess(false);
-    try {
-      await changePassword(current, next);
-      setSuccess(true);
-      setCurrent(''); setNext(''); setConfirm('');
-    } catch (err) {
-      setError(err.response?.data?.error || 'Fehler beim Ändern.');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  return (
-    <div className="card p-5">
-      <h2 className="font-semibold text-white mb-4 flex items-center gap-2">
-        <Lock size={16} className="text-brand-400" />
-        Passwort ändern
-      </h2>
-      <form onSubmit={handleSubmit} className="space-y-3">
-        <div>
-          <label className="label">Aktuelles Passwort</label>
-          <div className="relative">
-            <input
-              type={showPw ? 'text' : 'password'}
-              value={current}
-              onChange={e => setCurrent(e.target.value)}
-              className="input pr-10"
-              autoComplete="current-password"
-            />
-            <button
-              type="button"
-              onClick={() => setShowPw(v => !v)}
-              className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-200 transition-colors"
-              tabIndex={-1}
-            >
-              {showPw ? <EyeOff size={16} /> : <Eye size={16} />}
-            </button>
-          </div>
-        </div>
-        <div>
-          <label className="label">Neues Passwort</label>
-          <input
-            type={showPw ? 'text' : 'password'}
-            value={next}
-            onChange={e => setNext(e.target.value)}
-            className="input"
-            placeholder="Mindestens 8 Zeichen"
-            autoComplete="new-password"
-          />
-        </div>
-        <div>
-          <label className="label">Neues Passwort bestätigen</label>
-          <input
-            type={showPw ? 'text' : 'password'}
-            value={confirm}
-            onChange={e => setConfirm(e.target.value)}
-            className="input"
-            autoComplete="new-password"
-          />
-        </div>
-
-        {error && <p className="text-red-400 text-sm">{error}</p>}
-        {success && (
-          <p className="text-green-400 text-sm flex items-center gap-1.5">
-            <Check size={14} /> Passwort erfolgreich geändert.
-          </p>
-        )}
-
-        <button
-          type="submit"
-          disabled={loading || !current || !next || !confirm}
-          className="btn-primary flex items-center gap-2"
-        >
-          {loading
-            ? <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-            : <Save size={15} />}
-          Passwort ändern
-        </button>
-      </form>
     </div>
   );
 }
