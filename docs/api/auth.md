@@ -1,15 +1,74 @@
 # Auth — `/api/auth`
 
-All endpoints except the public admin setup routes require a valid `Authorization: Bearer` header.  
-See [README.md](README.md) for the token format.
+All endpoints except `POST /login` and `POST /logout` require the session cookie to be present.  
+The cookie is set automatically by `POST /login` and cleared by `POST /logout`.
+
+---
+
+## `POST /api/auth/login`
+
+Verifies credentials once and issues a **30-day httpOnly JWT cookie** (`auth_token`).
+
+**Auth required:** no
+
+**Request body**
+```json
+{
+  "identifier": "jannis",
+  "password": "mysecretpassword"
+}
+```
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `identifier` | string | yes | Username or UUID (UUID only works in legacy migration mode) |
+| `password` | string | conditional | Required if the user has a password set |
+
+**Identifier resolution order:**
+1. Lookup by `username` (standard)
+2. Lookup by `uuid` (legacy — only allowed if the user has no `username` yet)
+
+**Cookie set on success**
+
+| Attribute | Value |
+|---|---|
+| Name | `auth_token` |
+| `HttpOnly` | ✓ — inaccessible to JavaScript |
+| `Secure` | ✓ in production, ✗ in development |
+| `SameSite` | `Lax` |
+| `MaxAge` | 30 days |
+
+**Response `200`** — user object (same shape as `GET /me`)
+
+**Error responses**
+
+| HTTP | `code` | Condition |
+|---|---|---|
+| `401` | `UUID_BLOCKED` | Login via UUID after username was already set |
+| `401` | `PASSWORD_REQUIRED` | User has a password but none was provided |
+| `401` | — | Wrong password |
+| `401` | — | Unknown identifier |
+
+---
+
+## `POST /api/auth/logout`
+
+Clears the `auth_token` cookie.
+
+**Auth required:** no
+
+**Response `200`**
+```json
+{ "ok": true }
+```
 
 ---
 
 ## `GET /api/auth/me`
 
-Returns the currently authenticated user.
+Returns the currently authenticated user. Used to restore a session on page load.
 
-**Auth required:** yes
+**Auth required:** yes (cookie)
 
 **Response `200`**
 ```json
@@ -25,10 +84,10 @@ Returns the currently authenticated user.
 }
 ```
 
-| Field | Type | Description |
-|---|---|---|
-| `hasPassword` | boolean | Derived — true if user has a passwordHash or adminSecretHash |
-| `mustChangePassword` | boolean | Admin-set flag; frontend shows forced password change modal when true |
+| Field | Description |
+|---|---|
+| `hasPassword` | Derived — `true` if user has a `passwordHash` or `adminSecretHash` |
+| `mustChangePassword` | `true` when admin created the account with a temporary password |
 
 ---
 
@@ -46,18 +105,13 @@ Updates the current user's display name and weight unit preference.
 }
 ```
 
-| Field | Type | Required | Description |
-|---|---|---|---|
-| `name` | string | no | Display name |
-| `weightUnit` | `"kg"` \| `"lbs"` | no | Preferred weight unit |
-
-**Response `200`** — updated user object (same shape as `GET /me`)
+**Response `200`** — updated user object
 
 ---
 
 ## `PUT /api/auth/me/username`
 
-Sets or changes the username. Also sets the password during **first-time setup** (when the user has no credentials yet).
+Sets or changes the username. Password is required only during **first-time setup** (when the user has no credentials yet).
 
 **Auth required:** yes
 
@@ -69,21 +123,15 @@ Sets or changes the username. Also sets the password during **first-time setup**
 }
 ```
 
-| Field | Type | Required | Description |
-|---|---|---|---|
-| `username` | string | yes | 3–30 chars, lowercase `a-z 0-9 _ . -` |
-| `password` | string | conditional | Required only if user has no credentials yet (first-time setup). Min 8 chars. |
-
-**Validation errors**
-
-| HTTP | Condition |
+| Field | Constraint |
 |---|---|
-| `400` | Username too short/long or invalid characters |
-| `409` | Username already taken by another user |
+| `username` | 3–30 chars, lowercase `a-z 0-9 _ . -` |
+| `password` | Required only if user has no credentials yet. Min 8 chars. |
 
-**Response `200`** — updated user object
+**Response `200`** — updated user object  
+**Error `409`** — username already taken
 
-**Side effect:** The frontend must update `auth_token` in localStorage to `newUsername:password` after a successful username change.
+> The JWT cookie stays valid after a username change — the token is tied to `userId`, not the identifier.
 
 ---
 
@@ -101,26 +149,18 @@ Changes the current user's password. Requires the correct current password.
 }
 ```
 
-| Field | Type | Required |
-|---|---|---|
-| `currentPassword` | string | yes |
-| `newPassword` | string | yes, min 8 chars |
-
-**Response `200`**
-```json
-{ "ok": true }
-```
-
+**Response `200`** `{ "ok": true }`  
 **Error `401`** — current password is wrong
+
+> The JWT cookie stays valid after a password change.
 
 ---
 
 ## `PUT /api/auth/me/password/forced`
 
-Changes the password without requiring the current password. Only allowed when `mustChangePassword` is `true` on the user record (set by admin).
+Changes the password without providing the current password. Only allowed when `mustChangePassword === true`.
 
-**Auth required:** yes  
-**Condition:** `req.user.mustChangePassword === true`
+**Auth required:** yes
 
 **Request body**
 ```json
@@ -129,9 +169,5 @@ Changes the password without requiring the current password. Only allowed when `
 }
 ```
 
-**Response `200`**
-```json
-{ "ok": true }
-```
-
-**Error `400`** — no forced password change is pending for this user
+**Response `200`** `{ "ok": true }`  
+**Error `400`** — no forced password change is pending
