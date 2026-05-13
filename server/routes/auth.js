@@ -1,9 +1,83 @@
 const express = require('express');
 const router = express.Router();
+const jwt = require('jsonwebtoken');
+const JWT_SECRET = require('../utils/jwtSecret');
 const bcrypt = require('bcryptjs');
 const auth = require('../middleware/auth');
 const User = require('../models/User');
 const pw = require('../utils/password');
+
+const COOKIE_OPTIONS = {
+  httpOnly: true,
+  secure: process.env.NODE_ENV === 'production',
+  sameSite: 'lax',
+  maxAge: 30 * 24 * 60 * 60 * 1000, // 30 days
+};
+
+// ── Login ─────────────────────────────────────────────────────────────────────
+// Verifies credentials once, then issues a 30-day httpOnly JWT cookie.
+// Preserves all legacy auth edge cases from the old per-request flow.
+
+router.post('/login', async (req, res) => {
+  try {
+    const { identifier, password } = req.body;
+    if (!identifier) return res.status(400).json({ error: 'Benutzername erforderlich.' });
+
+    const user = await User.findOne({
+      $or: [{ uuid: identifier }, { username: identifier }]
+    }).select('+passwordHash +adminSecretHash');
+
+    if (!user) return res.status(401).json({ error: 'Unbekannter Benutzername' });
+
+    const loginViaUuid = user.uuid === identifier;
+
+    // UUID login is permanently blocked once username is set
+    if (loginViaUuid && user.username) {
+      return res.status(401).json({
+        error: 'Bitte melde dich mit deinem Benutzernamen an.',
+        code: 'UUID_BLOCKED',
+      });
+    }
+
+    if (user.passwordHash) {
+      if (!password) {
+        return res.status(401).json({ error: 'Passwort erforderlich', code: 'PASSWORD_REQUIRED' });
+      }
+      const valid = await pw.verify(password, user.passwordHash);
+      if (!valid) return res.status(401).json({ error: 'Falsches Passwort' });
+    } else if (user.adminSecretHash) {
+      // Backward compat: admin with old bcrypt secret (no pepper)
+      if (!password) {
+        return res.status(401).json({ error: 'Passwort erforderlich', code: 'PASSWORD_REQUIRED' });
+      }
+      const valid = await bcrypt.compare(password, user.adminSecretHash);
+      if (!valid) return res.status(401).json({ error: 'Falsches Passwort' });
+    }
+    // else: UUID-only migration mode — no credentials set yet, allow through
+
+    const token = jwt.sign({ userId: user._id }, JWT_SECRET, { expiresIn: '30d' });
+    res.cookie('auth_token', token, COOKIE_OPTIONS);
+
+    const data = user.toJSON();
+    data.hasPassword = !!(user.passwordHash || user.adminSecretHash);
+    res.json(data);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ── Logout ────────────────────────────────────────────────────────────────────
+
+router.post('/logout', (_req, res) => {
+  res.clearCookie('auth_token', {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === 'production',
+    sameSite: 'lax',
+  });
+  res.json({ ok: true });
+});
+
+// ── Protected profile routes ──────────────────────────────────────────────────
 
 router.get('/me', auth, (req, res) => {
   const data = req.user.toJSON();
@@ -73,8 +147,6 @@ router.put('/me/username', auth, async (req, res) => {
 });
 
 // Change password for all users (admin and regular).
-// Supports backward compat: admins with adminSecretHash can verify against it,
-// then migrate to passwordHash.
 router.put('/me/password', auth, async (req, res) => {
   try {
     const { currentPassword, newPassword } = req.body;
@@ -93,9 +165,7 @@ router.put('/me/password', auth, async (req, res) => {
     const valid = user.passwordHash
       ? await pw.verify(currentPassword, user.passwordHash)
       : await bcrypt.compare(currentPassword, user.adminSecretHash);
-    if (!valid) {
-      return res.status(401).json({ error: 'Aktuelles Passwort ist falsch.' });
-    }
+    if (!valid) return res.status(401).json({ error: 'Aktuelles Passwort ist falsch.' });
 
     user.passwordHash = await pw.hash(newPassword);
     user.mustChangePassword = false;
@@ -107,7 +177,6 @@ router.put('/me/password', auth, async (req, res) => {
 });
 
 // Forced password change: allowed only when mustChangePassword is true.
-// Does not require the current password (user is already authenticated).
 router.put('/me/password/forced', auth, async (req, res) => {
   try {
     if (!req.user.mustChangePassword) {
