@@ -11,7 +11,7 @@ import {
 
 function VersionBadge({ icon, label, version }) {
   return (
-    <div className="bg-slate-900 rounded-xl px-3 py-2.5">
+    <div className="bg-white/[.05] border border-white/[.08] rounded-xl px-3 py-2.5">
       <p className="text-xs text-slate-500 flex items-center gap-1.5 mb-1">
         {icon}
         {label}

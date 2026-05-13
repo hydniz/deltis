@@ -521,24 +521,24 @@ function CreateGoalModal({ activityTypes, habits, onSave, onClose }) {
 
   return (
     <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-end sm:items-center justify-center z-50">
-      <div className="bg-[#1e1e30]/95 backdrop-blur-2xl border border-white/[.1] w-full max-w-lg rounded-t-2xl sm:rounded-2xl flex flex-col" style={{ maxHeight: '92dvh' }}>
+      <div className="bg-[#1e1a14]/95 backdrop-blur-2xl border border-white/[.1] w-full max-w-lg rounded-t-2xl sm:rounded-2xl flex flex-col" style={{ maxHeight: '92dvh' }}>
 
         {/* Drag handle – mobile only */}
-        <div className="w-10 h-1 bg-slate-700 rounded-full mx-auto mt-3 sm:hidden flex-shrink-0" />
+        <div className="w-10 h-1 bg-white/15 rounded-full mx-auto mt-3 sm:hidden flex-shrink-0" />
 
         {/* Header */}
-        <div className="flex items-center justify-between px-5 pt-4 pb-3 border-b border-slate-800 flex-shrink-0">
+        <div className="flex items-center justify-between px-5 pt-4 pb-3 border-b border-white/[.08] flex-shrink-0">
           <div>
             <h2 className="text-base font-semibold text-white">Neues Ziel</h2>
-            <p className="text-xs text-slate-500 mt-0.5">{stepTitles[currentStep - 1]}</p>
+            <p className="text-xs text-white/35 mt-0.5">{stepTitles[currentStep - 1]}</p>
           </div>
           <div className="flex items-center gap-3">
             <div className="flex items-center gap-1.5">
               {Array.from({ length: totalSteps }).map((_, i) => (
-                <div key={i} className={`rounded-full transition-all duration-200 ${i + 1 === currentStep ? 'w-5 h-1.5 bg-brand-500' : i + 1 < currentStep ? 'w-1.5 h-1.5 bg-brand-600' : 'w-1.5 h-1.5 bg-slate-700'}`} />
+                <div key={i} className={`rounded-full transition-all duration-200 ${i + 1 === currentStep ? 'w-5 h-1.5 bg-brand-500' : i + 1 < currentStep ? 'w-1.5 h-1.5 bg-brand-600' : 'w-1.5 h-1.5 bg-white/15'}`} />
               ))}
             </div>
-            <button type="button" onClick={onClose} className="text-slate-400 hover:text-slate-200 p-1 -mr-1">
+            <button type="button" onClick={onClose} className="text-white/40 hover:text-white/80 p-1 -mr-1">
               <X size={20} />
             </button>
           </div>
@@ -880,7 +880,7 @@ function CreateGoalModal({ activityTypes, habits, onSave, onClose }) {
         </div>
 
         {/* Footer */}
-        <div className="flex gap-3 px-5 py-4 border-t border-slate-800 flex-shrink-0">
+        <div className="flex gap-3 px-5 py-4 border-t border-white/[.08] flex-shrink-0">
           {currentStep > 1
             ? <button type="button" onClick={() => setCurrentStep(s => s - 1)} className="btn-secondary flex-1">Zurück</button>
             : <button type="button" onClick={onClose} className="btn-secondary flex-1">Abbrechen</button>
@@ -1056,20 +1056,20 @@ function EditGoalModal({ goal, onSave, onClose }) {
 
   return (
     <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-end sm:items-center justify-center z-50">
-      <form onSubmit={handleSubmit} className="bg-[#1e1e30]/95 backdrop-blur-2xl border border-white/[.1] w-full max-w-lg rounded-t-2xl sm:rounded-2xl flex flex-col" style={{ maxHeight: '92dvh' }}>
-        <div className="w-10 h-1 bg-slate-700 rounded-full mx-auto mt-3 sm:hidden flex-shrink-0" />
+      <form onSubmit={handleSubmit} className="bg-[#1e1a14]/95 backdrop-blur-2xl border border-white/[.1] w-full max-w-lg rounded-t-2xl sm:rounded-2xl flex flex-col" style={{ maxHeight: '92dvh' }}>
+        <div className="w-10 h-1 bg-white/15 rounded-full mx-auto mt-3 sm:hidden flex-shrink-0" />
 
         {/* Header */}
-        <div className="flex items-center justify-between px-5 pt-4 pb-3 border-b border-slate-800 flex-shrink-0">
+        <div className="flex items-center justify-between px-5 pt-4 pb-3 border-b border-white/[.08] flex-shrink-0">
           <h2 className="text-base font-semibold text-white">Ziel bearbeiten</h2>
-          <button type="button" onClick={onClose} className="text-slate-400 hover:text-slate-200 p-1 -mr-1"><X size={20} /></button>
+          <button type="button" onClick={onClose} className="text-white/40 hover:text-white/80 p-1 -mr-1"><X size={20} /></button>
         </div>
 
         {/* Tabs */}
-        <div className="flex border-b border-slate-800 flex-shrink-0">
+        <div className="flex border-b border-white/[.08] flex-shrink-0">
           {tabs.map(t => (
             <button key={t.id} type="button" onClick={() => setEditTab(t.id)}
-              className={`flex-1 py-2.5 text-xs font-semibold transition-colors ${editTab === t.id ? 'text-brand-400 border-b-2 border-brand-500 -mb-px' : 'text-zinc-500 hover:text-zinc-300'}`}
+              className={`flex-1 py-2.5 text-xs font-semibold transition-colors ${editTab === t.id ? 'text-brand-400 border-b-2 border-brand-500 -mb-px' : 'text-white/30 hover:text-white/70'}`}
             >{t.label}</button>
           ))}
         </div>
@@ -1368,7 +1368,7 @@ function EditGoalModal({ goal, onSave, onClose }) {
         </div>
 
         {/* Footer */}
-        <div className="flex gap-3 px-5 py-4 border-t border-slate-800 flex-shrink-0">
+        <div className="flex gap-3 px-5 py-4 border-t border-white/[.08] flex-shrink-0">
           <button type="button" onClick={onClose} className="btn-secondary flex-1">Abbrechen</button>
           <button type="submit" disabled={saving || !form.name} className="btn-primary flex-1">
             {saving ? 'Speichern…' : 'Speichern'}
