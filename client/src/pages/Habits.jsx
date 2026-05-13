@@ -33,7 +33,7 @@ function CustomHabitRow({ def, selected, onToggle, onDelete, onUpdate }) {
   };
 
   return (
-    <div className="rounded-xl hover:bg-slate-800 transition-colors">
+    <div className="rounded-xl hover:bg-white/[.06] transition-colors">
       <div className="flex items-center gap-3 p-3">
         <label className="flex items-center gap-3 flex-1 cursor-pointer">
           <div className={`w-5 h-5 rounded-md border-2 flex items-center justify-center flex-shrink-0 transition-colors ${
@@ -168,7 +168,7 @@ function ManageHabitsModal({ definitions, onSave, onClose }) {
   const custom = localDefs.filter(d => !d.isPredefined);
 
   return (
-    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-end sm:items-center justify-center z-50 p-4">
+    <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-end sm:items-center justify-center z-50 p-4">
       <div className="card w-full max-w-md flex flex-col max-h-[90vh]">
         {/* Header */}
         <div className="flex items-center justify-between p-5 border-b border-slate-800">
@@ -184,7 +184,7 @@ function ManageHabitsModal({ definitions, onSave, onClose }) {
             <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">Voreingestellt</p>
             <div className="space-y-1.5">
               {predefined.map(d => (
-                <label key={d._id} className="flex items-center gap-3 p-3 rounded-xl cursor-pointer hover:bg-slate-800 focus-within:ring-1 focus-within:ring-brand-500 transition-colors">
+                <label key={d._id} className="flex items-center gap-3 p-3 rounded-xl cursor-pointer hover:bg-white/[.06] focus-within:ring-1 focus-within:ring-brand-400/50 transition-colors">
                   <div className={`w-5 h-5 rounded-md border-2 flex items-center justify-center flex-shrink-0 transition-colors ${
                     selected.has(d._id)
                       ? 'bg-brand-600 border-brand-600'
@@ -228,7 +228,7 @@ function ManageHabitsModal({ definitions, onSave, onClose }) {
 
           {/* Neue Gewohnheit hinzufügen */}
           {showAddForm ? (
-            <form onSubmit={handleAddHabit} className="bg-slate-800/80 border border-brand-700/40 rounded-xl p-4 space-y-3">
+            <form onSubmit={handleAddHabit} className="bg-white/[.06] border border-white/[.1] rounded-2xl p-4 space-y-3">
               <p className="text-sm font-semibold text-white">Neue Gewohnheit</p>
               <div>
                 <label className="label text-xs">Name</label>
@@ -429,7 +429,7 @@ function HabitCard({ habit, todayLog, onLog }) {
       </div>
 
       {showSettings && (
-        <div className="mb-4 p-3 bg-slate-800/60 rounded-xl border border-slate-700 space-y-2">
+        <div className="mb-4 p-3 bg-white/[.06] rounded-2xl border border-white/[.1] space-y-2">
           <p className="text-xs font-semibold text-slate-400">Fehlende Tage in Statistik</p>
           <select
             className="input text-sm w-full"
@@ -472,7 +472,7 @@ function HabitCard({ habit, todayLog, onLog }) {
           onChange={e => handleDateChange(e.target.value)}
           className={`text-sm rounded-lg px-2 py-2 border transition-colors bg-slate-800 ${
             isToday
-              ? 'border-slate-700 text-slate-500 w-auto'
+              ? 'border-white/[.15] text-white/35 w-auto'
               : 'border-brand-600 text-slate-200 flex-1'
           }`}
         />
@@ -489,7 +489,7 @@ function HabitCard({ habit, todayLog, onLog }) {
 
       {loadingLog ? (
         <div className="flex items-center justify-center py-3">
-          <div className="w-4 h-4 border-2 border-brand-500 border-t-transparent rounded-full animate-spin" />
+          <div className="w-4 h-4 border-2 border-zinc-700 border-t-brand-500 rounded-full animate-spin" />
         </div>
       ) : (
         <form onSubmit={e => { e.preventDefault(); handleLog(); }} className="flex gap-2">
@@ -528,11 +528,11 @@ function HabitCard({ habit, todayLog, onLog }) {
         <div className="mt-4">
           <ResponsiveContainer width="100%" height={120}>
             <LineChart data={chartData}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
-              <XAxis dataKey="date" tick={{ fill: '#64748b', fontSize: 10 }} tickLine={false} />
-              <YAxis tick={{ fill: '#64748b', fontSize: 10 }} tickLine={false} axisLine={false} width={30} />
+              <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.06)" />
+              <XAxis dataKey="date" tick={{ fill: 'rgba(255,255,255,0.30)', fontSize: 10 }} tickLine={false} />
+              <YAxis tick={{ fill: 'rgba(255,255,255,0.30)', fontSize: 10 }} tickLine={false} axisLine={false} width={30} />
               <Tooltip
-                contentStyle={{ background: '#1e293b', border: '1px solid #334155', borderRadius: 8, color: '#f1f5f9' }}
+                contentStyle={{ background: 'rgba(30,28,50,0.95)', border: '1px solid rgba(255,255,255,0.12)', borderRadius: 12, color: '#fff', backdropFilter: 'blur(8px)' }}
                 formatter={(v, _name, props) => [
                   `${v} ${habit.unitSymbol}${props.payload?.isDefault ? ' (Standard)' : ''}`,
                   habit.name
@@ -541,11 +541,11 @@ function HabitCard({ habit, todayLog, onLog }) {
               <Line
                 type="monotone"
                 dataKey="value"
-                stroke="#8b5cf6"
+                stroke="#c4623a"
                 strokeWidth={2}
                 dot={(props) => {
                   const { cx, cy, payload } = props;
-                  return <circle key={`dot-${cx}-${cy}`} cx={cx} cy={cy} r={3} fill={payload.isDefault ? '#475569' : '#8b5cf6'} />;
+                  return <circle key={`dot-${cx}-${cy}`} cx={cx} cy={cy} r={3} fill={payload.isDefault ? '#7a6050' : '#c4623a'} />;
                 }}
                 connectNulls
               />
@@ -599,7 +599,7 @@ export default function Habits() {
 
   if (loading) return (
     <div className="flex items-center justify-center py-20">
-      <div className="w-8 h-8 border-2 border-brand-500 border-t-transparent rounded-full animate-spin" />
+      <div className="w-8 h-8 border-2 border-zinc-700 border-t-brand-500 rounded-full animate-spin" />
     </div>
   );
 

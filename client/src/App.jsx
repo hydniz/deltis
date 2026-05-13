@@ -19,8 +19,8 @@ import { User, AlertCircle, Lock, Eye, EyeOff, KeyRound } from 'lucide-react';
 
 function Spinner() {
   return (
-    <div className="min-h-screen bg-slate-950 flex items-center justify-center">
-      <div className="w-8 h-8 border-2 border-brand-500 border-t-transparent rounded-full animate-spin" />
+    <div className="min-h-screen flex items-center justify-center">
+      <div className="w-6 h-6 border-2 border-white/20 border-t-brand-400 rounded-full animate-spin" />
     </div>
   );
 }
@@ -68,19 +68,14 @@ function UsernameSetupModal() {
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-slate-950/90 backdrop-blur-sm flex items-center justify-center p-4">
-      <div className="card p-6 w-full max-w-sm space-y-4">
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 bg-brand-600 rounded-xl flex items-center justify-center flex-shrink-0">
-            <User size={18} className="text-white" />
-          </div>
-          <div>
-            <h2 className="text-white font-semibold text-lg">Zugangsdaten einrichten</h2>
-            <p className="text-slate-400 text-sm">Einmalige Einrichtung erforderlich</p>
-          </div>
+    <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-md flex items-center justify-center p-4">
+      <div className="card p-6 w-full max-w-sm space-y-5">
+        <div>
+          <h2 className="text-white font-semibold text-lg">Zugangsdaten einrichten</h2>
+          <p className="text-white/45 text-sm mt-0.5">Einmalige Einrichtung erforderlich</p>
         </div>
 
-        <p className="text-slate-400 text-sm">
+        <p className="text-white/45 text-sm">
           Wähle einen Benutzernamen{needsPassword ? ' und ein Passwort' : ''}.
           {' '}Danach ist deine UUID dauerhaft gesperrt.
         </p>
@@ -104,10 +99,7 @@ function UsernameSetupModal() {
           {needsPassword && (
             <>
               <div>
-                <label className="label">
-                  <Lock size={13} className="inline mr-1" />
-                  Passwort
-                </label>
+                <label className="label">Passwort</label>
                 <div className="relative">
                   <input
                     type={showPassword ? 'text' : 'password'}
@@ -121,10 +113,10 @@ function UsernameSetupModal() {
                   <button
                     type="button"
                     onClick={() => setShowPassword(v => !v)}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-200 transition-colors"
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-white/30 hover:text-white/70 transition-colors"
                     tabIndex={-1}
                   >
-                    {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                    {showPassword ? <EyeOff size={15} /> : <Eye size={15} />}
                   </button>
                 </div>
               </div>
@@ -143,8 +135,8 @@ function UsernameSetupModal() {
           )}
 
           {error && (
-            <div className="flex items-center gap-2 text-red-400 text-sm bg-red-900/20 border border-red-900/50 rounded-xl px-3 py-2">
-              <AlertCircle size={14} />
+            <div className="flex items-center gap-2 text-red-300 text-sm bg-red-500/10 border border-red-400/20 rounded-xl px-3 py-2.5">
+              <AlertCircle size={14} className="flex-shrink-0" />
               {error}
             </div>
           )}
@@ -158,7 +150,7 @@ function UsernameSetupModal() {
             }
             className="btn-primary w-full py-2.5 flex items-center justify-center gap-2"
           >
-            {loading && <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />}
+            {loading && <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />}
             Zugangsdaten speichern
           </button>
         </form>
@@ -193,28 +185,20 @@ function MustChangePasswordModal() {
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-slate-950/90 backdrop-blur-sm flex items-center justify-center p-4">
-      <div className="card p-6 w-full max-w-sm space-y-4">
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 bg-amber-600 rounded-xl flex items-center justify-center flex-shrink-0">
-            <KeyRound size={18} className="text-white" />
-          </div>
-          <div>
-            <h2 className="text-white font-semibold text-lg">Passwort ändern</h2>
-            <p className="text-slate-400 text-sm">Du musst dein Passwort jetzt ändern.</p>
-          </div>
+    <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-md flex items-center justify-center p-4">
+      <div className="card p-6 w-full max-w-sm space-y-5">
+        <div>
+          <h2 className="text-white font-semibold text-lg">Passwort ändern</h2>
+          <p className="text-white/45 text-sm mt-0.5">Bitte wähle jetzt ein neues Passwort.</p>
         </div>
 
-        <p className="text-slate-400 text-sm">
+        <p className="text-white/45 text-sm">
           Wähle ein neues persönliches Passwort (mindestens 8 Zeichen).
         </p>
 
         <form onSubmit={handleSubmit} className="space-y-3">
           <div>
-            <label className="label">
-              <Lock size={13} className="inline mr-1" />
-              Neues Passwort
-            </label>
+            <label className="label">Neues Passwort</label>
             <div className="relative">
               <input
                 type={showPw ? 'text' : 'password'}
@@ -228,10 +212,10 @@ function MustChangePasswordModal() {
               <button
                 type="button"
                 onClick={() => setShowPw(v => !v)}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-200 transition-colors"
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-white/30 hover:text-white/70 transition-colors"
                 tabIndex={-1}
               >
-                {showPw ? <EyeOff size={16} /> : <Eye size={16} />}
+                {showPw ? <EyeOff size={15} /> : <Eye size={15} />}
               </button>
             </div>
           </div>
@@ -248,8 +232,8 @@ function MustChangePasswordModal() {
           </div>
 
           {error && (
-            <div className="flex items-center gap-2 text-red-400 text-sm bg-red-900/20 border border-red-900/50 rounded-xl px-3 py-2">
-              <AlertCircle size={14} />
+            <div className="flex items-center gap-2 text-red-300 text-sm bg-red-500/10 border border-red-400/20 rounded-xl px-3 py-2.5">
+              <AlertCircle size={14} className="flex-shrink-0" />
               {error}
             </div>
           )}
@@ -259,7 +243,7 @@ function MustChangePasswordModal() {
             disabled={loading || password.length < 8 || password !== confirm}
             className="btn-primary w-full py-2.5 flex items-center justify-center gap-2"
           >
-            {loading && <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />}
+            {loading && <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />}
             Passwort speichern
           </button>
         </form>
