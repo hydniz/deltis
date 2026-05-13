@@ -51,8 +51,8 @@ sudo systemctl start mongod && sudo systemctl enable mongod
 | `MONGODB_URI` | **yes** | — | MongoDB connection string |
 | `PORT` | no | `3001` | HTTP port the server listens on |
 | `NODE_ENV` | **yes** | — | `development` or `production` |
-| `JWT_SECRET` | **yes*** | — | Secret for signing JWT session tokens |
-| `JWT_SECRET_FILE` | **yes*** | — | Alternative: path to a file containing the secret |
+| `JWT_SECRET_FILE` | **yes*** | — | Path to a file containing the JWT secret (takes precedence) |
+| `JWT_SECRET` | **yes*** | — | JWT secret value directly in env (used when `JWT_SECRET_FILE` is not set) |
 | `PEPPER_FILE` | recommended | — | Path to a file containing the password pepper |
 | `PASSWORD_PEPPER` | recommended | — | Alternative: pepper value directly in env |
 | `VALID_UUIDS` | no | — | Legacy migration only (see note below) |
