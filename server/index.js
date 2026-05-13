@@ -1,8 +1,11 @@
 require('dotenv').config();
+require('./utils/jwtSecret'); // validates JWT_SECRET / JWT_SECRET_FILE at startup
+
 const express = require('express');
 const mongoose = require('mongoose');
 const crypto = require('crypto');
 const cors = require('cors');
+const cookieParser = require('cookie-parser');
 const path = require('path');
 const fs = require('fs');
 const branding = require('./config/branding');
@@ -13,8 +16,9 @@ const app = express();
 
 app.use(cors({
   origin: process.env.NODE_ENV === 'production' ? false : 'http://localhost:5173',
-  credentials: true
+  credentials: true, // required for cross-origin cookies in dev
 }));
+app.use(cookieParser());
 app.use(express.json());
 
 // Block write requests while a backup is in progress

@@ -26,39 +26,29 @@
 
 ## Authentication
 
-The API uses **stateless per-request authentication**. There is no login endpoint that returns a session token — instead, credentials are sent with every request.
+The API uses **httpOnly JWT cookies**. The cookie is issued by `POST /api/auth/login` and automatically sent by the browser with every subsequent request.
 
-### Token format
+### Login flow
 
-```
-Authorization: Bearer <identifier>:<password>
-```
+1. `POST /api/auth/login` with `{ identifier, password }` — bcrypt runs **once**
+2. Server signs a JWT (`userId` payload, 30-day expiry) and sets an httpOnly cookie `auth_token`
+3. Every subsequent request: browser sends the cookie automatically → server calls `jwt.verify()` (microseconds, no bcrypt)
+4. `POST /api/auth/logout` — server clears the cookie
 
-| Part | Description |
+### Cookie properties
+
+| Attribute | Value |
 |---|---|
-| `identifier` | Username (lowercase) or UUID (legacy only) |
-| `password` | User's current password |
-
-The token is the literal string `identifier:password`, Base64 is **not** used.
-
-**Example:**
-```http
-GET /api/auth/me
-Authorization: Bearer jannis:mysecretpassword
-```
-
-### Login flow (frontend)
-
-1. Build token: `identifier + ":" + password`
-2. Store in `localStorage` as `auth_token`
-3. Verify by calling `GET /api/auth/me` — success means credentials are valid
-4. On every subsequent request the axios interceptor reads `auth_token` and attaches it as the `Bearer` header
+| `HttpOnly` | ✓ — completely inaccessible to JavaScript (XSS-proof) |
+| `Secure` | ✓ in production, ✗ in development |
+| `SameSite` | `Lax` — CSRF protection for top-level navigation |
+| `MaxAge` | 30 days |
 
 ### Error codes
 
 | HTTP | `code` field | Meaning |
 |---|---|---|
-| `401` | — | Missing or invalid `Authorization` header |
+| `401` | — | Missing, expired, or invalid cookie |
 | `401` | `UUID_BLOCKED` | UUID login attempted after username was set |
 | `401` | `PASSWORD_REQUIRED` | Identifier recognised but no password provided |
 | `401` | — | Wrong password |
@@ -114,3 +104,4 @@ On every page load the frontend compares `res.data.apiVersion` against `REQUIRED
 | `apiVersion` | Changes |
 |---|---|
 | `1` | Initial version |
+| `2` | Auth switched from per-request `Bearer identifier:password` to httpOnly JWT cookie. Added `POST /api/auth/login` and `POST /api/auth/logout`. |
