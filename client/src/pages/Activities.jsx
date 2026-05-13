@@ -151,7 +151,7 @@ function ActivityTypeCard({ type, onSave, onDelete }) {
   };
 
   return (
-    <div className="bg-slate-800/50 border border-slate-700 rounded-xl overflow-hidden">
+    <div className="bg-white/[.05] border border-white/[.09] rounded-2xl overflow-hidden">
       <div className="flex items-center gap-3 px-4 py-3">
         <Dumbbell size={15} className="text-brand-400 flex-shrink-0" />
         <span className="flex-1 font-medium text-slate-200 text-sm">{type.label}</span>
@@ -306,7 +306,7 @@ function ActivityTypesModal({ onClose, onUpdate }) {
   };
 
   return (
-    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-end sm:items-center justify-center z-50 p-4 overflow-y-auto">
+    <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-end sm:items-center justify-center z-50 p-4 overflow-y-auto">
       <div className="card w-full max-w-lg p-6 my-4">
         <div className="flex items-center justify-between mb-5">
           <h2 className="text-lg font-semibold text-white flex items-center gap-2">
@@ -331,7 +331,7 @@ function ActivityTypesModal({ onClose, onUpdate }) {
         </div>
 
         {showNewForm ? (
-          <div className="bg-slate-800/80 border border-brand-700/50 rounded-xl p-4">
+          <div className="bg-white/[.06] border border-white/[.1] rounded-2xl p-4">
             <h3 className="text-sm font-semibold text-white mb-3">Neuer Aktivitätstyp</h3>
             <form onSubmit={handleCreate} className="space-y-3">
               <div>
@@ -441,7 +441,7 @@ function ActivityForm({ activityTypes, onSave, onClose }) {
   };
 
   return (
-    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-end sm:items-center justify-center z-50 p-4">
+    <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-end sm:items-center justify-center z-50 p-4">
       <div className="card w-full max-w-md p-6">
         <div className="flex items-center justify-between mb-5">
           <h2 className="text-lg font-semibold text-white">Aktivität eintragen</h2>
@@ -598,19 +598,19 @@ function ActivityChart({ typeId, typeLabel, onClose }) {
       </div>
       {loading ? (
         <div className="flex items-center justify-center h-28">
-          <div className="w-6 h-6 border-2 border-brand-500 border-t-transparent rounded-full animate-spin" />
+          <div className="w-6 h-6 border-2 border-zinc-700 border-t-brand-500 rounded-full animate-spin" />
         </div>
       ) : (
         <ResponsiveContainer width="100%" height={160}>
           <BarChart data={data}>
-            <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
-            <XAxis dataKey="kw" tick={{ fill: '#64748b', fontSize: 10 }} tickLine={false} />
-            <YAxis tick={{ fill: '#64748b', fontSize: 10 }} tickLine={false} axisLine={false} allowDecimals={false} width={20} />
+            <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.06)" />
+            <XAxis dataKey="kw" tick={{ fill: 'rgba(255,255,255,0.30)', fontSize: 10 }} tickLine={false} />
+            <YAxis tick={{ fill: 'rgba(255,255,255,0.30)', fontSize: 10 }} tickLine={false} axisLine={false} allowDecimals={false} width={20} />
             <Tooltip
-              contentStyle={{ background: '#1e293b', border: '1px solid #334155', borderRadius: 8, color: '#f1f5f9' }}
+              contentStyle={{ background: 'rgba(30,28,50,0.95)', border: '1px solid rgba(255,255,255,0.12)', borderRadius: 12, color: '#fff', backdropFilter: 'blur(8px)' }}
               formatter={(v) => [`${v}x`, typeLabel]}
             />
-            <Bar dataKey="Einheiten" fill="#8b5cf6" radius={[4, 4, 0, 0]} />
+            <Bar dataKey="Einheiten" fill="#c4623a" radius={[4, 4, 0, 0]} />
           </BarChart>
         </ResponsiveContainer>
       )}
@@ -656,7 +656,7 @@ function EditActivityModal({ activity, onSave, onClose }) {
   };
 
   return (
-    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-end sm:items-center justify-center z-50 p-4">
+    <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-end sm:items-center justify-center z-50 p-4">
       <div className="card w-full max-w-md p-6 max-h-[90vh] overflow-y-auto">
         <div className="flex items-center justify-between mb-1">
           <h2 className="text-lg font-semibold text-white">Aktivität bearbeiten</h2>
@@ -771,7 +771,7 @@ function ActivityCard({ activity, onDelete, onEdit }) {
     <>
       <div className="card p-4 flex items-start gap-4 hover:border-slate-700 transition-colors">
         <div className="flex-shrink-0 mt-0.5">
-          <span className="badge bg-brand-900/40 text-brand-400 py-1 px-2.5 whitespace-nowrap">
+          <span className="badge bg-white/[.1] text-white/60 py-1 px-2.5 whitespace-nowrap">
             {displayLabel}
           </span>
         </div>
@@ -915,8 +915,8 @@ export default function Activities() {
       <div className="flex gap-2 flex-wrap items-center">
         <button
           onClick={() => { setFilter(''); setPage(0); setChartType(null); }}
-          className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
-            !filter ? 'bg-brand-600 text-white' : 'bg-slate-800 text-slate-400 hover:text-slate-200'
+          className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
+            !filter ? 'bg-brand-600 text-white shadow-md shadow-brand-600/25' : 'bg-white/[.08] text-white/50 hover:text-white/80'
           }`}
         >
           Alle
@@ -925,8 +925,8 @@ export default function Activities() {
           <div key={t._id} className="flex items-center gap-0.5">
             <button
               onClick={() => { setFilter(t._id); setPage(0); }}
-              className={`px-3 py-1.5 rounded-l-lg text-sm font-medium transition-colors ${
-                filter === t._id ? 'bg-brand-600 text-white' : 'bg-slate-800 text-slate-400 hover:text-slate-200'
+              className={`px-3 py-1.5 rounded-l-md text-sm font-medium transition-colors ${
+                filter === t._id ? 'bg-brand-600 text-white shadow-md shadow-brand-600/25' : 'bg-white/[.08] text-white/50 hover:text-white/80'
               }`}
             >
               {t.label}
@@ -934,10 +934,10 @@ export default function Activities() {
             <button
               onClick={() => toggleChart({ _id: t._id, label: t.label })}
               title="Verlauf anzeigen"
-              className={`p-2 rounded-r-lg text-sm transition-colors border-l border-slate-700 ${
+              className={`p-2 rounded-r-md text-sm transition-colors border-l border-white/[.08] ${
                 chartType?._id === t._id
                   ? 'bg-brand-600 text-white'
-                  : 'bg-slate-800 text-slate-500 hover:text-brand-400'
+                  : 'bg-white/[.08] text-white/40 hover:text-brand-300'
               }`}
             >
               <TrendingUp size={14} />
@@ -946,7 +946,7 @@ export default function Activities() {
         ))}
         <button
           onClick={() => setShowTypesModal(true)}
-          className="ml-auto flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium bg-slate-800 text-slate-400 hover:text-slate-200 transition-colors"
+          className="ml-auto flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-sm font-medium bg-white/[.08] text-white/50 hover:text-white/80 transition-colors"
           title="Aktivitätstypen verwalten"
         >
           <SettingsIcon size={14} />
@@ -962,12 +962,12 @@ export default function Activities() {
       {/* List */}
       {loading ? (
         <div className="flex items-center justify-center py-16">
-          <div className="w-8 h-8 border-2 border-brand-500 border-t-transparent rounded-full animate-spin" />
+          <div className="w-8 h-8 border-2 border-zinc-700 border-t-brand-500 rounded-full animate-spin" />
         </div>
       ) : activities.length === 0 ? (
         <div className="card p-12 text-center">
-          <Dumbbell size={36} className="text-slate-600 mx-auto mb-3" />
-          <p className="text-slate-400">Noch keine Aktivitäten eingetragen</p>
+          <Dumbbell size={36} className="text-white/15 mx-auto mb-3" />
+          <p className="text-white/40">Noch keine Aktivitäten eingetragen</p>
           <button onClick={() => setShowForm(true)} className="btn-primary mt-4 inline-flex items-center gap-2">
             <Plus size={16} /> Erste Aktivität eintragen
           </button>
