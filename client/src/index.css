@@ -1,3 +1,66 @@
+/* ══════════════════════════════════════════════════════════════════════════
+   DESIGN TOKENS — edit this block to retheme the entire app
+   ══════════════════════════════════════════════════════════════════════════ */
+:root {
+  /* Brand palette — Terracotta earth tones */
+  --brand-200: #f4c5a0;
+  --brand-300: #e89e70;
+  --brand-400: #d87c4e;
+  --brand-500: #c4623a;
+  --brand-600: #a84e2a;
+  --brand-700: #8a3c1e;
+  --brand-800: #6e2e14;
+  --brand-900: #3c160a;
+
+  /* App background */
+  --bg-base:       #1d1912;
+  --bg-orb-a:      rgba(196, 98,  58,  0.20);
+  --bg-orb-b:      rgba(160, 78,  42,  0.16);
+  --bg-orb-c:      rgba(95,  133, 86,  0.07);
+
+  /* Glass surface */
+  --surface-bg:          rgba(255, 255, 255, 0.055);
+  --surface-border:      rgba(255, 255, 255, 0.08);
+  --surface-border-hover: rgba(255, 255, 255, 0.18);
+
+  /* Logo / avatar */
+  --logo-shadow:    rgba(60, 22, 10, 0.45);
+  --avatar-bg-from: rgba(196, 98, 58, 0.60);
+  --avatar-bg-to:   rgba(138, 60, 30, 0.60);
+
+  /* Button — primary */
+  --btn-p-from:   var(--brand-400);
+  --btn-p-to:     var(--brand-600);
+  --btn-p-border: rgba(180, 88, 48, 0.65);
+  --btn-p-shine:  rgba(240, 170, 120, 0.22);
+  --btn-p-shadow: rgba(40,  14,  6,   0.50);
+  --btn-p-glow:   rgba(196, 98,  58,  0.32);
+
+  /* Button — secondary */
+  --btn-s-bg:           rgba(196, 98, 58, 0.10);
+  --btn-s-border:       rgba(196, 98, 58, 0.22);
+  --btn-s-bg-hover:     rgba(196, 98, 58, 0.18);
+  --btn-s-border-hover: rgba(196, 98, 58, 0.38);
+
+  /* Nav active pill */
+  --nav-active-text:    #fff;
+  --nav-active-bg-from: rgba(196, 98, 58, 0.22);
+  --nav-active-bg-to:   rgba(196, 98, 58, 0.06);
+  --nav-active-ring:    rgba(196, 98, 58, 0.28);
+
+  /* Input */
+  --input-bg:           rgba(255, 255, 255, 0.07);
+  --input-border:       rgba(255, 255, 255, 0.11);
+  --input-border-hover: rgba(255, 255, 255, 0.22);
+  --input-border-focus: rgba(216, 124, 78, 0.65);
+  --input-placeholder:  rgba(255, 255, 255, 0.25);
+
+  /* Focus ring */
+  --focus-ring: rgba(196, 98, 58, 0.70);
+}
+
+/* ══════════════════════════════════════════════════════════════════════════ */
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -5,20 +68,19 @@
 @layer base {
   body {
     @apply text-white font-sans antialiased;
-    background-color: #1d1912;
+    background-color: var(--bg-base);
   }
 
-  /* Warmer Erd-Gradient — bleibt fix während der Inhalt scrollt */
   body::before {
     content: '';
     position: fixed;
     inset: 0;
     z-index: -1;
     background:
-      radial-gradient(ellipse 90% 70% at 5% 5%,  rgba(196, 98,  58,  0.20) 0%, transparent 60%),
-      radial-gradient(ellipse 70% 65% at 95% 95%, rgba(160, 78,  42,  0.16) 0%, transparent 60%),
-      radial-gradient(ellipse 55% 40% at 50% 50%, rgba(95,  133, 86,  0.07) 0%, transparent 55%),
-      #1d1912;
+      radial-gradient(ellipse 90% 70% at 5%  5%,  var(--bg-orb-a) 0%, transparent 60%),
+      radial-gradient(ellipse 70% 65% at 95% 95%, var(--bg-orb-b) 0%, transparent 60%),
+      radial-gradient(ellipse 55% 40% at 50% 50%, var(--bg-orb-c) 0%, transparent 55%),
+      var(--bg-base);
   }
 
   button:focus-visible,
@@ -27,7 +89,7 @@
   input:focus-visible,
   select:focus-visible,
   textarea:focus-visible {
-    outline: 2px solid rgba(196, 98, 58, 0.7);
+    outline: 2px solid var(--focus-ring);
     outline-offset: 2px;
   }
   input.input:focus-visible,
@@ -45,85 +107,102 @@
 }
 
 @layer components {
-  /* ── Glasskarte ─────────────────────────────────── */
+
+  /* ── Card ────────────────────────────────────────── */
   .card {
-    @apply bg-white/[.06] backdrop-blur-xl border border-white/[.09] rounded-2xl;
+    background: var(--surface-bg);
+    border: 1px solid var(--surface-border);
+    @apply backdrop-blur-xl rounded-2xl;
   }
 
-  /* ── Primär-Button: Terrakotta von oben nach unten, mit Tiefe ── */
+  /* ── Primary Button ──────────────────────────────────────────────────────
+     Terracotta gradient with depth, shine, and tactile hover/press states.
+     ──────────────────────────────────────────────────────────────────────── */
   .btn-primary {
     @apply text-white px-4 py-2 rounded-xl font-semibold text-sm tracking-wide
-      transition-all disabled:opacity-40 disabled:cursor-not-allowed;
-    background-image: linear-gradient(
-      to bottom,
-      theme('colors.brand.400'),
-      theme('colors.brand.700')
-    );
-    border: 1px solid rgba(168, 78, 42, 0.55);
+      cursor-pointer
+      transition-all duration-150
+      disabled:opacity-40 disabled:cursor-not-allowed disabled:transform-none;
+    background-image: linear-gradient(160deg, var(--btn-p-from) 0%, var(--btn-p-to) 100%);
+    border: 1px solid var(--btn-p-border);
     box-shadow:
-      inset 0 1px 0 rgba(232, 158, 112, 0.30), /* obere Lichtreflexion */
-      0 4px 14px rgba(60, 22, 10, 0.45);
+      inset 0 1px 0 var(--btn-p-shine),
+      0 1px 3px rgba(0, 0, 0, 0.30),
+      0 3px 10px var(--btn-p-shadow);
   }
   .btn-primary:hover:not(:disabled) {
-    background-image: linear-gradient(
-      to bottom,
-      theme('colors.brand.300'),
-      theme('colors.brand.600')
-    );
+    transform: translateY(-1px);
+    background-image: linear-gradient(160deg, var(--brand-300) 0%, var(--brand-500) 100%);
     box-shadow:
-      inset 0 1px 0 rgba(232, 158, 112, 0.40),
-      0 6px 18px rgba(60, 22, 10, 0.55);
+      inset 0 1px 0 rgba(240, 170, 120, 0.30),
+      0 2px 5px rgba(0, 0, 0, 0.25),
+      0 6px 18px var(--btn-p-shadow),
+      0 0 20px var(--btn-p-glow);
   }
   .btn-primary:active:not(:disabled) {
-    background-image: linear-gradient(
-      to bottom,
-      theme('colors.brand.600'),
-      theme('colors.brand.800')
-    );
-    box-shadow: inset 0 2px 4px rgba(60, 22, 10, 0.30);
+    transform: translateY(1px);
+    background-image: linear-gradient(160deg, var(--brand-600) 0%, var(--brand-800) 100%);
+    box-shadow: inset 0 2px 5px rgba(0, 0, 0, 0.35);
   }
 
-  /* ── Sekundär-Button: warme Erd-Glasoptik ───────── */
+  /* ── Secondary Button ────────────────────────────────────────────────────
+     Warm earth glass — transparent tint with brand outline.
+     ──────────────────────────────────────────────────────────────────────── */
   .btn-secondary {
-    @apply text-white/80 hover:text-white px-4 py-2 rounded-xl
-      font-medium text-sm tracking-wide transition-all;
-    background-color: rgba(196, 98, 58, 0.10);
-    border: 1px solid rgba(196, 98, 58, 0.22);
+    @apply text-white/75 hover:text-white px-4 py-2 rounded-xl
+      font-medium text-sm tracking-wide cursor-pointer
+      transition-all duration-150;
+    background-color: var(--btn-s-bg);
+    border: 1px solid var(--btn-s-border);
   }
   .btn-secondary:hover {
-    background-color: rgba(196, 98, 58, 0.18);
-    border-color: rgba(196, 98, 58, 0.35);
+    background-color: var(--btn-s-bg-hover);
+    border-color: var(--btn-s-border-hover);
+    transform: translateY(-1px);
   }
   .btn-secondary:active {
-    background-color: rgba(196, 98, 58, 0.07);
+    transform: translateY(1px);
+    background-color: rgba(196, 98, 58, 0.06);
   }
 
-  /* ── Danger-Button ───────────────────────────────── */
+  /* ── Danger Button ───────────────────────────────── */
   .btn-danger {
     @apply text-red-300/70 hover:text-red-300 hover:bg-red-500/15
-      px-3 py-1.5 rounded-lg text-sm font-medium transition-colors;
+      px-3 py-1.5 rounded-lg text-sm font-medium cursor-pointer
+      transition-all duration-150;
+  }
+  .btn-danger:hover {
+    transform: translateY(-1px);
   }
 
-  /* ── Aktives Sidebar-Element ─────────────────────── */
-  /* Eigene Klasse, um JIT-Probleme mit custom-color/opacity zu vermeiden */
+  /* ── Active Sidebar Item — glass pill ───────────────────────────────────
+     Gradient background + ring border; no cheap left-edge inset shadow.
+     ──────────────────────────────────────────────────────────────────────── */
   .nav-active {
-    color: theme('colors.brand.200');
-    background-color: rgba(196, 98, 58, 0.20);
-    box-shadow: inset 3px 0 0 theme('colors.brand.400');
+    color: var(--nav-active-text);
+    background: linear-gradient(
+      100deg,
+      var(--nav-active-bg-from) 0%,
+      var(--nav-active-bg-to) 100%
+    );
+    box-shadow: inset 0 0 0 1px var(--nav-active-ring);
   }
 
-  /* ── Glas-Input ──────────────────────────────────── */
-  /* focus:border-brand-* schlägt in @apply fehl → CSS :focus */
+  /* ── Glass Input ─────────────────────────────────── */
   .input {
-    @apply bg-white/[.07] border border-white/[.11] text-white
-      rounded-xl px-3 py-2 w-full focus:outline-none
-      placeholder-white/25 transition-colors text-sm;
+    background: var(--input-bg);
+    border: 1px solid var(--input-border);
+    @apply text-white rounded-xl px-3 py-2 w-full
+      focus:outline-none placeholder-white/25 transition-colors text-sm;
+  }
+  .input::placeholder {
+    color: var(--input-placeholder);
   }
   .input:hover {
-    border-color: rgba(255, 255, 255, 0.22);
+    border-color: var(--input-border-hover);
   }
   .input:focus {
-    border-color: rgba(216, 124, 78, 0.65);
+    border-color: var(--input-border-focus);
   }
 
   /* ── Label ───────────────────────────────────────── */
