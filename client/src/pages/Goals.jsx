@@ -137,10 +137,10 @@ function GoalProgress({ goal }) {
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
             <h3 className="font-semibold text-white">{goal.name}</h3>
-            <span className={`badge text-xs ${isLongTerm ? 'bg-amber-900/50 text-amber-400' : 'bg-brand-900/50 text-brand-400'}`}>
+            <span className={`badge text-xs ${isLongTerm ? 'bg-amber-950/60 text-amber-500' : 'bg-brand-600/20 text-brand-300'}`}>
               {isLongTerm ? 'Langfristig' : intervalBadgeLabel(iv, iu)}
             </span>
-            <span className={`badge text-xs ${isHabit ? 'bg-emerald-900/40 text-emerald-400' : 'bg-slate-700 text-slate-400'}`}>
+            <span className={`badge text-xs ${isHabit ? 'bg-green-600/20 text-green-300' : 'bg-white/[.08] text-white/45'}`}>
               {isHabit ? <><Sparkles size={10} className="inline mr-1" />Gewohnheit</> : <><Dumbbell size={10} className="inline mr-1" />Aktivität</>}
             </span>
           </div>
@@ -204,7 +204,7 @@ function GoalProgress({ goal }) {
             const pct = Math.min(100, (current / nextStep.targetValue) * 100);
             const barColor = pct >= 100 ? 'bg-emerald-500' : pct >= 60 ? 'bg-amber-500' : 'bg-red-500';
             return (
-              <div className="bg-amber-900/20 border border-amber-800/30 rounded-xl px-3 py-2">
+              <div className="bg-amber-500/10 border border-amber-400/20 rounded-xl px-3 py-2">
                 <div className="flex items-center justify-between text-xs mb-1">
                   <span className="text-amber-400 font-medium">
                     Nächstes Zwischenziel: {nextStep.targetValue} {goal.unitSymbol}
@@ -266,12 +266,12 @@ function GoalProgress({ goal }) {
           {showChart && (
             <ResponsiveContainer width="100%" height={150}>
               <LineChart data={chartData}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
-                <XAxis dataKey="date" tick={{ fill: '#64748b', fontSize: 10 }} tickLine={false} />
-                <YAxis tick={{ fill: '#64748b', fontSize: 10 }} tickLine={false} axisLine={false} width={30} />
-                <Tooltip contentStyle={{ background: '#1e293b', border: '1px solid #334155', borderRadius: 8, color: '#f1f5f9' }} />
-                <Line type="monotone" dataKey="Wert" stroke="#8b5cf6" strokeWidth={2} dot={{ r: 3 }} />
-                <Line type="monotone" dataKey="Ziel" stroke="#334155" strokeWidth={1.5} strokeDasharray="4 2" dot={false} />
+                <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.06)" />
+                <XAxis dataKey="date" tick={{ fill: 'rgba(255,255,255,0.30)', fontSize: 10 }} tickLine={false} />
+                <YAxis tick={{ fill: 'rgba(255,255,255,0.30)', fontSize: 10 }} tickLine={false} axisLine={false} width={30} />
+                <Tooltip contentStyle={{ background: 'rgba(30,28,50,0.95)', border: '1px solid rgba(255,255,255,0.12)', borderRadius: 12, color: '#fff', backdropFilter: 'blur(8px)' }} />
+                <Line type="monotone" dataKey="Wert" stroke="#c4623a" strokeWidth={2} dot={{ r: 3 }} />
+                <Line type="monotone" dataKey="Ziel" stroke="rgba(255,255,255,0.15)" strokeWidth={1.5} strokeDasharray="4 2" dot={false} />
                 {stepResults.map((step, idx) => (
                   <ReferenceLine
                     key={idx}
@@ -520,25 +520,25 @@ function CreateGoalModal({ activityTypes, habits, onSave, onClose }) {
   const stepTitles = ['Grundlagen', 'Was & Bedingungen', 'Meilensteine'];
 
   return (
-    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-end sm:items-center justify-center z-50">
-      <div className="bg-slate-900 border border-slate-700/50 w-full max-w-lg rounded-t-2xl sm:rounded-2xl flex flex-col" style={{ maxHeight: '92dvh' }}>
+    <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-end sm:items-center justify-center z-50">
+      <div className="bg-[#1e1a14]/95 backdrop-blur-2xl border border-white/[.1] w-full max-w-lg rounded-t-2xl sm:rounded-2xl flex flex-col" style={{ maxHeight: '92dvh' }}>
 
         {/* Drag handle – mobile only */}
-        <div className="w-10 h-1 bg-slate-700 rounded-full mx-auto mt-3 sm:hidden flex-shrink-0" />
+        <div className="w-10 h-1 bg-white/15 rounded-full mx-auto mt-3 sm:hidden flex-shrink-0" />
 
         {/* Header */}
-        <div className="flex items-center justify-between px-5 pt-4 pb-3 border-b border-slate-800 flex-shrink-0">
+        <div className="flex items-center justify-between px-5 pt-4 pb-3 border-b border-white/[.08] flex-shrink-0">
           <div>
             <h2 className="text-base font-semibold text-white">Neues Ziel</h2>
-            <p className="text-xs text-slate-500 mt-0.5">{stepTitles[currentStep - 1]}</p>
+            <p className="text-xs text-white/35 mt-0.5">{stepTitles[currentStep - 1]}</p>
           </div>
           <div className="flex items-center gap-3">
             <div className="flex items-center gap-1.5">
               {Array.from({ length: totalSteps }).map((_, i) => (
-                <div key={i} className={`rounded-full transition-all duration-200 ${i + 1 === currentStep ? 'w-5 h-1.5 bg-brand-500' : i + 1 < currentStep ? 'w-1.5 h-1.5 bg-brand-600' : 'w-1.5 h-1.5 bg-slate-700'}`} />
+                <div key={i} className={`rounded-full transition-all duration-200 ${i + 1 === currentStep ? 'w-5 h-1.5 bg-brand-500' : i + 1 < currentStep ? 'w-1.5 h-1.5 bg-brand-600' : 'w-1.5 h-1.5 bg-white/15'}`} />
               ))}
             </div>
-            <button type="button" onClick={onClose} className="text-slate-400 hover:text-slate-200 p-1 -mr-1">
+            <button type="button" onClick={onClose} className="text-white/40 hover:text-white/80 p-1 -mr-1">
               <X size={20} />
             </button>
           </div>
@@ -558,13 +558,13 @@ function CreateGoalModal({ activityTypes, habits, onSave, onClose }) {
               <label className="label">Zielart</label>
               <div className="grid grid-cols-2 gap-2">
                 <button type="button" onClick={() => set('isLongTerm', false)}
-                  className={`p-3 rounded-xl border text-left transition-colors ${!form.isLongTerm ? 'border-brand-500 bg-brand-950/60 text-white' : 'border-slate-700 bg-slate-800/40 text-slate-400'}`}
+                  className={`p-3 rounded-lg border text-left transition-colors ${!form.isLongTerm ? 'border-brand-500 bg-brand-950/60 text-white' : 'border-white/[.12] bg-white/[.07] text-white/45'}`}
                 >
                   <div className="font-semibold text-sm">Periodisch</div>
                   <div className="text-xs opacity-60 mt-0.5">Täglich, wöchentlich…</div>
                 </button>
                 <button type="button" onClick={() => set('isLongTerm', true)}
-                  className={`p-3 rounded-xl border text-left transition-colors ${form.isLongTerm ? 'border-amber-500 bg-amber-950/60 text-white' : 'border-slate-700 bg-slate-800/40 text-slate-400'}`}
+                  className={`p-3 rounded-lg border text-left transition-colors ${form.isLongTerm ? 'border-amber-500 bg-amber-950/60 text-white' : 'border-white/[.12] bg-white/[.07] text-white/45'}`}
                 >
                   <div className="font-semibold text-sm">Langfristig</div>
                   <div className="text-xs opacity-60 mt-0.5">Enddatum & Meilensteine</div>
@@ -578,7 +578,7 @@ function CreateGoalModal({ activityTypes, habits, onSave, onClose }) {
             </div>
 
             {!form.isLongTerm && (
-              <div className="bg-slate-800/50 border border-slate-700 rounded-xl p-4">
+              <div className="bg-white/[.05] border border-white/[.09] rounded-2xl p-4">
                 <label className="label text-xs mb-2">Intervall</label>
                 <div className="flex gap-2">
                   <input type="number" className="input w-20" min="1" max="365" value={form.intervalValue} onChange={e => set('intervalValue', Math.max(1, parseInt(e.target.value) || 1))} />
@@ -593,7 +593,7 @@ function CreateGoalModal({ activityTypes, habits, onSave, onClose }) {
             )}
 
             {form.isLongTerm && (
-              <div className="bg-slate-800/50 border border-slate-700 rounded-xl p-4">
+              <div className="bg-white/[.05] border border-white/[.09] rounded-2xl p-4">
                 <label className="label text-xs mb-2">Zeitraum</label>
                 <div className="grid grid-cols-2 gap-2">
                   <div>
@@ -620,13 +620,13 @@ function CreateGoalModal({ activityTypes, habits, onSave, onClose }) {
               <label className="label">Kategorie</label>
               <div className="grid grid-cols-2 gap-2">
                 <button type="button" onClick={() => handleCategoryChange('activity')}
-                  className={`p-3 rounded-xl border text-left transition-colors ${form.targetCategory === 'activity' ? 'border-brand-500 bg-brand-950/60 text-white' : 'border-slate-700 bg-slate-800/40 text-slate-400'}`}
+                  className={`p-3 rounded-lg border text-left transition-colors ${form.targetCategory === 'activity' ? 'border-brand-500 bg-brand-950/60 text-white' : 'border-white/[.12] bg-white/[.07] text-white/45'}`}
                 >
                   <div className="flex items-center gap-1.5 font-semibold text-sm"><Dumbbell size={13} /> Aktivität</div>
                   <div className="text-xs opacity-60 mt-0.5">Sport, Training…</div>
                 </button>
                 <button type="button" onClick={() => handleCategoryChange('habit')}
-                  className={`p-3 rounded-xl border text-left transition-colors ${form.targetCategory === 'habit' ? 'border-emerald-500 bg-emerald-950/60 text-white' : 'border-slate-700 bg-slate-800/40 text-slate-400'}`}
+                  className={`p-3 rounded-lg border text-left transition-colors ${form.targetCategory === 'habit' ? 'border-emerald-500 bg-emerald-950/60 text-white' : 'border-white/[.12] bg-white/[.07] text-white/45'}`}
                 >
                   <div className="flex items-center gap-1.5 font-semibold text-sm"><Sparkles size={13} /> Gewohnheit</div>
                   <div className="text-xs opacity-60 mt-0.5">Tägliche Routinen…</div>
@@ -653,7 +653,7 @@ function CreateGoalModal({ activityTypes, habits, onSave, onClose }) {
               </div>
               <div className="space-y-3">
                 {form.conditions.map((cond, i) => (
-                  <div key={i} className="bg-slate-800/50 border border-slate-700 rounded-xl p-3 space-y-3">
+                  <div key={i} className="bg-white/[.05] border border-white/[.09] rounded-2xl p-3 space-y-3">
                     {form.conditions.length > 1 && (
                       <div className="flex items-center justify-between">
                         <span className="text-xs font-semibold text-slate-300">Bedingung {i + 1}</span>
@@ -686,7 +686,7 @@ function CreateGoalModal({ activityTypes, habits, onSave, onClose }) {
                       <div className="flex gap-1.5">
                         {[{ v: 'min', l: 'Mindestens' }, { v: 'max', l: 'Maximal' }, { v: 'exact', l: 'Genau' }].map(({ v, l }) => (
                           <button key={v} type="button" onClick={() => updateCondition(i, 'condition', v)}
-                            className={`flex-1 py-2 rounded-xl text-xs font-semibold transition-colors ${cond.condition === v ? 'bg-brand-600 text-white' : 'bg-slate-700 text-slate-400'}`}
+                            className={`flex-1 py-2 rounded-md text-xs font-semibold transition-colors ${cond.condition === v ? 'bg-brand-600 text-white' : 'bg-white/[.08] text-white/45'}`}
                           >{l}</button>
                         ))}
                       </div>
@@ -704,13 +704,13 @@ function CreateGoalModal({ activityTypes, habits, onSave, onClose }) {
                         {isActivityGoal ? (<>
                           <div className="flex gap-1.5">
                             <button type="button" onClick={() => updateConditionFields(i, { valueScope: 'total', aggregation: 'sum' })}
-                              className={`flex-1 py-2 rounded-xl text-xs font-semibold transition-colors ${cond.aggregation !== 'max' && cond.valueScope !== 'perActivity' ? 'bg-brand-600 text-white' : 'bg-slate-700 text-slate-400'}`}
+                              className={`flex-1 py-2 rounded-md text-xs font-semibold transition-colors ${cond.aggregation !== 'max' && cond.valueScope !== 'perActivity' ? 'bg-brand-600 text-white' : 'bg-white/[.08] text-white/45'}`}
                             >{form.isLongTerm ? 'Gesamt' : 'pro Intervall'}</button>
                             <button type="button" onClick={() => updateConditionFields(i, { valueScope: 'perActivity', aggregation: 'sum' })}
-                              className={`flex-1 py-2 rounded-xl text-xs font-semibold transition-colors ${cond.aggregation !== 'max' && cond.valueScope === 'perActivity' ? 'bg-brand-600 text-white' : 'bg-slate-700 text-slate-400'}`}
+                              className={`flex-1 py-2 rounded-md text-xs font-semibold transition-colors ${cond.aggregation !== 'max' && cond.valueScope === 'perActivity' ? 'bg-brand-600 text-white' : 'bg-white/[.08] text-white/45'}`}
                             >Ø / Aktivität</button>
                             <button type="button" onClick={() => updateConditionFields(i, { valueScope: 'total', aggregation: 'max' })}
-                              className={`flex-1 py-2 rounded-xl text-xs font-semibold transition-colors ${cond.aggregation === 'max' ? 'bg-amber-600 text-white' : 'bg-slate-700 text-slate-400'}`}
+                              className={`flex-1 py-2 rounded-md text-xs font-semibold transition-colors ${cond.aggregation === 'max' ? 'bg-amber-600 text-white' : 'bg-white/[.08] text-white/45'}`}
                             >Bestleistung</button>
                           </div>
                           <p className="text-xs text-slate-600 mt-1.5">
@@ -721,10 +721,10 @@ function CreateGoalModal({ activityTypes, habits, onSave, onClose }) {
                         </>) : (
                           <div className="flex gap-1.5">
                             <button type="button" onClick={() => updateConditionFields(i, { valueScope: 'total', aggregation: 'sum' })}
-                              className={`flex-1 py-2 rounded-xl text-xs font-semibold transition-colors ${cond.valueScope !== 'perActivity' ? 'bg-brand-600 text-white' : 'bg-slate-700 text-slate-400'}`}
+                              className={`flex-1 py-2 rounded-md text-xs font-semibold transition-colors ${cond.valueScope !== 'perActivity' ? 'bg-brand-600 text-white' : 'bg-white/[.08] text-white/45'}`}
                             >Gesamt</button>
                             <button type="button" onClick={() => updateConditionFields(i, { valueScope: 'perActivity', aggregation: 'sum' })}
-                              className={`flex-1 py-2 rounded-xl text-xs font-semibold transition-colors ${cond.valueScope === 'perActivity' ? 'bg-brand-600 text-white' : 'bg-slate-700 text-slate-400'}`}
+                              className={`flex-1 py-2 rounded-md text-xs font-semibold transition-colors ${cond.valueScope === 'perActivity' ? 'bg-brand-600 text-white' : 'bg-white/[.08] text-white/45'}`}
                             >Ø pro Tag</button>
                           </div>
                         )}
@@ -737,7 +737,7 @@ function CreateGoalModal({ activityTypes, habits, onSave, onClose }) {
                       if (!filterFields.length) return null;
                       const filters = cond.activityFilters || [];
                       return (
-                        <div className="border border-slate-600 rounded-xl p-3 space-y-2">
+                        <div className="border border-white/[.1] rounded-2xl p-3 space-y-2">
                           <div className="flex items-center justify-between">
                             <div>
                               <span className="text-xs font-semibold text-slate-200">In derselben Aktivität</span>
@@ -754,7 +754,7 @@ function CreateGoalModal({ activityTypes, habits, onSave, onClose }) {
                             const field = filterFields.find(f => f.key === filter.fieldKey) || filterFields[0];
                             const isNum = (filter.fieldType || 'select') === 'number';
                             return (
-                              <div key={fi} className="bg-slate-800/80 rounded-xl p-2.5 space-y-2">
+                              <div key={fi} className="bg-white/[.06] rounded-xl p-2.5 space-y-2">
                                 <div className="flex items-center gap-2">
                                   <select className="input text-xs py-1.5 flex-1" value={filter.fieldKey}
                                     onChange={e => {
@@ -774,7 +774,7 @@ function CreateGoalModal({ activityTypes, habits, onSave, onClose }) {
                                       {[{ v: 'min', l: 'Mindestens' }, { v: 'max', l: 'Maximal' }, { v: 'exact', l: 'Genau' }].map(({ v, l }) => (
                                         <button key={v} type="button"
                                           onClick={() => updateActivityFilter(i, fi, { numOperator: v })}
-                                          className={`flex-1 py-1.5 rounded-lg text-xs font-semibold transition-colors ${(filter.numOperator || 'min') === v ? 'bg-brand-600 text-white' : 'bg-slate-700 text-slate-400'}`}
+                                          className={`flex-1 py-1.5 rounded-lg text-xs font-semibold transition-colors ${(filter.numOperator || 'min') === v ? 'bg-brand-600 text-white' : 'bg-white/[.08] text-white/45'}`}
                                         >{l}</button>
                                       ))}
                                     </div>
@@ -794,7 +794,7 @@ function CreateGoalModal({ activityTypes, habits, onSave, onClose }) {
                                       {(field?.options || []).map(opt => (
                                         <button key={opt} type="button"
                                           onClick={() => toggleFilterValue(i, fi, opt)}
-                                          className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-colors ${(filter.values || []).includes(opt) ? 'bg-brand-600 text-white' : 'bg-slate-700 text-slate-400'}`}
+                                          className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-colors ${(filter.values || []).includes(opt) ? 'bg-brand-600 text-white' : 'bg-white/[.08] text-white/45'}`}
                                         >{opt}</button>
                                       ))}
                                     </div>
@@ -814,7 +814,7 @@ function CreateGoalModal({ activityTypes, habits, onSave, onClose }) {
                   <span className="text-xs text-slate-500">Verknüpfung:</span>
                   {['AND', 'OR'].map(op => (
                     <button key={op} type="button" onClick={() => set('conditionOperator', op)}
-                      className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors ${form.conditionOperator === op ? 'bg-brand-600 text-white' : 'bg-slate-700 text-slate-400'}`}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors ${form.conditionOperator === op ? 'bg-brand-600 text-white' : 'bg-white/[.08] text-white/45'}`}
                     >{op === 'AND' ? 'UND' : 'ODER'}</button>
                   ))}
                 </div>
@@ -834,7 +834,7 @@ function CreateGoalModal({ activityTypes, habits, onSave, onClose }) {
               </div>
               {steps.length === 0 && (
                 <button type="button" onClick={addStep}
-                  className="w-full mt-3 border-2 border-dashed border-slate-700 hover:border-brand-600 rounded-xl py-8 text-slate-500 hover:text-brand-400 transition-colors flex flex-col items-center gap-2"
+                  className="w-full mt-3 border-2 border-dashed border-white/20 hover:border-brand-400/60 rounded-2xl py-8 text-slate-500 hover:text-brand-400 transition-colors flex flex-col items-center gap-2"
                 >
                   <Plus size={22} />
                   <span className="text-sm">Ersten Meilenstein hinzufügen</span>
@@ -847,7 +847,7 @@ function CreateGoalModal({ activityTypes, habits, onSave, onClose }) {
                   const unit = firstCond?.unitSymbol || '';
                   const mLabel = metricLabel(firstCond?.metric, selectedActivityType?.customFields);
                   return (
-                    <div key={i} className="bg-slate-800/50 border border-slate-700 rounded-xl p-3 space-y-2">
+                    <div key={i} className="bg-white/[.05] border border-white/[.09] rounded-2xl p-3 space-y-2">
                       <div className="flex items-center justify-between">
                         <span className="text-xs font-semibold text-slate-300">Meilenstein {i + 1}</span>
                         <button type="button" onClick={() => removeStep(i)} className="text-slate-600 hover:text-red-400"><X size={14} /></button>
@@ -867,7 +867,7 @@ function CreateGoalModal({ activityTypes, habits, onSave, onClose }) {
                         <input className="input text-sm py-1.5" value={milestone.description} onChange={e => updateStep(i, 'description', e.target.value)} placeholder="z.B. Halbzeitmarke" />
                       </div>
                       {milestone.date && milestone.targetValue !== '' && (
-                        <p className="text-xs text-brand-400/80 bg-brand-900/20 rounded-lg px-2 py-1">
+                        <p className="text-xs text-brand-300/80 bg-brand-500/10 rounded-xl px-2 py-1">
                           → Bis {format(parseISO(milestone.date), 'd. MMMM yyyy', { locale: de })}: {cLabel} {milestone.targetValue}{unit ? ` ${unit}` : ''}
                         </p>
                       )}
@@ -880,7 +880,7 @@ function CreateGoalModal({ activityTypes, habits, onSave, onClose }) {
         </div>
 
         {/* Footer */}
-        <div className="flex gap-3 px-5 py-4 border-t border-slate-800 flex-shrink-0">
+        <div className="flex gap-3 px-5 py-4 border-t border-white/[.08] flex-shrink-0">
           {currentStep > 1
             ? <button type="button" onClick={() => setCurrentStep(s => s - 1)} className="btn-secondary flex-1">Zurück</button>
             : <button type="button" onClick={onClose} className="btn-secondary flex-1">Abbrechen</button>
@@ -1055,21 +1055,21 @@ function EditGoalModal({ goal, onSave, onClose }) {
   ];
 
   return (
-    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-end sm:items-center justify-center z-50">
-      <form onSubmit={handleSubmit} className="bg-slate-900 border border-slate-700/50 w-full max-w-lg rounded-t-2xl sm:rounded-2xl flex flex-col" style={{ maxHeight: '92dvh' }}>
-        <div className="w-10 h-1 bg-slate-700 rounded-full mx-auto mt-3 sm:hidden flex-shrink-0" />
+    <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-end sm:items-center justify-center z-50">
+      <form onSubmit={handleSubmit} className="bg-[#1e1a14]/95 backdrop-blur-2xl border border-white/[.1] w-full max-w-lg rounded-t-2xl sm:rounded-2xl flex flex-col" style={{ maxHeight: '92dvh' }}>
+        <div className="w-10 h-1 bg-white/15 rounded-full mx-auto mt-3 sm:hidden flex-shrink-0" />
 
         {/* Header */}
-        <div className="flex items-center justify-between px-5 pt-4 pb-3 border-b border-slate-800 flex-shrink-0">
+        <div className="flex items-center justify-between px-5 pt-4 pb-3 border-b border-white/[.08] flex-shrink-0">
           <h2 className="text-base font-semibold text-white">Ziel bearbeiten</h2>
-          <button type="button" onClick={onClose} className="text-slate-400 hover:text-slate-200 p-1 -mr-1"><X size={20} /></button>
+          <button type="button" onClick={onClose} className="text-white/40 hover:text-white/80 p-1 -mr-1"><X size={20} /></button>
         </div>
 
         {/* Tabs */}
-        <div className="flex border-b border-slate-800 flex-shrink-0">
+        <div className="flex border-b border-white/[.08] flex-shrink-0">
           {tabs.map(t => (
             <button key={t.id} type="button" onClick={() => setEditTab(t.id)}
-              className={`flex-1 py-2.5 text-xs font-semibold transition-colors ${editTab === t.id ? 'text-brand-400 border-b-2 border-brand-500 -mb-px' : 'text-slate-500 hover:text-slate-300'}`}
+              className={`flex-1 py-2.5 text-xs font-semibold transition-colors ${editTab === t.id ? 'text-brand-400 border-b-2 border-brand-500 -mb-px' : 'text-white/30 hover:text-white/70'}`}
             >{t.label}</button>
           ))}
         </div>
@@ -1090,7 +1090,7 @@ function EditGoalModal({ goal, onSave, onClose }) {
 
             {/* Intervall nur für periodische Ziele */}
             {!isLongTerm && (
-              <div className="bg-slate-800/50 border border-slate-700 rounded-xl p-4">
+              <div className="bg-white/[.05] border border-white/[.09] rounded-2xl p-4">
                 <label className="label text-xs mb-2">Intervall</label>
                 <div className="flex gap-2">
                   <input
@@ -1135,7 +1135,7 @@ function EditGoalModal({ goal, onSave, onClose }) {
                 </button>
               </div>
               {conditions.map((cond, i) => (
-                <div key={i} className="bg-slate-800/50 border border-slate-700 rounded-xl p-3 space-y-3">
+                <div key={i} className="bg-white/[.05] border border-white/[.09] rounded-2xl p-3 space-y-3">
                   <div className="flex items-center justify-between">
                     <span className="text-xs font-semibold text-slate-300">
                       {conditions.length > 1 ? `Bedingung ${i + 1}` : 'Bedingung'}
@@ -1182,7 +1182,7 @@ function EditGoalModal({ goal, onSave, onClose }) {
                     <div className="flex gap-1.5">
                       {[{ v: 'min', l: 'Mindestens' }, { v: 'max', l: 'Maximal' }, { v: 'exact', l: 'Genau' }].map(({ v, l }) => (
                         <button key={v} type="button" onClick={() => updateCond(i, 'condition', v)}
-                          className={`flex-1 py-2 rounded-xl text-xs font-semibold transition-colors ${cond.condition === v ? 'bg-brand-600 text-white' : 'bg-slate-700 text-slate-400'}`}
+                          className={`flex-1 py-2 rounded-md text-xs font-semibold transition-colors ${cond.condition === v ? 'bg-brand-600 text-white' : 'bg-white/[.08] text-white/45'}`}
                         >{l}</button>
                       ))}
                     </div>
@@ -1202,22 +1202,22 @@ function EditGoalModal({ goal, onSave, onClose }) {
                       {isActivityGoal ? (
                         <div className="flex gap-1.5">
                           <button type="button" onClick={() => updateCondFields(i, { valueScope: 'total', aggregation: 'sum' })}
-                            className={`flex-1 py-2 rounded-xl text-xs font-semibold transition-colors ${cond.aggregation !== 'max' && cond.valueScope !== 'perActivity' ? 'bg-brand-600 text-white' : 'bg-slate-700 text-slate-400'}`}
+                            className={`flex-1 py-2 rounded-md text-xs font-semibold transition-colors ${cond.aggregation !== 'max' && cond.valueScope !== 'perActivity' ? 'bg-brand-600 text-white' : 'bg-white/[.08] text-white/45'}`}
                           >Gesamt</button>
                           <button type="button" onClick={() => updateCondFields(i, { valueScope: 'perActivity', aggregation: 'sum' })}
-                            className={`flex-1 py-2 rounded-xl text-xs font-semibold transition-colors ${cond.aggregation !== 'max' && cond.valueScope === 'perActivity' ? 'bg-brand-600 text-white' : 'bg-slate-700 text-slate-400'}`}
+                            className={`flex-1 py-2 rounded-md text-xs font-semibold transition-colors ${cond.aggregation !== 'max' && cond.valueScope === 'perActivity' ? 'bg-brand-600 text-white' : 'bg-white/[.08] text-white/45'}`}
                           >Ø / Aktivität</button>
                           <button type="button" onClick={() => updateCondFields(i, { valueScope: 'total', aggregation: 'max' })}
-                            className={`flex-1 py-2 rounded-xl text-xs font-semibold transition-colors ${cond.aggregation === 'max' ? 'bg-amber-600 text-white' : 'bg-slate-700 text-slate-400'}`}
+                            className={`flex-1 py-2 rounded-md text-xs font-semibold transition-colors ${cond.aggregation === 'max' ? 'bg-amber-600 text-white' : 'bg-white/[.08] text-white/45'}`}
                           >Bestleistung</button>
                         </div>
                       ) : (
                         <div className="flex gap-1.5">
                           <button type="button" onClick={() => updateCondFields(i, { valueScope: 'total', aggregation: 'sum' })}
-                            className={`flex-1 py-2 rounded-xl text-xs font-semibold transition-colors ${cond.valueScope !== 'perActivity' ? 'bg-brand-600 text-white' : 'bg-slate-700 text-slate-400'}`}
+                            className={`flex-1 py-2 rounded-md text-xs font-semibold transition-colors ${cond.valueScope !== 'perActivity' ? 'bg-brand-600 text-white' : 'bg-white/[.08] text-white/45'}`}
                           >Gesamt</button>
                           <button type="button" onClick={() => updateCondFields(i, { valueScope: 'perActivity', aggregation: 'sum' })}
-                            className={`flex-1 py-2 rounded-xl text-xs font-semibold transition-colors ${cond.valueScope === 'perActivity' ? 'bg-brand-600 text-white' : 'bg-slate-700 text-slate-400'}`}
+                            className={`flex-1 py-2 rounded-md text-xs font-semibold transition-colors ${cond.valueScope === 'perActivity' ? 'bg-brand-600 text-white' : 'bg-white/[.08] text-white/45'}`}
                           >Ø pro Tag</button>
                         </div>
                       )}
@@ -1226,7 +1226,7 @@ function EditGoalModal({ goal, onSave, onClose }) {
 
                   {/* Aktivitätsfilter bei Bestleistung */}
                   {cond.aggregation === 'max' && isActivityGoal && filterableFieldsEdit.length > 0 && (
-                    <div className="border border-slate-600 rounded-xl p-3 space-y-2">
+                    <div className="border border-white/[.1] rounded-2xl p-3 space-y-2">
                       <div className="flex items-center justify-between">
                         <div>
                           <span className="text-xs font-semibold text-slate-200">In derselben Aktivität</span>
@@ -1243,7 +1243,7 @@ function EditGoalModal({ goal, onSave, onClose }) {
                         const field = filterableFieldsEdit.find(f => f.key === filter.fieldKey) || filterableFieldsEdit[0];
                         const isNum = (filter.fieldType || 'select') === 'number';
                         return (
-                          <div key={fi} className="bg-slate-800/80 rounded-xl p-2.5 space-y-2">
+                          <div key={fi} className="bg-white/[.06] rounded-xl p-2.5 space-y-2">
                             <div className="flex items-center gap-2">
                               <select className="input text-xs py-1.5 flex-1" value={filter.fieldKey}
                                 onChange={e => {
@@ -1263,7 +1263,7 @@ function EditGoalModal({ goal, onSave, onClose }) {
                                   {[{ v: 'min', l: 'Mindestens' }, { v: 'max', l: 'Maximal' }, { v: 'exact', l: 'Genau' }].map(({ v, l }) => (
                                     <button key={v} type="button"
                                       onClick={() => updateFilterEdit(i, fi, { numOperator: v })}
-                                      className={`flex-1 py-1.5 rounded-lg text-xs font-semibold transition-colors ${(filter.numOperator || 'min') === v ? 'bg-brand-600 text-white' : 'bg-slate-700 text-slate-400'}`}
+                                      className={`flex-1 py-1.5 rounded-lg text-xs font-semibold transition-colors ${(filter.numOperator || 'min') === v ? 'bg-brand-600 text-white' : 'bg-white/[.08] text-white/45'}`}
                                     >{l}</button>
                                   ))}
                                 </div>
@@ -1283,7 +1283,7 @@ function EditGoalModal({ goal, onSave, onClose }) {
                                   {(field?.options || []).map(opt => (
                                     <button key={opt} type="button"
                                       onClick={() => toggleFilterValueEdit(i, fi, opt)}
-                                      className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-colors ${(filter.values || []).includes(opt) ? 'bg-brand-600 text-white' : 'bg-slate-700 text-slate-400'}`}
+                                      className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-colors ${(filter.values || []).includes(opt) ? 'bg-brand-600 text-white' : 'bg-white/[.08] text-white/45'}`}
                                     >{opt}</button>
                                   ))}
                                 </div>
@@ -1301,7 +1301,7 @@ function EditGoalModal({ goal, onSave, onClose }) {
                   <span className="text-xs text-slate-500">Verknüpfung:</span>
                   {['AND', 'OR'].map(op => (
                     <button key={op} type="button" onClick={() => setCondOpEdit(op)}
-                      className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors ${condOpEdit === op ? 'bg-brand-600 text-white' : 'bg-slate-700 text-slate-400'}`}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors ${condOpEdit === op ? 'bg-brand-600 text-white' : 'bg-white/[.08] text-white/45'}`}
                     >{op === 'AND' ? 'UND' : 'ODER'}</button>
                   ))}
                 </div>
@@ -1320,7 +1320,7 @@ function EditGoalModal({ goal, onSave, onClose }) {
               </div>
               {steps.length === 0 && (
                 <button type="button" onClick={addStep}
-                  className="w-full mt-2 border-2 border-dashed border-slate-700 hover:border-brand-600 rounded-xl py-6 text-slate-500 hover:text-brand-400 transition-colors flex flex-col items-center gap-2"
+                  className="w-full mt-2 border-2 border-dashed border-white/20 hover:border-brand-400/60 rounded-2xl py-6 text-slate-500 hover:text-brand-400 transition-colors flex flex-col items-center gap-2"
                 >
                   <Plus size={20} />
                   <span className="text-sm">Ersten Meilenstein hinzufügen</span>
@@ -1328,7 +1328,7 @@ function EditGoalModal({ goal, onSave, onClose }) {
               )}
               <div className="space-y-2">
                 {steps.map((step, i) => (
-                  <div key={i} className="bg-slate-800/50 border border-slate-700 rounded-xl p-3 space-y-2">
+                  <div key={i} className="bg-white/[.05] border border-white/[.09] rounded-2xl p-3 space-y-2">
                     <div className="flex items-center justify-between">
                       <span className="text-xs font-semibold text-slate-300">Meilenstein {i + 1}</span>
                       <button type="button" onClick={() => removeStep(i)} className="text-slate-600 hover:text-red-400"><X size={14} /></button>
@@ -1356,7 +1356,7 @@ function EditGoalModal({ goal, onSave, onClose }) {
                       />
                     </div>
                     {step.date && step.targetValue !== '' && (
-                      <p className="text-xs text-brand-400/80 bg-brand-900/20 rounded-lg px-2 py-1">
+                      <p className="text-xs text-brand-300/80 bg-brand-500/10 rounded-xl px-2 py-1">
                         → Bis {format(parseISO(step.date), 'd. MMMM yyyy', { locale: de })}: {condLabelEdit} {step.targetValue}{unitEdit ? ` ${unitEdit}` : ''}{aggregationNoteEdit}
                       </p>
                     )}
@@ -1368,7 +1368,7 @@ function EditGoalModal({ goal, onSave, onClose }) {
         </div>
 
         {/* Footer */}
-        <div className="flex gap-3 px-5 py-4 border-t border-slate-800 flex-shrink-0">
+        <div className="flex gap-3 px-5 py-4 border-t border-white/[.08] flex-shrink-0">
           <button type="button" onClick={onClose} className="btn-secondary flex-1">Abbrechen</button>
           <button type="submit" disabled={saving || !form.name} className="btn-primary flex-1">
             {saving ? 'Speichern…' : 'Speichern'}
@@ -1433,11 +1433,11 @@ export default function Goals() {
 
       {loading ? (
         <div className="flex items-center justify-center py-16">
-          <div className="w-8 h-8 border-2 border-brand-500 border-t-transparent rounded-full animate-spin" />
+          <div className="w-8 h-8 border-2 border-zinc-700 border-t-brand-500 rounded-full animate-spin" />
         </div>
       ) : goals.length === 0 ? (
         <div className="card p-12 text-center">
-          <Target size={36} className="text-slate-600 mx-auto mb-3" />
+          <Target size={32} className="text-zinc-700 mx-auto mb-3" />
           <p className="text-slate-400">Noch keine Ziele definiert</p>
           <p className="text-slate-600 text-sm mt-1">Für Aktivitäten und Gewohnheiten</p>
           <button onClick={() => setShowCreate(true)} className="btn-primary mt-4 inline-flex items-center gap-2">
