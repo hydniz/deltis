@@ -50,7 +50,7 @@ export default function Sidebar() {
       <div className="px-5 py-5 border-b border-white/[.07]">
         <div className="flex items-center gap-2.5">
           <div className="w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0"
-            style={{ background: 'linear-gradient(135deg, #c4623a, #8a3c1e)', boxShadow: '0 2px 8px rgba(60,22,10,0.4)' }}>
+            style={{ background: 'linear-gradient(135deg, var(--brand-500), var(--brand-700))', boxShadow: '0 2px 8px var(--logo-shadow)' }}>
             <Activity size={16} className="text-white" />
           </div>
           <span className="font-semibold text-white tracking-tight">{APP_NAME}</span>
@@ -76,7 +76,7 @@ export default function Sidebar() {
         <div className="flex items-center gap-3 px-3 py-2 mb-1">
           <div
             className="w-8 h-8 rounded-full border border-white/15 flex items-center justify-center text-sm font-semibold text-white flex-shrink-0"
-            style={{ background: 'linear-gradient(135deg, rgba(196,98,58,0.6), rgba(138,60,30,0.6))' }}
+            style={{ background: 'linear-gradient(135deg, var(--avatar-bg-from), var(--avatar-bg-to))' }}
           >
             {user?.name?.charAt(0)?.toUpperCase() || 'U'}
           </div>
