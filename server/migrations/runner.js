@@ -124,6 +124,27 @@ async function runMigrations(opts = {}) {
     const applied = await Migration.find().select('name').lean();
     const appliedSet = new Set(applied.map(m => m.name));
 
+    // Guard: if the DB has migrations that are not present in this codebase
+    // the backend has been rolled back to an older version.  Starting up would
+    // silently operate on a schema this code does not understand, risking data
+    // corruption.  Refuse to start and ask the operator to either deploy the
+    // correct backend version or manually roll back the database.
+    const codeNames = new Set(files.map(f => f.replace(/\.js$/, '')));
+    const futureMigrations = applied.map(m => m.name).filter(n => !codeNames.has(n));
+    if (futureMigrations.length > 0) {
+      const msg =
+        `DB schema is ahead of this backend version — ` +
+        `${futureMigrations.length} migration(s) applied in the DB are unknown to this ` +
+        `codebase: ${futureMigrations.join(', ')}. ` +
+        `Deploy the matching backend version or roll back the database before starting.`;
+      logErr(`✗ ${msg}`);
+      if (exitOnFailure) process.exit(1);
+      const e = new Error(msg);
+      e.code = 'SCHEMA_AHEAD_OF_CODE';
+      e.futureMigrations = futureMigrations;
+      throw e;
+    }
+
     const pending = files.filter(f => !appliedSet.has(f.replace(/\.js$/, '')));
     if (pending.length === 0) {
       log(`Database schema is up to date (${appliedSet.size} migration(s) applied)`);

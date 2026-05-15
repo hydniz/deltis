@@ -20,53 +20,59 @@ describe('GET /api/admin/setup-status', () => {
   it('returns setupNeeded=true when no admin exists', async () => {
     const res = await request(app).get('/api/admin/setup-status');
     expect(res.status).toBe(200);
-    expect(res.body.setupNeeded).toBe(false);
+    expect(res.body.setupNeeded).toBe(true);
   });
 
-  it('returns setupNeeded=true and adminUuid when admin has no password set', async () => {
+  it('returns setupNeeded=true when admin has no password set', async () => {
     const User = require('../models/User');
-    const crypto = require('crypto');
-    const uuid = crypto.randomUUID();
-    await User.create({ uuid, name: 'Admin', isAdmin: true });
+    await User.create({ name: 'Admin', isAdmin: true });
 
     const res = await request(app).get('/api/admin/setup-status');
     expect(res.status).toBe(200);
     expect(res.body.setupNeeded).toBe(true);
-    expect(res.body.adminUuid).toBe(uuid);
+    expect(res.body.adminUuid).toBeUndefined();
   });
 
-  it('returns setupNeeded=false and no UUID when admin is fully set up', async () => {
+  it('returns setupNeeded=false when admin is fully set up', async () => {
     await createAdminUser();
     const res = await request(app).get('/api/admin/setup-status');
     expect(res.status).toBe(200);
     expect(res.body.setupNeeded).toBe(false);
-    expect(res.body.adminUuid).toBeNull();
   });
 });
 
 describe('POST /api/admin/setup', () => {
-  it('sets the admin password during first-time setup', async () => {
-    const User = require('../models/User');
-    const crypto = require('crypto');
-    const uuid = crypto.randomUUID();
-    await User.create({ uuid, name: 'Admin', isAdmin: true });
-
+  it('creates admin directly when no admin exists yet', async () => {
     const res = await request(app)
       .post('/api/admin/setup')
-      .send({ password: 'newsecret1' });
+      .send({ username: 'admin', password: 'newsecret1' });
     expect(res.status).toBe(200);
     expect(res.body.ok).toBe(true);
   });
 
-  it('rejects a password shorter than 8 characters', async () => {
+  it('sets username and password for a passwordless admin', async () => {
     const User = require('../models/User');
-    const crypto = require('crypto');
-    const uuid = crypto.randomUUID();
-    await User.create({ uuid, name: 'Admin', isAdmin: true });
+    await User.create({ name: 'Admin', isAdmin: true });
 
     const res = await request(app)
       .post('/api/admin/setup')
-      .send({ password: 'short' });
+      .send({ username: 'admin', password: 'newsecret1' });
+    expect(res.status).toBe(200);
+    expect(res.body.ok).toBe(true);
+  });
+
+  it('rejects a username shorter than 3 characters', async () => {
+    const res = await request(app)
+      .post('/api/admin/setup')
+      .send({ username: 'ab', password: 'newsecret1' });
+    expect(res.status).toBe(400);
+    expect(res.body.error).toMatch(/3/);
+  });
+
+  it('rejects a password shorter than 8 characters', async () => {
+    const res = await request(app)
+      .post('/api/admin/setup')
+      .send({ username: 'admin', password: 'short' });
     expect(res.status).toBe(400);
     expect(res.body.error).toMatch(/8/);
   });
@@ -75,7 +81,7 @@ describe('POST /api/admin/setup', () => {
     await createAdminUser();
     const res = await request(app)
       .post('/api/admin/setup')
-      .send({ password: 'anothersecret1' });
+      .send({ username: 'admin', password: 'anothersecret1' });
     expect(res.status).toBe(400);
   });
 });

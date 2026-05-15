@@ -15,9 +15,8 @@ const adminOnly = (req, res, next) => {
 router.get('/setup-status', async (req, res) => {
   try {
     const admin = await User.findOne({ isAdmin: true }).select('+adminSecretHash +passwordHash');
-    if (!admin) return res.json({ setupNeeded: false });
-    const setupNeeded = !admin.passwordHash && !admin.adminSecretHash;
-    res.json({ setupNeeded, adminUuid: setupNeeded ? admin.uuid : null });
+    const setupNeeded = !admin || (!admin.passwordHash && !admin.adminSecretHash);
+    res.json({ setupNeeded });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -26,15 +25,24 @@ router.get('/setup-status', async (req, res) => {
 router.post('/setup', async (req, res) => {
   try {
     const admin = await User.findOne({ isAdmin: true }).select('+adminSecretHash +passwordHash');
-    if (!admin || admin.passwordHash || admin.adminSecretHash) {
+    if (admin?.passwordHash || admin?.adminSecretHash) {
       return res.status(400).json({ error: 'Setup bereits abgeschlossen' });
     }
-    const { password } = req.body;
+    const { username, password } = req.body;
+    if (!username || username.length < 3) {
+      return res.status(400).json({ error: 'Benutzername muss mindestens 3 Zeichen haben' });
+    }
     if (!password || password.length < 8) {
       return res.status(400).json({ error: 'Passwort muss mindestens 8 Zeichen haben' });
     }
-    admin.passwordHash = await pw.hash(password);
-    await admin.save();
+    const passwordHash = await pw.hash(password);
+    if (admin) {
+      admin.username = username.toLowerCase();
+      admin.passwordHash = passwordHash;
+      await admin.save();
+    } else {
+      await User.create({ username: username.toLowerCase(), passwordHash, name: 'Admin', isAdmin: true });
+    }
     res.json({ ok: true });
   } catch (err) {
     res.status(500).json({ error: err.message });

@@ -36,6 +36,8 @@ app.use('/api', versionRouter);
 app.use('/api/branding', require('./routes/branding'));
 app.use('/api/auth', require('./routes/auth'));
 app.use('/api/admin', require('./routes/admin'));
+app.use('/api/admin/update', require('./routes/update'));
+app.use('/api/admin/config', require('./routes/config'));
 app.use('/api/data', require('./routes/data'));
 app.use('/api/activities', require('./routes/activities'));
 app.use('/api/planner', require('./routes/planner'));
@@ -77,13 +79,9 @@ async function seedAdminUser() {
 
   const admin = await User.findOne({ isAdmin: true });
   if (!admin) {
-    // First start: generate admin UUID, password is set via /admin/setup in the browser
-    const uuid = crypto.randomUUID();
-    await User.create({ uuid, name: 'Admin', isAdmin: true });
     console.log('\n' + '═'.repeat(58));
-    console.log(`  ${branding.name} – FIRST START – admin account created!`);
-    console.log(`  UUID: ${uuid}`);
-    console.log('  Complete setup at /admin in your browser.');
+    console.log(`  ${branding.name} – FIRST START`);
+    console.log('  Create your admin account at /admin/setup in your browser.');
     console.log('═'.repeat(58) + '\n');
   }
 
@@ -103,6 +101,7 @@ async function seedAdminUser() {
 }
 
 const { runMigrations } = require('./migrations/runner');
+const appConfig = require('./utils/config');
 
 async function start() {
   await mongoose.connect(process.env.MONGODB_URI);
@@ -112,6 +111,7 @@ async function start() {
   // current schema. A failure here automatically restores from the
   // pre-migration backup and exits the process.
   await runMigrations();
+  await appConfig.loadAll();
 
   await seedAdminUser();
   await seedPredefinedData();
