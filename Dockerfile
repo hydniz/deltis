@@ -1,6 +1,12 @@
 # ── Stage 1: Build React frontend ─────────────────────────────────────────
 FROM node:20-alpine AS frontend
 WORKDIR /app/client
+
+# Passed in by the build command (e.g. --build-arg GIT_COMMIT=$(git rev-parse --short HEAD))
+# so vite.config.js can embed the commit hash without needing git inside the container.
+ARG GIT_COMMIT=unknown
+ENV GIT_COMMIT=$GIT_COMMIT
+
 COPY client/package*.json ./
 RUN npm ci
 COPY client/ ./
