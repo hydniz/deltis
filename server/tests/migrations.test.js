@@ -135,6 +135,28 @@ describe('migration runner', () => {
     writeMigration(dir, '001', 'b', '');
     await expect(listMigrationFiles(dir)).rejects.toThrow(/Duplicate migration prefix/);
   });
+
+  it('blocks when database migration version is newer than supported by this backend', async () => {
+    const dir = tmpDir();
+    const backupDir = tmpDir('mig-backup-');
+    writeMigration(dir, '001', 'first',
+      `    await mongoose.connection.collection('t').insertOne({ k: 'v' });`);
+
+    const Migration = require('../models/Migration');
+    await Migration.create({ name: '999-future-schema' });
+
+    silenceConsole();
+    await expect(runMigrations({ dir, backupDir, exitOnFailure: false }))
+      .rejects.toMatchObject({
+        code: 'DB_VERSION_TOO_NEW',
+        dbVersion: 999,
+        maxSupportedVersion: 1,
+      });
+    restoreConsole();
+
+    const docs = await mongoose.connection.collection('t').find().toArray();
+    expect(docs).toHaveLength(0);
+  });
 });
 
 describe('migration runner — backup and rollback', () => {
