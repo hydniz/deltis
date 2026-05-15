@@ -1,31 +1,12 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ShieldCheck, Copy, Check, Eye, EyeOff, AlertCircle, Activity } from 'lucide-react';
+import { Check, Eye, EyeOff, AlertCircle, Activity } from 'lucide-react';
 import { APP_NAME } from '../config/branding';
 import api from '../utils/api';
 
-function CopyButton({ text }) {
-  const [copied, setCopied] = useState(false);
-  const copy = async () => {
-    await navigator.clipboard.writeText(text);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
-  };
-  return (
-    <button
-      type="button"
-      onClick={copy}
-      className="flex items-center gap-1.5 text-xs text-slate-400 hover:text-slate-200 transition-colors"
-    >
-      {copied ? <Check size={13} className="text-green-400" /> : <Copy size={13} />}
-      {copied ? 'Kopiert!' : 'Kopieren'}
-    </button>
-  );
-}
-
 export default function AdminSetup() {
   const navigate = useNavigate();
-  const [adminUuid, setAdminUuid] = useState(null);
+  const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [confirm, setConfirm] = useState('');
   const [showPw, setShowPw] = useState(false);
@@ -37,11 +18,7 @@ export default function AdminSetup() {
   useEffect(() => {
     api.get('/admin/setup-status')
       .then(res => {
-        if (!res.data.setupNeeded) {
-          navigate('/login', { replace: true });
-        } else {
-          setAdminUuid(res.data.adminUuid);
-        }
+        if (!res.data.setupNeeded) navigate('/login', { replace: true });
       })
       .catch(() => navigate('/login', { replace: true }))
       .finally(() => setLoading(false));
@@ -49,6 +26,10 @@ export default function AdminSetup() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    if (username.length < 3) {
+      setError('Benutzername muss mindestens 3 Zeichen haben.');
+      return;
+    }
     if (password.length < 8) {
       setError('Passwort muss mindestens 8 Zeichen haben.');
       return;
@@ -60,7 +41,7 @@ export default function AdminSetup() {
     setSubmitting(true);
     setError('');
     try {
-      await api.post('/admin/setup', { password });
+      await api.post('/admin/setup', { username, password });
       setDone(true);
     } catch (err) {
       setError(err.response?.data?.error || 'Setup fehlgeschlagen.');
@@ -92,30 +73,23 @@ export default function AdminSetup() {
         </div>
 
         {!done ? (
-          <div className="card p-6 space-y-5">
-            <div>
-              <div className="flex items-center gap-2 mb-3">
-                <ShieldCheck size={16} className="text-brand-400" />
-                <h2 className="text-sm font-semibold text-slate-200">Deine Admin-UUID</h2>
-              </div>
-              <p className="text-xs text-slate-500 mb-3">
-                Speichere diese UUID – damit meldest du dich später an.
-              </p>
-              <div className="bg-slate-900 border border-slate-700 rounded-xl p-3">
-                <code className="text-brand-300 text-sm font-mono break-all leading-relaxed">
-                  {adminUuid}
-                </code>
-              </div>
-              <div className="flex justify-end mt-2">
-                <CopyButton text={adminUuid} />
-              </div>
-            </div>
-
-            <div className="border-t border-slate-800" />
-
+          <div className="card p-6">
             <form onSubmit={handleSubmit} className="space-y-4">
               <div>
-                <label className="label">Passwort setzen</label>
+                <label className="label">Benutzername</label>
+                <input
+                  type="text"
+                  value={username}
+                  onChange={e => setUsername(e.target.value)}
+                  className="input"
+                  placeholder="Mindestens 3 Zeichen"
+                  autoComplete="username"
+                  autoFocus
+                />
+              </div>
+
+              <div>
+                <label className="label">Passwort</label>
                 <div className="relative">
                   <input
                     type={showPw ? 'text' : 'password'}
@@ -124,7 +98,6 @@ export default function AdminSetup() {
                     className="input pr-10"
                     placeholder="Mindestens 8 Zeichen"
                     autoComplete="new-password"
-                    autoFocus
                   />
                   <button
                     type="button"
@@ -158,7 +131,7 @@ export default function AdminSetup() {
 
               <button
                 type="submit"
-                disabled={submitting || !password || !confirm}
+                disabled={submitting || !username || !password || !confirm}
                 className="btn-primary w-full py-3 flex items-center justify-center gap-2"
               >
                 {submitting
@@ -176,7 +149,7 @@ export default function AdminSetup() {
             <div>
               <h2 className="text-lg font-semibold text-white mb-1">Setup abgeschlossen!</h2>
               <p className="text-slate-400 text-sm">
-                Melde dich jetzt mit deiner UUID und deinem Passwort an.
+                Melde dich jetzt mit deinem Benutzernamen und Passwort an.
               </p>
             </div>
             <button

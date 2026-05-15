@@ -4,8 +4,15 @@ import { execSync } from 'child_process';
 import { readFileSync } from 'fs';
 
 const pkg = JSON.parse(readFileSync('./package.json', 'utf-8'));
+
+// GIT_COMMIT env var is the full SHA injected by Docker build-arg or CI.
+// Fall back to the short hash from git for local dev, or 'unknown' if git isn't available.
 let commitHash = 'unknown';
-try { commitHash = execSync('git rev-parse --short HEAD').toString().trim(); } catch {}
+if (process.env.GIT_COMMIT) {
+  commitHash = process.env.GIT_COMMIT.slice(0, 7);
+} else {
+  try { commitHash = execSync('git rev-parse --short HEAD').toString().trim(); } catch {}
+}
 
 export default defineConfig(({ mode }) => {
   const base = pkg.stage ? `${pkg.version}-${pkg.stage}` : pkg.version;

@@ -77,13 +77,9 @@ async function seedAdminUser() {
 
   const admin = await User.findOne({ isAdmin: true });
   if (!admin) {
-    // First start: generate admin UUID, password is set via /admin/setup in the browser
-    const uuid = crypto.randomUUID();
-    await User.create({ uuid, name: 'Admin', isAdmin: true });
     console.log('\n' + '═'.repeat(58));
-    console.log(`  ${branding.name} – FIRST START – admin account created!`);
-    console.log(`  UUID: ${uuid}`);
-    console.log('  Complete setup at /admin in your browser.');
+    console.log(`  ${branding.name} – FIRST START`);
+    console.log('  Create your admin account at /admin/setup in your browser.');
     console.log('═'.repeat(58) + '\n');
   }
 

@@ -1,7 +1,7 @@
 const mongoose = require('mongoose');
 
 const userSchema = new mongoose.Schema({
-  uuid: { type: String, required: true, unique: true },
+  uuid: { type: String, unique: true, sparse: true },
   username: { type: String, unique: true, sparse: true, minlength: 3, maxlength: 30 },
   passwordHash: { type: String, select: false },
   mustChangePassword: { type: Boolean, default: false },
