@@ -37,6 +37,11 @@ function logErr(msg) {
   console.error(`[migration] ${msg}`);
 }
 
+function extractMigrationVersion(name) {
+  const match = typeof name === 'string' ? name.match(/^(\d{3,})-/) : null;
+  return match ? parseInt(match[1], 10) : null;
+}
+
 // Lists migration files in `dir`, sorted by numeric prefix ascending.
 async function listMigrationFiles(dir) {
   const entries = await fs.readdir(dir);
@@ -123,6 +128,30 @@ async function runMigrations(opts = {}) {
     const files = await listMigrationFiles(dir);
     const applied = await Migration.find().select('name').lean();
     const appliedSet = new Set(applied.map(m => m.name));
+
+    const supportedVersions = files
+      .map(file => extractMigrationVersion(file.replace(/\.js$/, '')))
+      .filter(v => v !== null);
+    const appliedVersions = applied
+      .map(m => extractMigrationVersion(m.name))
+      .filter(v => v !== null);
+    const maxSupportedVersion = supportedVersions.length ? Math.max(...supportedVersions) : 0;
+    const dbVersion = appliedVersions.length ? Math.max(...appliedVersions) : 0;
+
+    if (dbVersion > maxSupportedVersion) {
+      logErr('✗ CRITICAL: Database schema version is newer than this backend supports.');
+      logErr(`  Actual DB version: ${dbVersion}`);
+      logErr(`  Max supported version: ${maxSupportedVersion}`);
+      logErr('  Refusing startup to prevent running against an unknown schema.');
+      if (exitOnFailure) process.exit(1);
+      const e = new Error(
+        `Database schema version mismatch: DB=${dbVersion}, max supported=${maxSupportedVersion}`
+      );
+      e.code = 'DB_VERSION_TOO_NEW';
+      e.dbVersion = dbVersion;
+      e.maxSupportedVersion = maxSupportedVersion;
+      throw e;
+    }
 
     const pending = files.filter(f => !appliedSet.has(f.replace(/\.js$/, '')));
     if (pending.length === 0) {
