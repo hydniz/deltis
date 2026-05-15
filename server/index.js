@@ -107,6 +107,13 @@ async function start() {
   await mongoose.connect(process.env.MONGODB_URI);
   console.log('✓ MongoDB connected');
 
+  // Prevent unhandled 'error' events on the mongoose connection from crashing
+  // the Node process. After initial connect(), mongoose can still emit errors
+  // (e.g. temporary network blip); without this handler Node 15+ will exit.
+  mongoose.connection.on('error', err => {
+    console.error('✗ MongoDB connection error:', err.message);
+  });
+
   // Apply pending migrations BEFORE seeding so seeds always run against the
   // current schema. A failure here automatically restores from the
   // pre-migration backup and exits the process.
