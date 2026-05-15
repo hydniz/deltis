@@ -281,6 +281,77 @@ describe('backup module', () => {
   });
 });
 
+describe('migration runner — schema-ahead-of-code guard', () => {
+  it('refuses to start when the DB has migrations unknown to the codebase', async () => {
+    const dir = tmpDir();
+    const backupDir = tmpDir('mig-backup-');
+
+    // Simulate a newer deployment that applied 001-old and 002-new-feature.
+    // The "rolled-back" backend only ships 001-old.
+    const Migration = require('../models/Migration');
+    await Migration.insertMany([
+      { name: '001-old', durationMs: 10 },
+      { name: '002-new-feature', durationMs: 20 },
+    ]);
+
+    writeMigration(dir, '001', 'old', '    // no-op');
+
+    silenceConsole();
+    let captured;
+    try {
+      await runMigrations({ dir, backupDir, exitOnFailure: false });
+    } catch (err) {
+      captured = err;
+    }
+    restoreConsole();
+
+    expect(captured).toBeDefined();
+    expect(captured.code).toBe('SCHEMA_AHEAD_OF_CODE');
+    expect(captured.futureMigrations).toEqual(['002-new-feature']);
+    expect(captured.message).toMatch(/002-new-feature/);
+  });
+
+  it('starts normally when all DB migrations are also present in the codebase', async () => {
+    const dir = tmpDir();
+    const backupDir = tmpDir('mig-backup-');
+
+    writeMigration(dir, '001', 'a', '    // no-op');
+    writeMigration(dir, '002', 'b', '    // no-op');
+
+    // Both already applied — should detect "up to date", not throw.
+    const Migration = require('../models/Migration');
+    await Migration.insertMany([
+      { name: '001-a', durationMs: 5 },
+      { name: '002-b', durationMs: 5 },
+    ]);
+
+    silenceConsole();
+    const result = await runMigrations({ dir, backupDir, exitOnFailure: false });
+    restoreConsole();
+
+    expect(result.applied).toBe(0);
+  });
+
+  it('releases the lock before throwing the SCHEMA_AHEAD_OF_CODE error', async () => {
+    const dir = tmpDir();
+    const backupDir = tmpDir('mig-backup-');
+
+    const Migration = require('../models/Migration');
+    await Migration.create({ name: '099-future', durationMs: 1 });
+
+    // No code migration files — all DB records are "future".
+    const MigrationLock = require('../models/MigrationLock');
+    silenceConsole();
+    try {
+      await runMigrations({ dir, backupDir, exitOnFailure: false });
+    } catch { /* expected */ }
+    restoreConsole();
+
+    const lock = await MigrationLock.findOne({ _id: 'lock' });
+    expect(lock).toBeNull();
+  });
+});
+
 describe('migration runner — lock and index invariants', () => {
   it('releases the migration lock even when a migration fails', async () => {
     const dir = tmpDir();

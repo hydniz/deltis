@@ -36,6 +36,8 @@ app.use('/api', versionRouter);
 app.use('/api/branding', require('./routes/branding'));
 app.use('/api/auth', require('./routes/auth'));
 app.use('/api/admin', require('./routes/admin'));
+app.use('/api/admin/update', require('./routes/update'));
+app.use('/api/admin/config', require('./routes/config'));
 app.use('/api/data', require('./routes/data'));
 app.use('/api/activities', require('./routes/activities'));
 app.use('/api/planner', require('./routes/planner'));
@@ -99,6 +101,7 @@ async function seedAdminUser() {
 }
 
 const { runMigrations } = require('./migrations/runner');
+const appConfig = require('./utils/config');
 
 async function start() {
   await mongoose.connect(process.env.MONGODB_URI);
@@ -108,6 +111,7 @@ async function start() {
   // current schema. A failure here automatically restores from the
   // pre-migration backup and exits the process.
   await runMigrations();
+  await appConfig.loadAll();
 
   await seedAdminUser();
   await seedPredefinedData();
