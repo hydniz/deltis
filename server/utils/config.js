@@ -1,27 +1,35 @@
 // Runtime configuration utility.
 //
 // Precedence (highest first):
-//   1. process.env  – set via .env / docker-compose environment:
-//   2. DB override  – saved by admin via the settings UI
-//   3. Default      – hard-coded default value
+//   1. process.env           – set via .env / docker-compose environment
+//   2. DB override           – saved by admin via the settings UI (SystemConfig)
+//      Bootstrap file        – deltis.config.json for keys that need pre-DB access
+//   3. Default               – hard-coded default value
+//
+// Keys marked `bootstrap: true` bypass the MongoDB-backed cache and use the
+// file-based bootstrapConfig module instead (chicken-and-egg: those keys are
+// needed to establish the DB connection in the first place).
+
+const bootstrapConfig = require('./bootstrapConfig');
 
 const DEFINITIONS = {
   // ── OTA update ────────────────────────────────────────────────────────────
   UPDATE_REPO_URL: {
     label: 'GitHub Repository URL',
     group: 'OTA Update',
-    description: 'Öffentliches Repository das auf neue Commits geprüft wird.',
+    description: 'Öffentliches GitHub-Repository, das auf neue Versionen geprüft wird.',
     type: 'url',
     editable: true,
-    default: '',
+    default: 'https://github.com/hydniz/deltis',
   },
-  UPDATE_BRANCH: {
-    label: 'Branch',
+  UPDATE_RELEASE_CHANNEL: {
+    label: 'Release-Kanal',
     group: 'OTA Update',
-    description: 'Zu verfolgender Branch.',
-    type: 'text',
+    description: 'Welche Versionen für Updates geprüft werden.',
+    type: 'select',
+    options: ['stable', 'beta', 'alpha', 'main'],
     editable: true,
-    default: 'main',
+    default: 'stable',
   },
   WATCHTOWER_API_TOKEN: {
     label: 'Watchtower API-Token',
@@ -52,10 +60,12 @@ const DEFINITIONS = {
   MONGODB_URI: {
     label: 'MongoDB URI',
     group: 'Server',
-    description: 'Verbindungszeichenkette für MongoDB. Nur per .env setzbar.',
+    description: 'Verbindungszeichenkette für MongoDB. Neustart erforderlich. Wenn in .env gesetzt, überschreibt .env diesen Wert.',
     type: 'password',
-    editable: false,
-    default: '',
+    editable: true,
+    bootstrap: true, // stored in deltis.config.json, not in DB (chicken-and-egg)
+    restartRequired: true,
+    default: 'mongodb://localhost:27017/habit_tracker',
   },
   // ── Sicherheit ────────────────────────────────────────────────────────────
   // These are read-only in the UI – they exist purely so the admin can see
@@ -79,7 +89,7 @@ const DEFINITIONS = {
   PEPPER_FILE: {
     label: 'Pepper-Datei',
     group: 'Sicherheit',
-    description: 'Pfad zur Pepper-Datei für Passwort-Hashing. Niemals nach erstem Login ändern!',
+    description: 'Pfad zur Pepper-Datei für Passwort-Hashing. Niemals nach erstem Login ändern! Nur per .env setzbar.',
     type: 'status',
     editable: false,
     default: '',
@@ -87,7 +97,7 @@ const DEFINITIONS = {
   PASSWORD_PEPPER: {
     label: 'Pepper (direkt)',
     group: 'Sicherheit',
-    description: 'Pepper-Wert. Niemals nach erstem Login ändern!',
+    description: 'Pepper-Wert direkt. Niemals nach erstem Login ändern! Nur per .env setzbar.',
     type: 'status',
     editable: false,
     default: '',
@@ -107,23 +117,36 @@ async function loadAll() {
   }
 }
 
-// Returns the effective value: process.env → DB cache → default
+// Returns the effective value: process.env → bootstrap file or DB cache → default
 function get(key) {
+  const def = DEFINITIONS[key];
   const envVal = process.env[key];
   if (envVal !== undefined && envVal !== '') return envVal;
+
+  if (def?.bootstrap) {
+    return bootstrapConfig.get(key) ?? def.default ?? '';
+  }
   if (cache[key] !== undefined) return cache[key];
-  return DEFINITIONS[key]?.default ?? '';
+  return def?.default ?? '';
 }
 
-// Returns where the effective value comes from: 'env' | 'db' | 'default'
+// Returns where the effective value comes from: 'env' | 'db' | 'file' | 'default'
 function getSource(key) {
+  const def = DEFINITIONS[key];
   const envVal = process.env[key];
   if (envVal !== undefined && envVal !== '') return 'env';
+
+  if (def?.bootstrap) return bootstrapConfig.getSource(key);
   if (cache[key] !== undefined) return 'db';
   return 'default';
 }
 
 async function set(key, value) {
+  const def = DEFINITIONS[key];
+  if (def?.bootstrap) {
+    bootstrapConfig.set(key, value);
+    return;
+  }
   const SystemConfig = require('../models/SystemConfig');
   await SystemConfig.findOneAndUpdate(
     { key },
@@ -134,6 +157,11 @@ async function set(key, value) {
 }
 
 async function remove(key) {
+  const def = DEFINITIONS[key];
+  if (def?.bootstrap) {
+    bootstrapConfig.remove(key);
+    return;
+  }
   const SystemConfig = require('../models/SystemConfig');
   await SystemConfig.deleteOne({ key });
   delete cache[key];

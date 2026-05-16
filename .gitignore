@@ -2,6 +2,7 @@ node_modules/
 client/node_modules/
 client/dist/
 .env
+deltis.config.json
 .env.production
 .env.*.local
 *.log

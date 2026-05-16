@@ -11,14 +11,16 @@ import Habits from './pages/Habits';
 import Weight from './pages/Weight';
 import Goals from './pages/Goals';
 import Settings from './pages/Settings';
-import Admin from './pages/Admin';
+import AdminUsers from './pages/AdminUsers';
+import AdminConfig from './pages/AdminConfig';
+import AdminUpdates from './pages/AdminUpdates';
 import AdminSetup from './pages/AdminSetup';
 import api from './utils/api';
 import { User, AlertCircle, Lock, Eye, EyeOff, KeyRound, AlertTriangle } from 'lucide-react';
 import { REQUIRED_API_VERSION } from './config/compatibility';
 
 
-// ── CompatibilityCheck ────────────────────────────────────────────────────
+// ── CompatibilityCheck ────────────────────────────────────────────────────────
 // Fetches backend API version on mount, logs the result, and renders a
 // persistent warning banner if frontend and backend are incompatible.
 
@@ -304,8 +306,8 @@ function ProtectedRoute({ children }) {
   return user ? children : <Navigate to="/login" replace />;
 }
 
-// Standalone route for /admin – checks auth and setup status itself
-function AdminPage() {
+// Admin area: handles auth check, setup redirect, and nested sub-routes.
+function AdminArea() {
   const { user, loading } = useAuth();
   const [setupNeeded, setSetupNeeded] = useState(null);
 
@@ -318,15 +320,21 @@ function AdminPage() {
   }, [loading, user]);
 
   if (loading || (!user?.isAdmin && setupNeeded === null)) return <Spinner />;
-  if (user?.isAdmin) {
-    return (
-      <Layout>
-        <Admin />
-      </Layout>
-    );
+  if (!user?.isAdmin) {
+    if (setupNeeded) return <Navigate to="/admin/setup" replace />;
+    return <Navigate to="/login" replace />;
   }
-  if (setupNeeded) return <Navigate to="/admin/setup" replace />;
-  return <Navigate to="/login" replace />;
+
+  return (
+    <Layout>
+      <Routes>
+        <Route path="users"   element={<AdminUsers />} />
+        <Route path="config"  element={<AdminConfig />} />
+        <Route path="updates" element={<AdminUpdates />} />
+        <Route path="*"       element={<Navigate to="users" replace />} />
+      </Routes>
+    </Layout>
+  );
 }
 
 function AppInner() {
@@ -337,10 +345,12 @@ function AppInner() {
         <MustChangePasswordModal />
         <Routes>
           {/* Public routes */}
-          <Route path="/" element={<RootRoute />} />
-          <Route path="/login" element={<Login />} />
+          <Route path="/"            element={<RootRoute />} />
+          <Route path="/login"       element={<Login />} />
           <Route path="/admin/setup" element={<AdminSetup />} />
-          <Route path="/admin" element={<AdminPage />} />
+
+          {/* Admin sub-routes */}
+          <Route path="/admin/*" element={<AdminArea />} />
 
           {/* Protected app routes */}
           <Route
@@ -351,13 +361,13 @@ function AppInner() {
               </ProtectedRoute>
             }
           >
-            <Route path="dashboard" element={<Dashboard />} />
+            <Route path="dashboard"  element={<Dashboard />} />
             <Route path="activities" element={<Activities />} />
-            <Route path="planner" element={<Planner />} />
-            <Route path="habits" element={<Habits />} />
-            <Route path="weight" element={<Weight />} />
-            <Route path="goals" element={<Goals />} />
-            <Route path="settings" element={<Settings />} />
+            <Route path="planner"    element={<Planner />} />
+            <Route path="habits"     element={<Habits />} />
+            <Route path="weight"     element={<Weight />} />
+            <Route path="goals"      element={<Goals />} />
+            <Route path="settings"   element={<Settings />} />
           </Route>
 
           {/* Catch-all: redirect unknown paths to home */}

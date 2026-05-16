@@ -4,6 +4,7 @@ const crypto = require('crypto');
 const auth = require('../middleware/auth');
 const User = require('../models/User');
 const pw = require('../utils/password');
+const bootstrapConfig = require('../utils/bootstrapConfig');
 
 const adminOnly = (req, res, next) => {
   if (!req.user?.isAdmin) return res.status(403).json({ error: 'Kein Zugriff' });
@@ -44,6 +45,38 @@ router.post('/setup', async (req, res) => {
       await User.create({ username: username.toLowerCase(), passwordHash, name: 'Admin', isAdmin: true });
     }
     res.json({ ok: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /api/admin/setup/system-config
+// Saves initial system configuration during the onboarding phase (before login).
+// Only available while setup has not yet been completed (no admin password set).
+// Accepts bootstrap settings like MONGODB_URI that must live in deltis.config.json.
+router.post('/setup/system-config', async (req, res) => {
+  try {
+    const admin = await User.findOne({ isAdmin: true }).select('+passwordHash');
+    const setupStillOpen = !admin?.passwordHash;
+    if (!setupStillOpen) {
+      return res.status(403).json({ error: 'Setup bereits abgeschlossen. Konfiguration nur im Admin-Bereich änderbar.' });
+    }
+
+    const { mongodb_uri } = req.body;
+
+    if (mongodb_uri !== undefined) {
+      const uri = String(mongodb_uri).trim();
+      if (uri && !uri.startsWith('mongodb://') && !uri.startsWith('mongodb+srv://')) {
+        return res.status(400).json({ error: 'Ungültige MongoDB URI. Muss mit mongodb:// oder mongodb+srv:// beginnen.' });
+      }
+      if (uri) {
+        bootstrapConfig.set('MONGODB_URI', uri);
+      } else {
+        bootstrapConfig.remove('MONGODB_URI');
+      }
+    }
+
+    res.json({ ok: true, note: 'Neustart des Servers erforderlich, damit Änderungen wirksam werden.' });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

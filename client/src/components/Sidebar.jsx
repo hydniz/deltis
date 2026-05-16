@@ -3,7 +3,8 @@ import { useAuth } from '../contexts/AuthContext';
 import { APP_NAME } from '../config/branding';
 import {
   LayoutDashboard, Dumbbell, CalendarDays, Sparkles,
-  Scale, Target, Settings, LogOut, Activity, ShieldCheck
+  Scale, Target, Settings, LogOut, Activity,
+  Users, SlidersHorizontal, RefreshCw, ShieldAlert,
 } from 'lucide-react';
 
 const navItems = [
@@ -16,6 +17,12 @@ const navItems = [
   { to: '/settings', icon: Settings, label: 'Einstellungen' },
 ];
 
+const adminNavItems = [
+  { to: '/admin/users',   icon: Users,             label: 'Nutzerverwaltung' },
+  { to: '/admin/config',  icon: SlidersHorizontal, label: 'Systemkonfiguration' },
+  { to: '/admin/updates', icon: RefreshCw,         label: 'Updates (OTA)' },
+];
+
 function NavItem({ to, icon: Icon, label, end }) {
   return (
     <NavLink
@@ -26,6 +33,24 @@ function NavItem({ to, icon: Icon, label, end }) {
           isActive
             ? 'nav-active'
             : 'text-white/50 hover:text-white/80 hover:bg-white/[.06]'
+        }`
+      }
+    >
+      <Icon size={17} />
+      {label}
+    </NavLink>
+  );
+}
+
+function AdminNavItem({ to, icon: Icon, label }) {
+  return (
+    <NavLink
+      to={to}
+      className={({ isActive }) =>
+        `flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all ${
+          isActive
+            ? 'bg-amber-500/15 text-amber-300 border border-amber-500/25'
+            : 'text-amber-500/70 hover:text-amber-300 hover:bg-amber-500/10'
         }`
       }
     >
@@ -65,8 +90,20 @@ export default function Sidebar() {
 
         {user?.isAdmin && (
           <>
-            <div className="mx-2 my-2 border-t border-white/[.07]" />
-            <NavItem to="/admin" icon={ShieldCheck} label="Nutzerverwaltung" />
+            {/* Admin section separator */}
+            <div className="mx-1 mt-4 mb-2">
+              <div className="flex items-center gap-2">
+                <div className="h-px flex-1 bg-amber-500/20" />
+                <span className="flex items-center gap-1 text-[10px] font-semibold tracking-widest uppercase text-amber-500/60">
+                  <ShieldAlert size={10} />
+                  Administration
+                </span>
+                <div className="h-px flex-1 bg-amber-500/20" />
+              </div>
+            </div>
+            {adminNavItems.map(item => (
+              <AdminNavItem key={item.to} {...item} />
+            ))}
           </>
         )}
       </nav>

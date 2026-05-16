@@ -31,6 +31,8 @@ router.get('/', auth, adminOnly, (req, res) => {
       description: def.description,
       type: def.type,
       editable: def.editable,
+      ...(def.options ? { options: def.options } : {}),
+      ...(def.default ? { default: def.default } : {}),
       ...(def.restartRequired ? { restartRequired: true } : {}),
       source,
       hasValue: Boolean(effective),

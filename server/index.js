@@ -104,7 +104,13 @@ const { runMigrations } = require('./migrations/runner');
 const appConfig = require('./utils/config');
 
 async function start() {
-  await mongoose.connect(process.env.MONGODB_URI);
+  // bootstrapConfig reads deltis.config.json before DB is available.
+  // Precedence: process.env > deltis.config.json > default.
+  const bootstrapConfig = require('./utils/bootstrapConfig');
+  const mongoUri =
+    bootstrapConfig.get('MONGODB_URI') ||
+    'mongodb://localhost:27017/habit_tracker';
+  await mongoose.connect(mongoUri);
   console.log('✓ MongoDB connected');
 
   // Prevent unhandled 'error' events on the mongoose connection from crashing
