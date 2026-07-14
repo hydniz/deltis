@@ -41,7 +41,7 @@ APP_CONTAINER="${INSTANCE}-app"
 
 echo "=== Deltis deploy: $NEW_IMAGE → instance '$INSTANCE' ==="
 
-# ── 1. Pre-deploy database backup ────────────────────────────────────────────
+# 1. Pre-deploy database backup
 
 BACKUP_FILE=""
 if docker container inspect "$MONGO_CONTAINER" --format '{{.State.Running}}' 2>/dev/null | grep -q true; then
@@ -60,7 +60,7 @@ else
   echo "→ First deploy – no running MongoDB, skipping backup."
 fi
 
-# ── 2. Record rollback info ──────────────────────────────────────────────────
+# 2. Record rollback info
 
 PREVIOUS_IMAGE=""
 if docker container inspect "$APP_CONTAINER" >/dev/null 2>&1; then
@@ -76,7 +76,7 @@ if [ -n "$PREVIOUS_IMAGE" ] && [ "$PREVIOUS_IMAGE" != "$NEW_IMAGE" ]; then
   echo "→ Rollback info written (previous image: $PREVIOUS_IMAGE)"
 fi
 
-# ── 3. Load new image and switch over ────────────────────────────────────────
+# 3. Load new image and switch over
 
 echo "→ Loading image ..."
 docker load < "$TAR_FILE"
@@ -92,7 +92,7 @@ fi
 echo "→ Recreating containers ..."
 docker compose up -d --no-build --force-recreate
 
-# ── 4. Wait for the app health check ─────────────────────────────────────────
+# 4. Wait for the app health check
 
 echo "→ Waiting for health check ..."
 DEADLINE=$((SECONDS + 120))
@@ -115,7 +115,7 @@ if [ "$STATUS" != "healthy" ]; then
 fi
 echo "✓ App is healthy."
 
-# ── 5. Prune old images of this instance ─────────────────────────────────────
+# 5. Prune old images of this instance
 # Only touches tags of this instance's prefix; keeps the new and previous image
 # so rollback.sh always has something to roll back to.
 

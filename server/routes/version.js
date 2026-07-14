@@ -1,3 +1,5 @@
+// Root API info (GET /api/): version, release stage, commit, apiVersion and
+// server state flags (setup mode, emergency mode, failed update).
 const { version, stage, apiVersion: API_VERSION } = require('../../package.json');
 
 // GIT_COMMIT is injected at image build time via --build-arg.

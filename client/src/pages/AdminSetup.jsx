@@ -8,7 +8,7 @@ import {
 import { APP_NAME } from '../config/branding';
 import api from '../utils/api';
 
-// ── Step indicator ────────────────────────────────────────────────────────────
+// Step indicator
 
 function Steps({ current, steps }) {
   return (
@@ -34,7 +34,7 @@ function Steps({ current, steps }) {
   );
 }
 
-// ── Shared form building blocks ───────────────────────────────────────────────
+// Shared form building blocks
 
 // Password-style input with a show/hide toggle.
 function SecretInput({ value, onChange, placeholder, disabled, autoFocus }) {
@@ -161,7 +161,7 @@ function PepperWarningCard({ onBack, onContinue }) {
   );
 }
 
-// ── Step: Configuration ───────────────────────────────────────────────────────
+// Step: Configuration
 // One component for both variants:
 //   withMongo=true  → setup mode: MongoDB URI + JWT + pepper (POST /admin/setup/bootstrap)
 //   withMongo=false → DB already connected: JWT + pepper only (POST /admin/setup/security-config)
@@ -298,7 +298,7 @@ function StepConfig({ withMongo, onDone }) {
   );
 }
 
-// ── Step: Admin account ───────────────────────────────────────────────────────
+// Step: Admin account
 
 function StepAccount({ onDone }) {
   const [username, setUsername] = useState('');
@@ -373,7 +373,7 @@ function StepAccount({ onDone }) {
   );
 }
 
-// ── Step: Done ────────────────────────────────────────────────────────────────
+// Step: Done
 
 function StepDone({ navigate }) {
   return (
@@ -399,7 +399,7 @@ function StepDone({ navigate }) {
   );
 }
 
-// ── Main component ────────────────────────────────────────────────────────────
+// Main component
 
 export default function AdminSetup() {
   const navigate = useNavigate();

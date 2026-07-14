@@ -21,7 +21,7 @@ const HabitLog        = require('../models/HabitLog');
 function log(msg) { console.log(`[migration]   ${msg}`); }
 
 async function up() {
-  // ── 1. ActivityTypes ──────────────────────────────────────────────────────
+  // 1. ActivityTypes
   const atVersioned = await ActivityType.updateMany(
     { version: { $exists: false } },
     { $set: { version: 1 } }
@@ -32,7 +32,7 @@ async function up() {
   );
   log(`ActivityType:    version=1 on ${atVersioned.modifiedCount}, nameHistory=[] on ${atHistory.modifiedCount}`);
 
-  // ── 2. HabitDefinitions ───────────────────────────────────────────────────
+  // 2. HabitDefinitions
   const hdVersioned = await HabitDefinition.updateMany(
     { version: { $exists: false } },
     { $set: { version: 1 } }
@@ -43,7 +43,7 @@ async function up() {
   );
   log(`HabitDefinition: version=1 on ${hdVersioned.modifiedCount}, nameHistory=[] on ${hdHistory.modifiedCount}`);
 
-  // ── 3. ActivityLogs ───────────────────────────────────────────────────────
+  // 3. ActivityLogs
   const alWithRef = await ActivityLog.updateMany(
     {
       activityTypeRef: { $exists: true, $ne: null },
@@ -76,7 +76,7 @@ async function up() {
   }
   log(`ActivityLog:     ${alMatched}/${logsWithoutRef.length} ref-less logs linked by name (${alUnmatched} unmatched)`);
 
-  // ── 4. ActivityPlans ──────────────────────────────────────────────────────
+  // 4. ActivityPlans
   const apWithRef = await ActivityPlan.updateMany(
     {
       activityTypeRef: { $exists: true, $ne: null },
@@ -109,7 +109,7 @@ async function up() {
   }
   log(`ActivityPlan:    ${apMatched}/${plansWithoutRef.length} ref-less plans linked by name (${apUnmatched} unmatched)`);
 
-  // ── 5. HabitLogs ──────────────────────────────────────────────────────────
+  // 5. HabitLogs
   const hlResult = await HabitLog.updateMany(
     { habitVersion: { $exists: false } },
     { $set: { habitVersion: 1 } }

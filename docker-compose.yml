@@ -1,6 +1,6 @@
 services:
 
-  # ── MongoDB ────────────────────────────────────────────────────────────────
+  # MongoDB
   # DELTIS_INSTANCE / *_PORT / DELTIS_IMAGE are read from the .env file next to
   # this compose file. Defaults keep the original single-instance names, so an
   # existing deployment keeps its containers and volume without any .env file.
@@ -21,7 +21,7 @@ services:
       retries: 5
       start_period: 20s
 
-  # ── App (Express + pre-built React frontend) ──────────────────────────────
+  # App (Express + pre-built React frontend)
   app:
     build: .
     image: ${DELTIS_IMAGE:-habit-tracker:latest}

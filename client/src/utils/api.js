@@ -1,3 +1,4 @@
+// Preconfigured axios instance: /api base URL, sends the httpOnly JWT cookie.
 import axios from 'axios';
 
 const api = axios.create({

@@ -15,7 +15,7 @@ const CARD_COLORS = [
   'border-slate-700 bg-slate-800/50',
 ];
 
-// ─── Custom Field Input ───────────────────────────────────────────────────────
+// ─Custom Field Input
 
 function CustomFieldInput({ field, value, onChange }) {
   if (field.type === 'select') {
@@ -53,7 +53,7 @@ function CustomFieldInput({ field, value, onChange }) {
   );
 }
 
-// ── Add plan (activity or habit) ─────────────────────────────
+// Add plan (activity or habit)
 
 function AddPlanModal({ date, activityTypes, habits, onSave, onClose }) {
   const [mode, setMode] = useState(activityTypes.length > 0 ? 'activity' : 'habit');
@@ -224,7 +224,7 @@ function AddPlanModal({ date, activityTypes, habits, onSave, onClose }) {
   );
 }
 
-// ── Complete activity → log ─────────────────────────────────────
+// Complete activity → log
 
 function CompleteActivityModal({ plan, onSave, onClose }) {
   const typeConfig = plan.activityTypeRef || {};
@@ -313,7 +313,7 @@ function CompleteActivityModal({ plan, onSave, onClose }) {
   );
 }
 
-// ── Complete habit → log ────────────────────────────────────
+// Complete habit → log
 
 function CompleteHabitModal({ plan, onSave, onClose }) {
   const isBoolean = plan.habitType === 'boolean';
@@ -384,7 +384,7 @@ function CompleteHabitModal({ plan, onSave, onClose }) {
   );
 }
 
-// ── Main page ──────────────────────────────────────────────────────────────
+// Main page
 
 export default function Planner() {
   const [weekStart, setWeekStart] = useState(() => startOfWeek(new Date(), { weekStartsOn: 1 }));

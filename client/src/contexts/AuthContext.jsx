@@ -1,3 +1,5 @@
+// Global authentication state: current user, login/logout and profile update
+// helpers backed by the /api/auth endpoints.
 import { createContext, useContext, useState, useEffect } from 'react';
 import api from '../utils/api';
 

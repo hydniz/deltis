@@ -20,7 +20,7 @@ import { User, AlertCircle, Lock, Eye, EyeOff, KeyRound, AlertTriangle } from 'l
 import { REQUIRED_API_VERSION } from './config/compatibility';
 
 
-// ── CompatibilityCheck ────────────────────────────────────────────────────────
+// CompatibilityCheck
 // Fetches backend API version on mount, logs the result, and renders a
 // persistent warning banner if frontend and backend are incompatible.
 

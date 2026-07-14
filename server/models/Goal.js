@@ -1,3 +1,5 @@
+// Mongoose model: user goal with target value, timeframe, milestones and
+// optional filters on which activities count towards it.
 const mongoose = require('mongoose');
 
 const intermediateStepSchema = new mongoose.Schema({

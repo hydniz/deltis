@@ -10,7 +10,7 @@ import SectionCard from '../components/admin/SectionCard';
 import ErrorBanner from '../components/admin/ErrorBanner';
 import ConfigRow from '../components/admin/ConfigRow';
 
-// ── Update-mode descriptions ──────────────────────────────────────────────────
+// Update-mode descriptions
 
 const MODES = {
   'docker-socket': {
@@ -70,7 +70,7 @@ docker compose up -d --no-build --force-recreate`}
   );
 }
 
-// ── Failed-update / rollback panel ────────────────────────────────────────────
+// Failed-update / rollback panel
 
 function RollbackPanel({ updateState, onRollback, rollbackRunning }) {
   if (!updateState || updateState.phase !== 'failed') return null;
@@ -120,7 +120,7 @@ function RollbackPanel({ updateState, onRollback, rollbackRunning }) {
   );
 }
 
-// ── Channel selector ──────────────────────────────────────────────────────────
+// Channel selector
 
 const CHANNELS = [
   {
@@ -165,7 +165,7 @@ function ChannelBadge({ channel }) {
   );
 }
 
-// ── Update log ────────────────────────────────────────────────────────────────
+// Update log
 
 function UpdateLog({ lines }) {
   const bottomRef = useRef(null);
@@ -197,7 +197,7 @@ function UpdateLog({ lines }) {
   );
 }
 
-// ── Main component ────────────────────────────────────────────────────────────
+// Main component
 
 export default function AdminUpdates() {
   const [status, setStatus] = useState(null);

@@ -1,3 +1,4 @@
+// Mongoose model: TTL lock document preventing concurrent migration runs.
 const mongoose = require('mongoose');
 
 const MIGRATION_LOCK_TTL_SECONDS = 24 * 60 * 60;

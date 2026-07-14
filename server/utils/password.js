@@ -1,3 +1,5 @@
+// Password hashing helpers: bcrypt (12 rounds) with an optional server-side
+// pepper from env or bootstrap config. See SECURITY.md.
 const bcrypt = require('bcryptjs');
 const fs = require('fs');
 const bootstrapConfig = require('./bootstrapConfig');

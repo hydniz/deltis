@@ -1,3 +1,5 @@
+// Resolves the JWT signing secret: env file/value, then bootstrap config file.
+// Falls back to a temporary random secret (sessions end on restart) with a warning.
 const fs = require('fs');
 const crypto = require('crypto');
 const bootstrapConfig = require('./bootstrapConfig');

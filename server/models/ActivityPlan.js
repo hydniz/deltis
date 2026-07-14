@@ -1,3 +1,4 @@
+// Mongoose model: an activity planned for a weekday in the weekly planner.
 const mongoose = require('mongoose');
 
 const activityPlanSchema = new mongoose.Schema({

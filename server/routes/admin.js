@@ -1,3 +1,5 @@
+// Admin endpoints (/api/admin): first-time setup, bootstrap configuration and
+// user management. Management routes require an admin account.
 const express = require('express');
 const router = express.Router();
 const crypto = require('crypto');
@@ -12,7 +14,7 @@ const adminOnly = (req, res, next) => {
   next();
 };
 
-// ── Public setup routes (no auth required) ────────────────────────────────────
+// Public setup routes (no auth required)
 
 router.get('/setup-status', async (req, res) => {
   // Check whether security secrets are configured (env takes priority over bootstrap file).
@@ -126,7 +128,7 @@ router.post('/setup/bootstrap', async (req, res) => {
 
   const { mongodb_uri, jwt_secret, jwt_secret_file, pepper_file, password_pepper } = req.body;
 
-  // ── Validate + save each field ──────────────────────────────────────────
+  // Validate + save each field
   if (mongodb_uri !== undefined) {
     const uri = String(mongodb_uri).trim();
     if (uri && !uri.startsWith('mongodb://') && !uri.startsWith('mongodb+srv://')) {
@@ -160,7 +162,7 @@ router.post('/setup/bootstrap', async (req, res) => {
     else bootstrapConfig.remove('PASSWORD_PEPPER');
   }
 
-  // ── Attempt MongoDB reconnect ───────────────────────────────────────────
+  // Attempt MongoDB reconnect
   try {
     if (serverState.reconnect) {
       await serverState.reconnect();
@@ -180,7 +182,7 @@ router.post('/setup/bootstrap', async (req, res) => {
   }
 });
 
-// ── Protected admin routes ────────────────────────────────────────────────────
+// Protected admin routes
 
 router.get('/users', auth, adminOnly, async (req, res) => {
   try {

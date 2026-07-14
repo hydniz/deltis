@@ -5,7 +5,7 @@ import {
 } from 'lucide-react';
 import api from '../../utils/api';
 
-// ── Source badge ──────────────────────────────────────────────────────────────
+// Source badge
 
 export function SourceBadge({ source }) {
   if (source === 'env') {
@@ -37,7 +37,7 @@ export function SourceBadge({ source }) {
   );
 }
 
-// ── Config entry row ──────────────────────────────────────────────────────────
+// Config entry row
 // Shared between AdminConfig (Server/Sicherheit groups) and AdminUpdates
 // (OTA settings) so config entries look and behave identically everywhere.
 

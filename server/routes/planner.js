@@ -1,3 +1,5 @@
+// Weekly planner endpoints (/api/planner): planned activities and habits per
+// weekday, including completion state derived from the logs.
 const express = require('express');
 const router = express.Router();
 const auth = require('../middleware/auth');
@@ -93,7 +95,7 @@ router.delete('/:id', auth, async (req, res) => {
   }
 });
 
-// ─── Habit Plans ──────────────────────────────────────────────────────────────
+// ─Habit Plans
 
 router.get('/habits', auth, async (req, res) => {
   try {

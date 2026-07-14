@@ -1,3 +1,4 @@
+// Mongoose model: one habit measurement per user, habit and day.
 const mongoose = require('mongoose');
 
 const habitLogSchema = new mongoose.Schema({

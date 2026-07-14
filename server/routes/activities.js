@@ -1,3 +1,4 @@
+// Activity log endpoints (/api/activities): list, create, update, delete.
 const express = require('express');
 const router = express.Router();
 const auth = require('../middleware/auth');

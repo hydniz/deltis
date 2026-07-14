@@ -58,7 +58,7 @@ async function main() {
   const pwFlagIdx = process.argv.indexOf('--password');
   let newPassword = pwFlagIdx !== -1 ? process.argv[pwFlagIdx + 1] ?? null : null;
 
-  console.log('── Reset admin password ─────────────────────────────────');
+  console.log('Reset admin password');
   console.log(`Database: ${MONGODB_URI}\n`);
 
   try {

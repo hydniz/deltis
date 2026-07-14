@@ -1,3 +1,5 @@
+// Data export/import endpoints (/api/data): full per-user backup as a ZIP
+// archive and restore from a previously exported archive.
 const express = require('express');
 const router = express.Router();
 const AdmZip = require('adm-zip');
@@ -23,7 +25,7 @@ const upload = multer({
   }
 });
 
-// ── CSV helpers ──────────────────────────────────────────────────────────────
+// CSV helpers
 
 function csvRow(values) {
   return values.map(v => {
@@ -77,7 +79,7 @@ function parseJson(entry) {
   try { return JSON.parse(entry.getData().toString('utf8')); } catch { return null; }
 }
 
-// ── Export ───────────────────────────────────────────────────────────────────
+// Export
 
 router.get('/export', auth, async (req, res) => {
   try {
@@ -91,14 +93,14 @@ router.get('/export', auth, async (req, res) => {
     const habitById  = new Map(allHabits.map(h => [h._id.toString(), h]));
     const actTypeById = new Map(actTypes.map(t => [t._id.toString(), t]));
 
-    // ── weight.csv ────────────────────────────────────────────────────────
+    // weight.csv
     const weights = await WeightLog.find({ userId }).sort({ date: 1 });
     const weightCsv = [
       csvRow(['date', 'weight', 'unit']),
       ...weights.map(w => csvRow([w.date.toISOString().slice(0, 10), w.weight, w.unit]))
     ].join('\n');
 
-    // ── habits.csv ────────────────────────────────────────────────────────
+    // habits.csv
     const habitLogs = await HabitLog.find({ userId })
       .populate('habitId', 'name unitSymbol').sort({ date: 1 });
     const habitCsv = [
@@ -111,7 +113,7 @@ router.get('/export', auth, async (req, res) => {
       ]))
     ].join('\n');
 
-    // ── activities.csv ────────────────────────────────────────────────────
+    // activities.csv
     const actLogs = await ActivityLog.find({ userId }).sort({ date: 1 });
     const actCsv = [
       csvRow(['date', 'activity_type', 'duration', 'distance', 'notes', 'custom_values']),
@@ -125,7 +127,7 @@ router.get('/export', auth, async (req, res) => {
       ]))
     ].join('\n');
 
-    // ── settings.json ─────────────────────────────────────────────────────
+    // settings.json
     const [userDoc, habitSettingsDoc] = await Promise.all([
       User.findById(userId),
       UserHabitSettings.findOne({ userId }).populate('selectedHabitIds', 'name'),
@@ -141,7 +143,7 @@ router.get('/export', auth, async (req, res) => {
       habitSettings: habitSettingsResolved
     }, null, 2);
 
-    // ── activity_plans.json ───────────────────────────────────────────────
+    // activity_plans.json
     const actPlans = await ActivityPlan.find({ userId }).sort({ scheduledDate: 1 });
     const actPlansJson = JSON.stringify(actPlans.map(p => ({
       date: p.scheduledDate.toISOString().slice(0, 10),
@@ -153,7 +155,7 @@ router.get('/export', auth, async (req, res) => {
       custom_values: p.customValues ?? {}
     })), null, 2);
 
-    // ── habit_plans.json ──────────────────────────────────────────────────
+    // habit_plans.json
     const habitPlans = await HabitPlan.find({ userId })
       .populate('habitId', 'name').sort({ scheduledDate: 1 });
     const habitPlansJson = JSON.stringify(habitPlans.map(p => ({
@@ -164,7 +166,7 @@ router.get('/export', auth, async (req, res) => {
       notes: p.notes ?? ''
     })), null, 2);
 
-    // ── goals.json ────────────────────────────────────────────────────────
+    // goals.json
     const goals = await Goal.find({ userId }).sort({ createdAt: 1 });
     const goalsJson = JSON.stringify(goals.map(g => {
       const obj = g.toObject();
@@ -184,7 +186,7 @@ router.get('/export', auth, async (req, res) => {
       return obj;
     }), null, 2);
 
-    // ── Build ZIP ─────────────────────────────────────────────────────────
+    // Build ZIP
     const zip = new AdmZip();
     zip.addFile('weight.csv',          Buffer.from(weightCsv,     'utf8'));
     zip.addFile('habits.csv',          Buffer.from(habitCsv,      'utf8'));
@@ -203,7 +205,7 @@ router.get('/export', auth, async (req, res) => {
   }
 });
 
-// ── Import ───────────────────────────────────────────────────────────────────
+// Import
 
 router.post('/import', auth, upload.single('file'), async (req, res) => {
   try {
@@ -216,7 +218,7 @@ router.post('/import', auth, upload.single('file'), async (req, res) => {
 
     const results = { weight: 0, habits: 0, activities: 0, plans: 0, goals: 0, settings: false, errors: [] };
 
-    // ── Helper: resolve or create habit/activity type by name ─────────────
+    // Helper: resolve or create habit/activity type by name
     async function resolveHabit(name, unit) {
       let h = await HabitDefinition.findOne({ name, $or: [{ userId }, { userId: null }] });
       if (!h) h = await HabitDefinition.create({ userId, name, unitSymbol: unit || '', type: 'amount' });
@@ -228,7 +230,7 @@ router.post('/import', auth, upload.single('file'), async (req, res) => {
       return t;
     }
 
-    // ── weight.csv ────────────────────────────────────────────────────────
+    // weight.csv
     const weightEntry = zip.getEntry('weight.csv');
     if (weightEntry) {
       for (const row of parseCsv(weightEntry.getData().toString('utf8'))) {
@@ -247,7 +249,7 @@ router.post('/import', auth, upload.single('file'), async (req, res) => {
       }
     }
 
-    // ── habits.csv ────────────────────────────────────────────────────────
+    // habits.csv
     const habitsEntry = zip.getEntry('habits.csv');
     if (habitsEntry) {
       for (const row of parseCsv(habitsEntry.getData().toString('utf8'))) {
@@ -267,7 +269,7 @@ router.post('/import', auth, upload.single('file'), async (req, res) => {
       }
     }
 
-    // ── activities.csv ────────────────────────────────────────────────────
+    // activities.csv
     const actEntry = zip.getEntry('activities.csv');
     if (actEntry) {
       for (const row of parseCsv(actEntry.getData().toString('utf8'))) {
@@ -299,7 +301,7 @@ router.post('/import', auth, upload.single('file'), async (req, res) => {
       }
     }
 
-    // ── settings.json ─────────────────────────────────────────────────────
+    // settings.json
     const settingsEntry = zip.getEntry('settings.json');
     if (settingsEntry) {
       const s = parseJson(settingsEntry);
@@ -343,7 +345,7 @@ router.post('/import', auth, upload.single('file'), async (req, res) => {
       }
     }
 
-    // ── activity_plans.json ───────────────────────────────────────────────
+    // activity_plans.json
     const actPlansEntry = zip.getEntry('activity_plans.json');
     if (actPlansEntry) {
       const plans = parseJson(actPlansEntry);
@@ -374,7 +376,7 @@ router.post('/import', auth, upload.single('file'), async (req, res) => {
       }
     }
 
-    // ── habit_plans.json ──────────────────────────────────────────────────
+    // habit_plans.json
     const habitPlansEntry = zip.getEntry('habit_plans.json');
     if (habitPlansEntry) {
       const plans = parseJson(habitPlansEntry);
@@ -403,7 +405,7 @@ router.post('/import', auth, upload.single('file'), async (req, res) => {
       }
     }
 
-    // ── goals.json ────────────────────────────────────────────────────────
+    // goals.json
     const goalsEntry = zip.getEntry('goals.json');
     if (goalsEntry) {
       const goals = parseJson(goalsEntry);

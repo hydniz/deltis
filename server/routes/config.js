@@ -1,3 +1,5 @@
+// Runtime configuration endpoints (/api/admin/config): list all settings with
+// their effective values, write or remove overrides. Env always wins.
 const express = require('express');
 const router = express.Router();
 const auth = require('../middleware/auth');
@@ -9,7 +11,7 @@ const adminOnly = (req, res, next) => {
   next();
 };
 
-// ── GET /api/admin/config ─────────────────────────────────────────────────
+// GET /api/admin/config
 // Returns all config definitions together with current effective values and
 // their sources. Sensitive env values are never exposed – only their
 // presence is indicated via `hasValue`.
@@ -46,7 +48,7 @@ router.get('/', auth, adminOnly, (req, res) => {
   res.json(entries);
 });
 
-// ── PUT /api/admin/config/bootstrap/:key ──────────────────────────────────
+// PUT /api/admin/config/bootstrap/:key
 // Writes a bootstrap-file override for keys that cannot use MongoDB storage
 // (chicken-and-egg problem – e.g. MONGODB_URI). These keys have
 // `editable: false` in DEFINITIONS so the standard PUT route rejects them,
@@ -75,7 +77,7 @@ router.put('/bootstrap/:key', auth, adminOnly, (req, res) => {
   res.json({ ok: true, source: 'file', note: 'Neustart des Servers erforderlich.' });
 });
 
-// ── DELETE /api/admin/config/bootstrap/:key ───────────────────────────────
+// DELETE /api/admin/config/bootstrap/:key
 // Removes the bootstrap-file override, falling back to env or the default.
 router.delete('/bootstrap/:key', auth, adminOnly, (req, res) => {
   const { key } = req.params;
@@ -89,7 +91,7 @@ router.delete('/bootstrap/:key', auth, adminOnly, (req, res) => {
   res.json({ ok: true, source: config.getSource(key) });
 });
 
-// ── PUT /api/admin/config/:key ────────────────────────────────────────────
+// PUT /api/admin/config/:key
 // Saves a DB override for an editable key. The .env always wins at runtime.
 router.put('/:key', auth, adminOnly, async (req, res) => {
   const { key } = req.params;
@@ -111,7 +113,7 @@ router.put('/:key', auth, adminOnly, async (req, res) => {
   res.json({ ok: true, source: 'db' });
 });
 
-// ── DELETE /api/admin/config/:key ─────────────────────────────────────────
+// DELETE /api/admin/config/:key
 // Removes the DB override so the key falls back to .env or the default.
 router.delete('/:key', auth, adminOnly, async (req, res) => {
   const { key } = req.params;

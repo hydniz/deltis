@@ -7,7 +7,7 @@ import {
   ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid
 } from 'recharts';
 
-// ── OptionsInput ─────────────────────────────────────────────────────────────
+// OptionsInput
 // Keeps raw text locally – only parses on blur.
 // Prevents cursor jumping in controlled inputs with split/join transformations.
 
@@ -31,7 +31,7 @@ function OptionsInput({ options, onChange }) {
   );
 }
 
-// ── CustomFieldEditor ──────────────────────────────────────────────────────
+// CustomFieldEditor
 
 function CustomFieldEditor({ field, onChange, onRemove }) {
   return (
@@ -98,7 +98,7 @@ function CustomFieldEditor({ field, onChange, onRemove }) {
   );
 }
 
-// ── ActivityTypeWizard ─────────────────────────────────────────────────────
+// ActivityTypeWizard
 // Shared create/edit wizard for activity types (2 steps).
 
 function ActivityTypeWizard({ initialForm, title, submitLabel, onSubmit, onClose, originalFieldCount = 0 }) {
@@ -282,7 +282,7 @@ function ActivityTypeWizard({ initialForm, title, submitLabel, onSubmit, onClose
   );
 }
 
-// ── ActivityTypeCard ───────────────────────────────────────────────────────
+// ActivityTypeCard
 
 function ActivityTypeCard({ type, onSave, onDelete }) {
   const [showEdit, setShowEdit] = useState(false);
@@ -336,7 +336,7 @@ function ActivityTypeCard({ type, onSave, onDelete }) {
   );
 }
 
-// ── ActivityTypesModal ─────────────────────────────────────────────────────
+// ActivityTypesModal
 
 function ActivityTypesModal({ onClose, onUpdate }) {
   const [types, setTypes] = useState([]);
@@ -429,7 +429,7 @@ function ActivityTypesModal({ onClose, onUpdate }) {
   );
 }
 
-// ── Activity form ─────────────────────────────────────────────────────
+// Activity form
 
 function ActivityForm({ activityTypes, onSave, onClose }) {
   const today = format(new Date(), 'yyyy-MM-dd');
@@ -583,7 +583,7 @@ function ActivityForm({ activityTypes, onSave, onClose }) {
   );
 }
 
-// ── History chart ──────────────────────────────────────────────────────────
+// History chart
 
 function ActivityChart({ typeId, typeLabel, onClose }) {
   const [data, setData] = useState([]);
@@ -647,7 +647,7 @@ function ActivityChart({ typeId, typeLabel, onClose }) {
   );
 }
 
-// ── Edit activity ────────────────────────────────────────────────────
+// Edit activity
 
 function EditActivityModal({ activity, onSave, onClose }) {
   // Aktuelle Felddefinitionen verwenden (nicht historische), damit neue Felder erscheinen
@@ -780,7 +780,7 @@ function EditActivityModal({ activity, onSave, onClose }) {
   );
 }
 
-// ── Activity card ────────────────────────────────────────────────────────
+// Activity card
 
 function ActivityCard({ activity, onDelete, onEdit }) {
   const [editing, setEditing] = useState(false);
@@ -874,7 +874,7 @@ function ActivityCard({ activity, onDelete, onEdit }) {
   );
 }
 
-// ── Main page ─────────────────────────────────────────────────────────────
+// Main page
 
 export default function Activities() {
   const [activityTypes, setActivityTypes] = useState([]);

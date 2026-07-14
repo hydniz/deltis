@@ -1,3 +1,5 @@
+// Mongoose model: user account with credentials, admin flag and preferences.
+// passwordHash/adminSecretHash use select:false and never leave the server.
 const mongoose = require('mongoose');
 
 const userSchema = new mongoose.Schema({

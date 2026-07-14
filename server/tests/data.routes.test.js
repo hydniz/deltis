@@ -22,7 +22,7 @@ afterAll(async () => {
   await stopDb();
 });
 
-// ─── CSV helpers (unit tests – extracted inline) ──────────────────────────────
+// ─CSV helpers (unit tests – extracted inline)
 
 function csvRow(values) {
   return values.map(v => {
@@ -106,7 +106,7 @@ describe('CSV helper: parseCsv / parseRow', () => {
   });
 });
 
-// ─── Export / Import integration tests ────────────────────────────────────────
+// ─Export / Import integration tests
 
 describe('GET /api/data/export', () => {
   it('returns a ZIP file', async () => {

@@ -1,3 +1,5 @@
+// Server entry point: loads configuration, connects to MongoDB, runs pending
+// database migrations, mounts the /api routes and serves the built frontend.
 require('dotenv').config();
 require('./utils/jwtSecret'); // load + validate early; warns but no longer exits if missing
 
@@ -32,7 +34,7 @@ app.use((req, res, next) => {
   next();
 });
 
-// ── Setup-mode guard ──────────────────────────────────────────────────────────
+// Setup-mode guard
 // When MongoDB is not yet reachable the server enters setup mode. Only the
 // setup wizard routes and static frontend assets are served.
 app.use((req, res, next) => {
@@ -79,7 +81,7 @@ if (process.env.NODE_ENV === 'production') {
   });
 }
 
-// ── Seeding ───────────────────────────────────────────────────────────────────
+// Seeding
 
 async function seedPredefinedData() {
   const HabitDefinition = require('./models/HabitDefinition');
@@ -123,7 +125,7 @@ async function seedAdminUser() {
   }
 }
 
-// ── DB connection + post-connect setup ───────────────────────────────────────
+// DB connection + post-connect setup
 
 const { runMigrations } = require('./migrations/runner');
 const appConfig = require('./utils/config');
@@ -154,7 +156,7 @@ const MIGRATION_ERROR_CODES = new Set([
   'BACKUP_FAILED',
 ]);
 
-// ── Post-update boot reconciliation ──────────────────────────────────────────
+// Post-update boot reconciliation
 // update-state.json travels across the container swap (backups/ is mounted).
 // Whoever boots next closes the loop: if we ARE the target version, the update
 // succeeded; if we are the OLD version again, the automatic recovery kicked in
@@ -202,7 +204,7 @@ function reconcileUpdateState(bootError) {
 // logged prominently, written to .run.port and exposed via GET /api/.
 const { listenOnAvailablePort } = require('./utils/portFinder');
 
-// ── Reconnect hook (called by admin setup/bootstrap route) ────────────────────
+// Reconnect hook (called by admin setup/bootstrap route)
 
 serverState.reconnect = async () => {
   if (mongoose.connection.readyState === 1) {
@@ -218,7 +220,7 @@ serverState.reconnect = async () => {
   console.log('✓ MongoDB reconnected – setup mode deactivated.');
 };
 
-// ── Startup ───────────────────────────────────────────────────────────────────
+// Startup
 
 async function start() {
   const desiredPort = parseInt(process.env.PORT || '3001', 10);

@@ -1,3 +1,4 @@
+// Mongoose model: a habit planned for a weekday in the weekly planner.
 const mongoose = require('mongoose');
 
 const habitPlanSchema = new mongoose.Schema({

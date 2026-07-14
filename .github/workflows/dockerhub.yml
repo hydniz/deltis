@@ -12,7 +12,7 @@ env:
 
 jobs:
 
-  # ── Tests ───────────────────────────────────────────────────────────────────
+  # Tests
   test:
     name: Run Tests
     runs-on: ubuntu-latest
@@ -35,7 +35,7 @@ jobs:
       - name: Run frontend tests
         run: npm test --prefix client
 
-  # ── Build & Push ─────────────────────────────────────────────────────────────
+  # Build & Push
   publish:
     name: Build & Push to Docker Hub
     runs-on: ubuntu-latest

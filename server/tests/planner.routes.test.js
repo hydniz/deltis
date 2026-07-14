@@ -20,7 +20,7 @@ afterAll(async () => {
   await stopDb();
 });
 
-// ─── Activity Plans ───────────────────────────────────────────────────────────
+// ─Activity Plans
 
 describe('GET /api/planner', () => {
   it('returns activity plans for the current user', async () => {
@@ -111,7 +111,7 @@ describe('DELETE /api/planner/:id', () => {
   });
 });
 
-// ─── Habit Plans ──────────────────────────────────────────────────────────────
+// ─Habit Plans
 
 describe('GET /api/planner/habits', () => {
   it('returns habit plans for the current user', async () => {

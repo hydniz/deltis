@@ -44,7 +44,7 @@ cleanup() {
 }
 trap cleanup EXIT
 
-# ── Prerequisites ────────────────────────────────────────────────────────────
+# Prerequisites
 
 if ! $RUNTIME container inspect "$CONTAINER_NAME" >/dev/null 2>&1 || \
    ! $RUNTIME container inspect "$CONTAINER_NAME" --format '{{.State.Running}}' 2>/dev/null | grep -q true; then
@@ -55,7 +55,7 @@ fi
 
 mkdir -p "$BACKUP_DIR"
 
-# ── Backup ───────────────────────────────────────────────────────────────────
+# Backup
 
 echo ""
 echo -e "${BOLD}=== Habit Tracker – Database Backup ===${NC}"
@@ -80,7 +80,7 @@ $RUNTIME cp "${CONTAINER_NAME}:/tmp/backup.archive" "$BACKUP_FILE"
 info "Releasing write lock..."
 rm -f "$LOCK_FILE"
 
-# ── Result ───────────────────────────────────────────────────────────────────
+# Result
 
 SIZE=$(du -sh "$BACKUP_FILE" | cut -f1)
 echo ""

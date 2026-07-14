@@ -1,3 +1,4 @@
+// Mongoose model: which habits a user tracks plus per-habit preferences.
 const mongoose = require('mongoose');
 
 const userHabitSettingsSchema = new mongoose.Schema({

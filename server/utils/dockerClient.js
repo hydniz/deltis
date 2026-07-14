@@ -50,13 +50,13 @@ function request(method, apiPath, { body, timeoutMs = DEFAULT_TIMEOUT_MS, onChun
   });
 }
 
-// ── Engine ────────────────────────────────────────────────────────────────────
+// Engine
 
 async function ping() {
   return request('GET', '/_ping', { timeoutMs: 3000 });
 }
 
-// ── Images ────────────────────────────────────────────────────────────────────
+// Images
 
 // Pulls `ref` (e.g. "hydniz/deltis:1.2.3"). The registry streams JSON progress
 // lines; `onProgress(statusLine)` is invoked with de-duplicated status text.
@@ -93,7 +93,7 @@ async function inspectImage(ref) {
   return request('GET', `/images/${encodeURIComponent(ref)}/json`);
 }
 
-// ── Containers ────────────────────────────────────────────────────────────────
+// Containers
 
 async function inspectContainer(idOrName) {
   return request('GET', `/containers/${encodeURIComponent(idOrName)}/json`);

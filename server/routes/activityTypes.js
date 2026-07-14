@@ -1,3 +1,5 @@
+// Activity type endpoints (/api/activity-types): per-user workout categories
+// with custom field definitions; a default set is seeded on first access.
 const express = require('express');
 const router = express.Router();
 const auth = require('../middleware/auth');

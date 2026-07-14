@@ -1,3 +1,5 @@
+// Habit endpoints (/api/habits): habit definitions, daily logs and per-user
+// habit selection.
 const express = require('express');
 const router = express.Router();
 const auth = require('../middleware/auth');

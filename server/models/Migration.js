@@ -1,3 +1,4 @@
+// Mongoose model: record of an applied database migration.
 const mongoose = require('mongoose');
 
 // Tracks which migrations have been applied to this database.

@@ -2,17 +2,14 @@
 
 Everything you need to get the app running, from prerequisites to first login.
 
----
-
-## Table of Contents
+## Table of contents
 
 1. [Prerequisites](#1-prerequisites)
-2. [Environment variables](#2-environment-variables)
+2. [Configuration & secrets](#2-configuration--secrets)
 3. [Local development](#3-local-development)
 4. [Production deployment (Docker / NAS)](#4-production-deployment-docker--nas)
-5. [First-time admin setup](#5-first-time-admin-setup)
-
----
+5. [First-time setup wizard](#5-first-time-setup-wizard)
+6. [Updating](#6-updating)
 
 ## 1. Prerequisites
 
@@ -40,56 +37,52 @@ sudo systemctl start mongod && sudo systemctl enable mongod
 
 - Docker Engine + Docker Compose
 
----
+## 2. Configuration & secrets
 
-## 2. Environment variables
+Configuration values are resolved in this order (highest priority first):
 
-### Required vs. optional
+1. **Environment variables** (`.env` / `.env.production` / compose `environment:`)
+2. **`/etc/deltis/deltis.config.json`** — written by the setup wizard and the admin UI
+3. **Built-in defaults**
+
+That means you can either configure everything up front via env vars, or start with an empty configuration and let the **setup wizard** (see [section 5](#5-first-time-setup-wizard)) store MongoDB URI, JWT secret and pepper for you.
+
+### Environment variables
 
 | Variable | Required | Default | Description |
 |---|---|---|---|
-| `MONGODB_URI` | **yes** | — | MongoDB connection string |
+| `MONGODB_URI` | yes* | — | MongoDB connection string |
 | `PORT` | no | `3001` | HTTP port the server listens on |
-| `NODE_ENV` | **yes** | — | `development` or `production` |
-| `JWT_SECRET_FILE` | **yes*** | — | Path to a file containing the JWT secret (takes precedence) |
-| `JWT_SECRET` | **yes*** | — | JWT secret value directly in env (used when `JWT_SECRET_FILE` is not set) |
-| `PEPPER_FILE` | recommended | — | Path to a file containing the password pepper |
-| `PASSWORD_PEPPER` | recommended | — | Alternative: pepper value directly in env |
-| `VALID_UUIDS` | no | — | Legacy migration only (see note below) |
-| `GIT_COMMIT` | no | `unknown` | Injected automatically by `build-nas.sh` |
+| `NODE_ENV` | yes | — | `development` or `production` |
+| `JWT_SECRET_FILE` | recommended* | — | Path to a file containing the JWT secret (takes precedence over `JWT_SECRET`) |
+| `JWT_SECRET` | recommended* | — | JWT secret value directly in env |
+| `PEPPER_FILE` | recommended* | — | Path to a file containing the password pepper |
+| `PASSWORD_PEPPER` | recommended* | — | Alternative: pepper value directly in env |
+| `VALID_UUIDS` | no | — | Legacy migration only |
+| `GIT_COMMIT` | no | `unknown` | Injected automatically by the build |
 
-> **\* JWT_SECRET:** exactly one of `JWT_SECRET` or `JWT_SECRET_FILE` must be set.  
-> **Pepper:** omitting both `PEPPER_FILE` and `PASSWORD_PEPPER` is allowed but weakens password security — a warning is printed at startup.
+> **\*** Each of these can also be set through the setup wizard / admin UI instead
+> (stored in `deltis.config.json`). Without a JWT secret the server generates a
+> temporary one at startup — sessions then end on every restart. Without a pepper
+> the server starts with a warning; see [SECURITY.md](SECURITY.md) for why you want one.
 
 ### Generating secrets
 
 ```bash
-# JWT secret (64 bytes, base64-encoded)
-openssl rand -base64 64
-
-# Password pepper (48 bytes)
-openssl rand -base64 48
+openssl rand -base64 64   # JWT secret
+openssl rand -base64 48   # password pepper
 ```
 
-> **⚠ Never change the pepper after users have registered.** All password hashes would become invalid. See [SECURITY.md](SECURITY.md) for details.
-
-> **⚠ Changing `JWT_SECRET` invalidates all active sessions** — every user must log in again.
-
----
+> **⚠ Never change the pepper after users have registered** — all password hashes
+> become invalid. **Changing the JWT secret** logs every user out.
 
 ## 3. Local development
 
-### 3.1 — Install dependencies
-
 ```bash
+# 1. Install dependencies (server + client)
 npm run install:all
-```
 
-### 3.2 — Create `.env`
-
-Copy the template and fill in the values:
-
-```bash
+# 2. Create .env
 cp .env.production.example .env
 ```
 
@@ -107,35 +100,30 @@ JWT_SECRET=<your-generated-secret>
 PASSWORD_PEPPER=<your-pepper>
 ```
 
-### 3.3 — Start
-
 ```bash
+# 3. Start (backend + frontend with hot reload)
 npm run dev
 ```
 
 - Frontend: http://localhost:5173
 - API: http://localhost:3001/api
 
-Continue with [First-time admin setup](#5-first-time-admin-setup).
-
----
+Continue with the [first-time setup wizard](#5-first-time-setup-wizard).
 
 ## 4. Production deployment (Docker / NAS)
 
 ### 4.1 — Prepare secrets on the host
 
+The compose file mounts the host directory `/etc/deltis/` into the container, so
+secret files placed there are available automatically:
+
 ```bash
-# Create a directory for secrets (outside the project)
 sudo mkdir -p /etc/deltis
 sudo chmod 700 /etc/deltis
 
-# Generate and store the JWT secret
 openssl rand -base64 64 | sudo tee /etc/deltis/jwt_secret > /dev/null
-sudo chmod 600 /etc/deltis/jwt_secret
-
-# Generate and store the password pepper
-openssl rand -base64 48 | sudo tee /etc/deltis/pepper.txt > /dev/null
-sudo chmod 600 /etc/deltis/pepper.txt
+openssl rand -base64 48 | sudo tee /etc/deltis/pepper.key > /dev/null
+sudo chmod 600 /etc/deltis/jwt_secret /etc/deltis/pepper.key
 ```
 
 ### 4.2 — Create `.env.production`
@@ -144,113 +132,92 @@ sudo chmod 600 /etc/deltis/pepper.txt
 cp .env.production.example .env.production
 ```
 
-Edit `.env.production`:
-
 ```env
 PORT=3001
 NODE_ENV=production
 
-# Point to the secret files created in step 4.1
 JWT_SECRET_FILE=/etc/deltis/jwt_secret
-PEPPER_FILE=/etc/deltis/pepper.txt
+PEPPER_FILE=/etc/deltis/pepper.key
 ```
 
-> `MONGODB_URI` is overridden by `docker-compose.yml` automatically — leave it out or set it to anything.
+> `MONGODB_URI` is overridden by `docker-compose.yml` — inside the container
+> MongoDB is reachable via the service name `mongo`.
 
-### 4.3 — Mount secret files into the container
+### 4.3 — Start
 
-Edit `docker-compose.yml` to mount the JWT secret file (the pepper is already mounted):
-
-```yaml
-volumes:
-  - /etc/deltis/pepper.txt:/etc/deltis/pepper.txt:ro
-  - /etc/deltis/jwt_secret:/etc/deltis/jwt_secret:ro
-```
-
-### 4.4 — Build and start
+**Option A — prebuilt image from Docker Hub (recommended):**
 
 ```bash
-# Build image for linux/amd64 (most NAS devices)
-./build-nas.sh
+echo "DELTIS_IMAGE=hydniz/deltis:latest" > .env
+mkdir -p backups
+docker compose up -d --no-build
+```
 
-# Start containers
+**Option B — build from source:**
+
+```bash
+./build-nas.sh           # linux/amd64 (most NAS devices)
+./build-nas.sh --arm64   # linux/arm64
+mkdir -p backups
 docker compose up -d
 ```
 
-Open `http://<host-ip>:3001` and continue with [First-time admin setup](#5-first-time-admin-setup).
+Open `http://<host-ip>:3001` and continue with the
+[first-time setup wizard](#5-first-time-setup-wizard).
 
-### Updating
+### Running multiple instances (e.g. beta + production)
 
-```bash
-./build-nas.sh          # rebuilds image with current code
-docker compose up -d    # recreates container with new image (DB is preserved)
-```
+Each instance gets its own directory with its own compose `.env`
+(`DELTIS_INSTANCE`, `APP_PORT`, `MONGO_PORT`) — see
+[docs/DEPLOYMENT.md](docs/DEPLOYMENT.md#3-instance-directories-on-the-server).
 
-### CI/CD via GitHub Actions
+### CI/CD
 
-Three workflows run automatically on the repository:
+The repository ships GitHub Actions workflows for automated testing, publishing
+and deployment:
 
 | Workflow | Trigger | What it does |
 |---|---|---|
-| `ci.yml` | Push to any branch except `main`, PRs | Runs tests |
-| `deploy.yml` | Push to `main` | Tests → builds image → deploys to NAS via SSH |
-| `dockerhub.yml` | Push of a `v*` tag | Tests → builds multi-platform image → pushes to Docker Hub |
-| `release.yml` | Push of a `v*` tag | Tests → builds image → creates GitHub Release with assets |
+| `ci.yml` | every push & PR | Runs backend + frontend tests |
+| `deploy-beta.yml` | push to `main` | Deploys to the beta instance |
+| `deploy-production.yml` | stable tag `vX.Y.Z` | Deploys to the production instance |
+| `docker-publish.yml` | push to `main` | Publishes `hydniz/deltis:latest` + `:<short-sha>` to Docker Hub |
+| `dockerhub.yml` | any `v*` tag | Publishes semver-tagged images to Docker Hub |
+| `release.yml` | any `v*` tag | Creates a GitHub Release with build assets |
 
-**Required repository secrets** (Settings → Secrets → Actions):
+Deployment setup (GitHub environments, SSH keys, rollback) is documented in
+[docs/DEPLOYMENT.md](docs/DEPLOYMENT.md).
 
-| Secret | Used by | Description |
-|---|---|---|
-| `SERVER_HOST` | `deploy.yml` | IP or hostname of the NAS |
-| `SERVER_USER` | `deploy.yml` | SSH username |
-| `SERVER_SSH_KEY` | `deploy.yml` | Private SSH key (PEM format) |
-| `TARGET_DIR` | `deploy.yml` | Deployment directory on the server |
-| `DOCKERHUB_USERNAME` | `dockerhub.yml` | Docker Hub account username |
-| `DOCKERHUB_TOKEN` | `dockerhub.yml` | Docker Hub access token (create at hub.docker.com → Account Settings → Security) |
+## 5. First-time setup wizard
 
-**Docker Hub image:** `<DOCKERHUB_USERNAME>/deltis`
+On the very first start the app redirects to `/admin/setup`:
 
-Tags pushed on every release (e.g. tag `v1.2.3`):
-- `1.2.3` — exact version
-- `1.2` — floating major.minor
-- `1` — floating major
-- `latest` — always the newest release
+1. **System configuration** *(only shown when no MongoDB connection exists yet)* —
+   enter the MongoDB URI and optionally a JWT secret and pepper. Values are stored
+   in `/etc/deltis/deltis.config.json`; env vars always take precedence.
+2. **Security configuration** *(shown when no pepper is configured)* — same as
+   above without the MongoDB field. The wizard warns you if you continue without
+   a pepper: configure it **before** creating accounts, never after.
+3. **Admin account** — choose a username and password.
+4. Sign in at `/login` and create user accounts under
+   *Administration → Nutzerverwaltung*.
 
-**To pull the image on your NAS (alternative to `build-nas.sh`):**
+> Users created by an admin receive a temporary password and must change it on
+> first login.
+
+## 6. Updating
+
+**In-app (recommended):** *Administration → Updates* checks the configured release
+channel (stable / beta / alpha) and updates with an automatic pre-update backup and
+rollback on failure. See [docs/UPDATES.md](docs/UPDATES.md).
+
+**Manually (Docker):**
+
 ```bash
-docker pull <your-username>/deltis:latest
+./backup.sh
+docker compose pull   # or: ./build-nas.sh when building from source
+docker compose up -d --no-build --force-recreate
 ```
-Update `docker-compose.yml` to use `image: <your-username>/deltis:latest` instead of `build: .`.
 
----
-
-## 5. First-time admin setup
-
-This runs **once** after the very first start.
-
-1. Open the app in the browser (`http://localhost:5173` in dev, `http://<host>:3001` in prod).
-2. You will be redirected to `/admin/setup`.
-3. Set a password for the admin account.
-4. Log in at `/login` with `admin` + the password you just set.
-5. A prompt appears to choose a **username** for your admin account — set it to complete the first-time setup.
-6. Go to `/admin` to create regular user accounts.
-
-> **Tip:** The admin's initial UUID is printed to the server console on first start — you won't need it if you complete the setup via the browser immediately.
-
----
-
-## Quick reference
-
-```
-REQUIRED (always):
-  MONGODB_URI          MongoDB connection string
-  NODE_ENV             development | production
-  JWT_SECRET           or JWT_SECRET_FILE (one required)
-
-RECOMMENDED:
-  PEPPER_FILE          or PASSWORD_PEPPER
-
-OPTIONAL:
-  PORT                 default: 3001
-  VALID_UUIDS          legacy UUID migration only
-```
+The database volume is preserved across updates; schema migrations run
+automatically at startup ([server/migrations/README.md](server/migrations/README.md)).

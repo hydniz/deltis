@@ -1,3 +1,5 @@
+// Authentication endpoints (/api/auth): login/logout via httpOnly JWT cookie,
+// current-user profile, username and password changes.
 const express = require('express');
 const router = express.Router();
 const jwt = require('jsonwebtoken');
@@ -14,7 +16,7 @@ const COOKIE_OPTIONS = {
   maxAge: 30 * 24 * 60 * 60 * 1000, // 30 days
 };
 
-// ── Login ─────────────────────────────────────────────────────────────────────
+// Login
 // Verifies credentials once, then issues a 30-day httpOnly JWT cookie.
 // Preserves all legacy auth edge cases from the old per-request flow.
 
@@ -66,7 +68,7 @@ router.post('/login', async (req, res) => {
   }
 });
 
-// ── Logout ────────────────────────────────────────────────────────────────────
+// Logout
 
 router.post('/logout', (_req, res) => {
   res.clearCookie('auth_token', {
@@ -77,7 +79,7 @@ router.post('/logout', (_req, res) => {
   res.json({ ok: true });
 });
 
-// ── Protected profile routes ──────────────────────────────────────────────────
+// Protected profile routes
 
 router.get('/me', auth, (req, res) => {
   const data = req.user.toJSON();

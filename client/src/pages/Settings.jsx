@@ -7,7 +7,7 @@ import {
   Download, Upload, AlertCircle, AtSign, Lock, Server, Monitor
 } from 'lucide-react';
 
-// ── VersionBadge ──────────────────────────────────────────────────────────
+// VersionBadge
 
 function VersionBadge({ icon, label, version }) {
   return (
@@ -26,7 +26,7 @@ function VersionBadge({ icon, label, version }) {
   );
 }
 
-// ── ExportImport ──────────────────────────────────────────────────────────
+// ExportImport
 
 function ExportImport() {
   const [importing, setImporting] = useState(false);
@@ -136,7 +136,7 @@ function ExportImport() {
   );
 }
 
-// ── UserPasswordForm ──────────────────────────────────────────────────────
+// UserPasswordForm
 
 function UserPasswordForm({ changePassword }) {
   const [current, setCurrent] = useState('');
@@ -236,7 +236,7 @@ function UserPasswordForm({ changePassword }) {
   );
 }
 
-// ── Main page ─────────────────────────────────────────────────────────────
+// Main page
 
 export default function Settings() {
   const { user, logout, updateUser, setUsername, changePassword } = useAuth();
@@ -319,7 +319,7 @@ export default function Settings() {
       {/* Desktop: 2-column grid; mobile: single column */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
 
-        {/* ── Left column ── */}
+        {/* Left column */}
         <div className="space-y-6">
 
           {/* Profil */}
@@ -401,7 +401,7 @@ export default function Settings() {
 
         </div>
 
-        {/* ── Right column ── */}
+        {/* Right column */}
         <div className="space-y-6">
 
           {/* Passwort */}
@@ -415,7 +415,7 @@ export default function Settings() {
         </div>
       </div>
 
-      {/* ── Full-width footer row: Konto + Versionen ── */}
+      {/* Full-width footer row: Konto + Versionen */}
       <div className="card p-5">
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div>

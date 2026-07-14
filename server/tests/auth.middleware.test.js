@@ -20,7 +20,7 @@ afterAll(async () => {
   await stopDb();
 });
 
-// ── Auth Middleware ───────────────────────────────────────────────────────────
+// Auth Middleware
 // Tests that the per-request JWT cookie check works correctly.
 // Credential validation (wrong password, UUID_BLOCKED, etc.) is tested in
 // the "POST /api/auth/login" section below.
@@ -89,7 +89,7 @@ describe('Auth Middleware', () => {
   });
 });
 
-// ── POST /api/auth/login ──────────────────────────────────────────────────────
+// POST /api/auth/login
 
 describe('POST /api/auth/login', () => {
   it('sets an httpOnly cookie and returns the user on valid credentials', async () => {
@@ -155,7 +155,7 @@ describe('POST /api/auth/login', () => {
   });
 });
 
-// ── POST /api/auth/logout ─────────────────────────────────────────────────────
+// POST /api/auth/logout
 
 describe('POST /api/auth/logout', () => {
   it('clears the auth_token cookie', async () => {
@@ -168,7 +168,7 @@ describe('POST /api/auth/logout', () => {
   });
 });
 
-// ── GET /api/auth/me ──────────────────────────────────────────────────────────
+// GET /api/auth/me
 
 describe('GET /api/auth/me', () => {
   it('returns the current user profile without sensitive fields', async () => {
@@ -204,7 +204,7 @@ describe('GET /api/auth/me', () => {
   });
 });
 
-// ── PUT /api/auth/me ──────────────────────────────────────────────────────────
+// PUT /api/auth/me
 
 describe('PUT /api/auth/me', () => {
   it('updates name and weightUnit', async () => {
@@ -230,7 +230,7 @@ describe('PUT /api/auth/me', () => {
   });
 });
 
-// ── PUT /api/auth/me/username ─────────────────────────────────────────────────
+// PUT /api/auth/me/username
 
 describe('PUT /api/auth/me/username', () => {
   it('sets username and password for a migration user (initial setup)', async () => {
@@ -340,7 +340,7 @@ describe('PUT /api/auth/me/username', () => {
   });
 });
 
-// ── PUT /api/auth/me/password ─────────────────────────────────────────────────
+// PUT /api/auth/me/password
 
 describe('PUT /api/auth/me/password', () => {
   it('changes the password successfully', async () => {
@@ -409,7 +409,7 @@ describe('PUT /api/auth/me/password', () => {
   });
 });
 
-// ── PUT /api/auth/me/password/forced ─────────────────────────────────────────
+// PUT /api/auth/me/password/forced
 
 describe('PUT /api/auth/me/password/forced', () => {
   it('changes password when mustChangePassword is true', async () => {

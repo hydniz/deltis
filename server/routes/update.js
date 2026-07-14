@@ -1,3 +1,5 @@
+// OTA update endpoints (/api/admin/update): update check, live log stream
+// (SSE), update and rollback orchestration. See docs/UPDATES.md.
 const express = require('express');
 const router = express.Router();
 const https = require('https');
@@ -27,13 +29,13 @@ const PRE_UPDATE_BACKUP_DIR = path.join(APP_DIR, 'backups', 'pre-update');
 // Kept for backwards compatibility – detection lives in utils/updateEnv now.
 const isRunningInDocker = updateEnv.isRunningInDocker;
 
-// ── Config accessors ──────────────────────────────────────────────────────────
+// Config accessors
 // repoUrl() returns '' when not configured – callers must check for empty string.
 const repoUrl = () => appConfig.get('UPDATE_REPO_URL') || '';
 const releaseChannel = () => appConfig.get('UPDATE_RELEASE_CHANNEL') || 'stable';
 const dockerImageRepo = () => appConfig.get('UPDATE_DOCKER_IMAGE') || 'hydniz/deltis';
 
-// ── Module-level update state ─────────────────────────────────────────────────
+// Module-level update state
 let updateInProgress = false;
 const logBuffer = [];
 const MAX_LOG_LINES = 400;
@@ -56,7 +58,7 @@ function pushRestart() {
   }
 }
 
-// ── Helpers ───────────────────────────────────────────────────────────────────
+// Helpers
 
 function capture(cmd, args) {
   const { spawn } = require('child_process');
@@ -241,7 +243,7 @@ async function createPreUpdateBackup() {
   return file;
 }
 
-// ── Background update check ───────────────────────────────────────────────────
+// Background update check
 // Periodically checks GitHub so the admin UI can show an "update available"
 // badge without hammering the API on every page load.
 
@@ -288,7 +290,7 @@ function startBackgroundChecks() {
   checkTimers = [initial, interval];
 }
 
-// ── Routes ────────────────────────────────────────────────────────────────────
+// Routes
 
 // GET /api/admin/update/status
 router.get('/status', auth, adminOnly, async (req, res) => {
@@ -440,7 +442,7 @@ router.post('/rollback', auth, adminOnly, async (req, res) => {
   });
 });
 
-// ── Update pipeline ───────────────────────────────────────────────────────────
+// Update pipeline
 
 const BAR = '══════════════════════════════════════════════';
 
@@ -460,7 +462,7 @@ async function runUpdate(mode) {
     ulog.log(`→ Log-Datei  : ${path.basename(logFile)}`);
     ulog.log('');
 
-    // ── [1/4] Determine target version ──────────────────────────────────────
+    // [1/4] Determine target version
     let latest;
     try {
       ulog.log('→ [1/4] Neueste Version ermitteln …');
@@ -487,7 +489,7 @@ async function runUpdate(mode) {
       startedAt: new Date().toISOString(),
     });
 
-    // ── [2/4] Pre-update backup (hard gate) ──────────────────────────────────
+    // [2/4] Pre-update backup (hard gate)
     // Safety net: without a verified backup NO update is performed.
     ulog.log('');
     ulog.log('→ [2/4] Datensicherung erstellen …');
@@ -506,7 +508,7 @@ async function runUpdate(mode) {
       return;
     }
 
-    // ── [3/4 + 4/4] Mode dispatch ────────────────────────────────────────────
+    // [3/4 + 4/4] Mode dispatch
     if (mode === 'docker-socket') {
       await runDockerSocketUpdate(latest, channel);
     } else if (mode === 'host') {
@@ -651,7 +653,7 @@ async function runHostUpdate(latest, channel) {
   // From here on the script owns the process – it will stop this app.
 }
 
-// ── Rollback pipeline ─────────────────────────────────────────────────────────
+// Rollback pipeline
 
 async function runRollback(st, restoreDb) {
   const logFile = ulog.startRun('rollback');
@@ -662,7 +664,7 @@ async function runRollback(st, restoreDb) {
     ulog.log(`→ Log-Datei: ${path.basename(logFile)}`);
     ulog.log('');
 
-    // ── Optional: restore the pre-update DB snapshot FIRST, while this app
+    // Optional: restore the pre-update DB snapshot FIRST, while this app
     // still has the DB connection. The old code version then boots on the
     // schema it understands.
     if (restoreDb) {
@@ -689,7 +691,7 @@ async function runRollback(st, restoreDb) {
       ulog.log('→ [1/2] Datenbank bleibt unverändert (restoreDb=false).');
     }
 
-    // ── Container / code swap back ────────────────────────────────────────────
+    // Container / code swap back
     const mode = await updateEnv.getUpdateMode();
 
     if (st.oldContainerName && mode === 'docker-socket') {

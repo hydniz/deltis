@@ -1,3 +1,4 @@
+// Mongoose model: admin-set runtime configuration override (key/value).
 const mongoose = require('mongoose');
 
 const systemConfigSchema = new mongoose.Schema({

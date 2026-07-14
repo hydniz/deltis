@@ -22,7 +22,7 @@ err()  { echo -e "${RED}✗${NC} $*"; }
 info() { echo -e "${CYAN}→${NC} $*"; }
 warn() { echo -e "${YELLOW}!${NC} $*"; }
 
-# ── MongoDB ──────────────────────────────────────────────────────────────────
+# MongoDB
 
 mongo_running() {
   podman ps --format '{{.Names}}' 2>/dev/null | grep -q "^${CONTAINER_NAME}$"
@@ -72,7 +72,7 @@ stop_mongo() {
   fi
 }
 
-# ── Process management ───────────────────────────────────────────────────────
+# Process management
 
 server_running() {
   [ -f "$PID_FILE" ] && kill -0 "$(cat "$PID_FILE")" 2>/dev/null
@@ -101,7 +101,7 @@ stop_server() {
   ok "Server stopped"
 }
 
-# ── Docker/Podman Compose ────────────────────────────────────────────────────
+# Docker/Podman Compose
 
 get_compose() {
   if command -v podman-compose &>/dev/null; then echo "podman-compose"
@@ -143,7 +143,7 @@ cmd_compose_rebuild() {
   $COMPOSE build --no-cache
 }
 
-# ── Commands ─────────────────────────────────────────────────────────────────
+# Commands
 
 cmd_start() {
   echo -e "\n${BOLD}Habit Tracker – Development Mode${NC}\n"
@@ -214,7 +214,7 @@ cmd_prod() {
   server_running && ok "Production server is running!" || err "Startup failed."
 }
 
-# ── Entry point ───────────────────────────────────────────────────────────────
+# Entry point
 
 case "${1:-help}" in
   start)          cmd_start ;;

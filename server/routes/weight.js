@@ -1,3 +1,4 @@
+// Weight log endpoints (/api/weight): list, upsert and delete daily entries.
 const express = require('express');
 const router = express.Router();
 const auth = require('../middleware/auth');

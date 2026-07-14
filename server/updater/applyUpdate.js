@@ -100,7 +100,7 @@ async function removeIfExists(name) {
   await docker.removeContainer(name, true);
 }
 
-// ── op=update ─────────────────────────────────────────────────────────────────
+// op=update
 
 async function doUpdate({ appName, newImage, healthTimeoutSec = 180 }) {
   const oldName = `${appName}${OLD_SUFFIX}`;
@@ -173,7 +173,7 @@ async function doUpdate({ appName, newImage, healthTimeoutSec = 180 }) {
   }
 }
 
-// ── op=rollback ───────────────────────────────────────────────────────────────
+// op=rollback
 
 async function doRollback({ appName, healthTimeoutSec = 180 }) {
   const oldName = `${appName}${OLD_SUFFIX}`;
@@ -211,7 +211,7 @@ async function doRollback({ appName, healthTimeoutSec = 180 }) {
   return healthy ? 0 : 1;
 }
 
-// ── Entry point ───────────────────────────────────────────────────────────────
+// Entry point
 
 async function main() {
   const s = spec();

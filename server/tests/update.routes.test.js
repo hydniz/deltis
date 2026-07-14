@@ -26,7 +26,7 @@ afterAll(async () => {
   await stopDb();
 });
 
-// ── GET /api/admin/update/status ──────────────────────────────────────────
+// GET /api/admin/update/status
 
 describe('GET /api/admin/update/status', () => {
   it('returns 401 for unauthenticated requests', async () => {
@@ -88,7 +88,7 @@ describe('GET /api/admin/update/status', () => {
   });
 });
 
-// ── POST /api/admin/update/start ──────────────────────────────────────────
+// POST /api/admin/update/start
 
 describe('POST /api/admin/update/start', () => {
   it('returns 401 for unauthenticated requests', async () => {
@@ -136,7 +136,7 @@ describe('POST /api/admin/update/start', () => {
   });
 });
 
-// ── Pre-update backup ─────────────────────────────────────────────────────
+// Pre-update backup
 
 describe('pre-update backup', () => {
   const fs = require('fs');
@@ -170,7 +170,7 @@ describe('pre-update backup', () => {
   });
 });
 
-// ── GET /api/admin/update/check ───────────────────────────────────────────
+// GET /api/admin/update/check
 
 describe('GET /api/admin/update/check', () => {
   it('returns 401 for unauthenticated requests', async () => {
@@ -197,7 +197,7 @@ describe('GET /api/admin/update/check', () => {
   });
 });
 
-// ── POST /api/admin/update/rollback ───────────────────────────────────────
+// POST /api/admin/update/rollback
 
 describe('POST /api/admin/update/rollback', () => {
   const updateStateUtil = require('../utils/updateState');
@@ -257,7 +257,7 @@ describe('POST /api/admin/update/rollback', () => {
   });
 });
 
-// ── Status: mode & updateState fields ─────────────────────────────────────
+// Status: mode & updateState fields
 
 describe('GET /api/admin/update/status – mode & state', () => {
   it('reports host mode outside Docker and an idle update state', async () => {
@@ -284,7 +284,7 @@ describe('GET /api/admin/update/status – mode & state', () => {
   });
 });
 
-// ── GET /api/admin/update/stream ──────────────────────────────────────────
+// GET /api/admin/update/stream
 
 describe('GET /api/admin/update/stream', () => {
   it('returns 401 for unauthenticated requests', async () => {
@@ -313,7 +313,7 @@ describe('GET /api/admin/update/stream', () => {
   });
 });
 
-// ── Version comparison ────────────────────────────────────────────────────
+// Version comparison
 
 describe('compareSemver', () => {
   const cmp = require('../routes/update')._compareSemver;

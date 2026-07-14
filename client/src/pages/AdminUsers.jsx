@@ -7,7 +7,7 @@ import AdminPageHeader from '../components/admin/AdminPageHeader';
 import AdminSpinner from '../components/admin/AdminSpinner';
 import ErrorBanner from '../components/admin/ErrorBanner';
 
-// ── Toggle switch ─────────────────────────────────────────────────────────────
+// Toggle switch
 
 function Toggle({ value, onChange }) {
   return (
@@ -21,7 +21,7 @@ function Toggle({ value, onChange }) {
   );
 }
 
-// ── Create modal ──────────────────────────────────────────────────────────────
+// Create modal
 
 function NewUserModal({ onClose, onCreate }) {
   const [username, setUsername] = useState('');
@@ -179,7 +179,7 @@ function NewUserModal({ onClose, onCreate }) {
   );
 }
 
-// ── Edit modal ────────────────────────────────────────────────────────────────
+// Edit modal
 
 function EditUserModal({ user, onClose, onSave }) {
   const [username, setUsername] = useState(user.username || '');
@@ -307,7 +307,7 @@ function EditUserModal({ user, onClose, onSave }) {
   );
 }
 
-// ── Main component ────────────────────────────────────────────────────────────
+// Main component
 
 export default function AdminUsers() {
   const [users, setUsers] = useState([]);

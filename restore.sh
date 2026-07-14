@@ -57,7 +57,7 @@ cleanup() {
 }
 trap cleanup EXIT
 
-# ── No argument → list backups ───────────────────────────────────────────────
+# No argument → list backups
 
 if [ -z "${1:-}" ]; then
   echo ""
@@ -117,7 +117,7 @@ fi
 
 BACKUP_FILE="$1"
 
-# ── Prerequisites ────────────────────────────────────────────────────────────
+# Prerequisites
 
 if [ ! -f "$BACKUP_FILE" ]; then
   err "Backup file not found: $BACKUP_FILE"
@@ -143,7 +143,7 @@ esac
 
 SIZE=$(du -sh "$BACKUP_FILE" | cut -f1)
 
-# ── Confirmation ─────────────────────────────────────────────────────────────
+# Confirmation
 
 echo ""
 echo -e "${BOLD}=== Habit Tracker – Restore Database ===${NC}"
@@ -165,7 +165,7 @@ fi
 
 echo ""
 
-# ── Stop app (keep MongoDB running) ──────────────────────────────────────────
+# Stop app (keep MongoDB running)
 
 COMPOSE_MODE=false
 if $RUNTIME container inspect "$APP_CONTAINER" >/dev/null 2>&1; then
@@ -194,7 +194,7 @@ else
   info "App was not running"
 fi
 
-# ── Restore data ─────────────────────────────────────────────────────────────
+# Restore data
 
 touch "$LOCK_FILE"
 
@@ -231,7 +231,7 @@ fi
 ok "Data restored successfully"
 rm -f "$LOCK_FILE"
 
-# ── Restart app ───────────────────────────────────────────────────────────────
+# Restart app
 
 info "Restarting app..."
 if $COMPOSE_MODE; then
@@ -256,7 +256,7 @@ else
   fi
 fi
 
-# ── Done ─────────────────────────────────────────────────────────────────────
+# Done
 
 echo ""
 ok "Restore complete!"

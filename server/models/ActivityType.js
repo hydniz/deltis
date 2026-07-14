@@ -1,3 +1,5 @@
+// Mongoose model: per-user activity category with custom field definitions.
+// Versioned: renames/field changes keep a history for old log entries.
 const mongoose = require('mongoose');
 
 const customFieldSchema = new mongoose.Schema({

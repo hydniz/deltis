@@ -1,3 +1,5 @@
+// Goal endpoints (/api/goals): CRUD plus progress computed from activity and
+// habit logs.
 const express = require('express');
 const router = express.Router();
 const mongoose = require('mongoose');
@@ -8,7 +10,7 @@ const HabitLog = require('../models/HabitLog');
 const ActivityType = require('../models/ActivityType');
 const HabitDefinition = require('../models/HabitDefinition');
 
-// ─── Hilfsfunktionen ─────────────────────────────────────────────────────────
+// ─Hilfsfunktionen
 
 function getIntervalBounds(intervalValue = 1, intervalUnit = 'week') {
   const end = new Date();
@@ -211,7 +213,7 @@ async function enrichGoal(goal) {
   return obj;
 }
 
-// ─── Routen ───────────────────────────────────────────────────────────────────
+// ─Routen
 
 router.get('/', auth, async (req, res) => {
   try {

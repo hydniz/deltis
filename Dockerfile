@@ -1,4 +1,4 @@
-# ── Stage 1: Build React frontend ─────────────────────────────────────────
+# Stage 1: Build React frontend
 FROM node:20-alpine AS frontend
 WORKDIR /app/client
 
@@ -12,7 +12,7 @@ RUN npm ci
 COPY client/ ./
 RUN npm run build
 
-# ── Stage 2: Production image ──────────────────────────────────────────────
+# Stage 2: Production image
 FROM node:20-alpine
 WORKDIR /app
 

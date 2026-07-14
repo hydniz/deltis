@@ -17,7 +17,7 @@ afterAll(async () => {
   await stopDb();
 });
 
-// ── GET /api/admin/config ─────────────────────────────────────────────────
+// GET /api/admin/config
 
 describe('GET /api/admin/config', () => {
   it('returns 401 for unauthenticated requests', async () => {
@@ -138,7 +138,7 @@ describe('GET /api/admin/config', () => {
   });
 });
 
-// ── PUT /api/admin/config/:key ────────────────────────────────────────────
+// PUT /api/admin/config/:key
 
 describe('PUT /api/admin/config/:key', () => {
   it('returns 401 for unauthenticated requests', async () => {
@@ -226,7 +226,7 @@ describe('PUT /api/admin/config/:key', () => {
   });
 });
 
-// ── DELETE /api/admin/config/:key ─────────────────────────────────────────
+// DELETE /api/admin/config/:key
 
 describe('DELETE /api/admin/config/:key', () => {
   it('returns 401 for unauthenticated requests', async () => {

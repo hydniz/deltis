@@ -46,14 +46,14 @@ Set one of the following options in your `.env` / `.env.production` file:
 #### Option A: File (recommended)
 
 ```env
-PEPPER_FILE=/etc/deltis/pepper.txt
+PEPPER_FILE=/etc/deltis/pepper.key
 ```
 
 Generate the pepper file (one-time):
 
 ```bash
-openssl rand -base64 48 | sudo tee /etc/deltis/pepper.txt
-sudo chmod 600 /etc/deltis/pepper.txt
+openssl rand -base64 48 | sudo tee /etc/deltis/pepper.key
+sudo chmod 600 /etc/deltis/pepper.key
 ```
 
 The path should be **outside** the project directory and must not be committed to git.
@@ -76,7 +76,7 @@ Without configuration the server starts with a warning. Passwords are hashed wit
 > All existing password hashes become invalid and users can no longer log in.
 > If rotation is absolutely necessary, all users must reset their passwords.
 
-> **Docker / NAS:** Provide the pepper via a mounted file (e.g. `/etc/deltis/pepper.txt`) —
+> **Docker / NAS:** Provide the pepper via a mounted file (e.g. `/etc/deltis/pepper.key`) —
 > the value never appears in the image or Compose file.
 
 ---

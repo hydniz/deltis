@@ -8,7 +8,7 @@ import {
   Tooltip, CartesianGrid, ReferenceLine
 } from 'recharts';
 
-// ── Interval helpers ────────────────────────────────────────────────
+// Interval helpers
 
 function unitLabel(value, unit) {
   if (unit === 'day') return value === 1 ? 'Tag' : 'Tage';
@@ -58,7 +58,7 @@ function metricLabel(metric, customFields = []) {
   return metric;
 }
 
-// ── Single goal progress display ────────────────────────────
+// Single goal progress display
 
 function GoalProgress({ goal }) {
   const [progress, setProgress] = useState(null);
@@ -290,7 +290,7 @@ function GoalProgress({ goal }) {
   );
 }
 
-// ── Goal creation form ───────────────────────────────────
+// Goal creation form
 
 function CreateGoalModal({ activityTypes, habits, onSave, onClose }) {
   const [form, setForm] = useState({
@@ -547,7 +547,7 @@ function CreateGoalModal({ activityTypes, habits, onSave, onClose }) {
         {/* Scrollable content */}
         <div className="flex-1 overflow-y-auto px-5 py-5 space-y-4">
 
-          {/* ── Step 1: Grundlagen ── */}
+          {/* Step 1: Grundlagen */}
           {currentStep === 1 && (<>
             <div>
               <label className="label">Name</label>
@@ -614,7 +614,7 @@ function CreateGoalModal({ activityTypes, habits, onSave, onClose }) {
             </div>
           </>)}
 
-          {/* ── Step 2: Was & Bedingungen ── */}
+          {/* Step 2: Was & Bedingungen */}
           {currentStep === 2 && (<>
             <div>
               <label className="label">Kategorie</label>
@@ -822,7 +822,7 @@ function CreateGoalModal({ activityTypes, habits, onSave, onClose }) {
             </div>
           </>)}
 
-          {/* ── Step 3: Meilensteine (nur langfristig) ── */}
+          {/* Step 3: Meilensteine (nur langfristig) */}
           {currentStep === 3 && (
             <div>
               <div className="flex items-center justify-between mb-1">
@@ -904,7 +904,7 @@ function CreateGoalModal({ activityTypes, habits, onSave, onClose }) {
   );
 }
 
-// ── Edit modal (periodic & long-term) ───────────────────────────
+// Edit modal (periodic & long-term)
 
 function EditGoalModal({ goal, onSave, onClose }) {
   const isActivityGoal = goal.targetRefModel === 'ActivityType' || goal.targetRefModel === 'activity';
@@ -1077,7 +1077,7 @@ function EditGoalModal({ goal, onSave, onClose }) {
         {/* Scrollable content */}
         <div className="flex-1 overflow-y-auto px-5 py-4 space-y-4">
 
-          {/* ── Grundlagen ── */}
+          {/* Grundlagen */}
           {editTab === 'basics' && (<>
             <div>
               <label className="label">Name</label>
@@ -1125,7 +1125,7 @@ function EditGoalModal({ goal, onSave, onClose }) {
             )}
           </>)}
 
-          {/* ── Bedingungen ── */}
+          {/* Bedingungen */}
           {editTab === 'conditions' && (
             <div className="space-y-3">
               <div className="flex items-center justify-between">
@@ -1309,7 +1309,7 @@ function EditGoalModal({ goal, onSave, onClose }) {
             </div>
           )}
 
-          {/* ── Meilensteine ── */}
+          {/* Meilensteine */}
           {editTab === 'milestones' && (
             <div>
               <div className="flex items-center justify-between mb-2">
@@ -1379,7 +1379,7 @@ function EditGoalModal({ goal, onSave, onClose }) {
   );
 }
 
-// ── Main page ─────────────────────────────────────────────────────────────
+// Main page
 
 export default function Goals() {
   const [goals, setGoals] = useState([]);

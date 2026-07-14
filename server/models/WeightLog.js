@@ -1,3 +1,4 @@
+// Mongoose model: one weight measurement per user and day.
 const mongoose = require('mongoose');
 
 const weightLogSchema = new mongoose.Schema({

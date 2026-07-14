@@ -13,7 +13,7 @@
 const bootstrapConfig = require('./bootstrapConfig');
 
 const DEFINITIONS = {
-  // ── OTA update ────────────────────────────────────────────────────────────
+  // OTA update
   UPDATE_REPO_URL: {
     label: 'GitHub Repository URL',
     group: 'OTA Update',
@@ -50,7 +50,7 @@ const DEFINITIONS = {
     editable: true,
     default: 'stable',
   },
-  // ── Server ────────────────────────────────────────────────────────────────
+  // Server
   PORT: {
     label: 'Server-Port',
     group: 'Server',
@@ -70,7 +70,7 @@ const DEFINITIONS = {
     restartRequired: true,
     default: 'mongodb://localhost:27017/habit_tracker',
   },
-  // ── Sicherheit ────────────────────────────────────────────────────────────
+  // Sicherheit
   // editable: false keeps the standard PUT /api/admin/config/:key route from
   // accepting writes (tests depend on this). Writes go through the dedicated
   // PUT /api/admin/config/bootstrap/:key route instead (bootstrap: true).

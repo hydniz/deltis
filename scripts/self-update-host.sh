@@ -27,7 +27,7 @@ RUN_LOG="$APP_DIR/.run.log"
 
 cd "$APP_DIR"
 
-# ── Logging / state helpers ───────────────────────────────────────────────────
+# Logging / state helpers
 
 log() {
   local ts; ts="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
@@ -46,7 +46,7 @@ set_state() {
   ' "$1" 2>/dev/null || log "! Konnte update-state.json nicht schreiben"
 }
 
-# ── App start/stop ────────────────────────────────────────────────────────────
+# App start/stop
 
 stop_app() {
   log "→ [Host-Update] Stoppe App …"
@@ -114,7 +114,7 @@ checkout_and_build() {
   return 0
 }
 
-# ── Main ──────────────────────────────────────────────────────────────────────
+# Main
 
 sleep 2   # give the HTTP response + SSE restart event time to flush
 
@@ -140,7 +140,7 @@ else
   log "✗ [Host-Update] Checkout/Build fehlgeschlagen."
 fi
 
-# ── Automatic recovery ────────────────────────────────────────────────────────
+# Automatic recovery
 
 if [ "${UPDATE_IS_ROLLBACK:-}" = "1" ]; then
   log "✗ [Host-Update] Rollback fehlgeschlagen. MANUELLER EINGRIFF NÖTIG (siehe .run.log)."

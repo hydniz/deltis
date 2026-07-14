@@ -1,3 +1,5 @@
+// Mongoose model: one logged activity, with a reference to its ActivityType
+// and the type version at logging time (for historical display).
 const mongoose = require('mongoose');
 
 const activityLogSchema = new mongoose.Schema({

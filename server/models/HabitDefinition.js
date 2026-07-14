@@ -1,3 +1,5 @@
+// Mongoose model: definition of a trackable habit (name, unit), versioned so
+// old logs keep their historical name.
 const mongoose = require('mongoose');
 
 // Stores the state of a version (name + unit)

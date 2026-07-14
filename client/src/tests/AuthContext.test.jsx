@@ -10,7 +10,7 @@ beforeAll(() => server.listen());
 afterEach(() => server.resetHandlers());
 afterAll(() => server.close());
 
-// ── Helpers ──────────────────────────────────────────────────────────────────
+// Helpers
 
 function TestConsumer() {
   const { user, loading } = useAuth();
@@ -33,7 +33,7 @@ function LoginConsumer() {
   );
 }
 
-// ── Initial load ──────────────────────────────────────────────────────────────
+// Initial load
 
 describe('AuthContext – initial load', () => {
   it('resolves to no user when the server returns 401 (no cookie)', async () => {
@@ -63,7 +63,7 @@ describe('AuthContext – initial load', () => {
   });
 });
 
-// ── Login / logout ────────────────────────────────────────────────────────────
+// Login / logout
 
 describe('AuthContext – login / logout', () => {
   it('sets user state on successful login via POST /auth/login', async () => {
@@ -100,7 +100,7 @@ describe('AuthContext – login / logout', () => {
   });
 });
 
-// ── setUsername ───────────────────────────────────────────────────────────────
+// setUsername
 
 describe('AuthContext – setUsername', () => {
   function SetUsernameConsumer() {
@@ -125,7 +125,7 @@ describe('AuthContext – setUsername', () => {
   });
 });
 
-// ── changePassword ────────────────────────────────────────────────────────────
+// changePassword
 
 function ChangePasswordConsumer() {
   const { changePassword } = useAuth();
@@ -145,7 +145,7 @@ describe('AuthContext – changePassword', () => {
   });
 });
 
-// ── forceChangePassword ───────────────────────────────────────────────────────
+// forceChangePassword
 
 describe('AuthContext – forceChangePassword', () => {
   it('sets mustChangePassword to false in user state', async () => {
@@ -174,7 +174,7 @@ describe('AuthContext – forceChangePassword', () => {
   });
 });
 
-// ── updateUser ────────────────────────────────────────────────────────────────
+// updateUser
 
 describe('AuthContext – updateUser', () => {
   it('merges the provided data into the current user state', async () => {

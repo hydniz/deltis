@@ -108,16 +108,15 @@
 
 @layer components {
 
-  /* ── Card ────────────────────────────────────────── */
+  /* Card */
   .card {
     background: var(--surface-bg);
     border: 1px solid var(--surface-border);
     @apply backdrop-blur-xl rounded-2xl;
   }
 
-  /* ── Primary Button ──────────────────────────────────────────────────────
-     Terracotta gradient with depth, shine, and tactile hover/press states.
-     ──────────────────────────────────────────────────────────────────────── */
+  /* Primary Button
+     Terracotta gradient with depth, shine, and tactile hover/press states. */
   .btn-primary {
     @apply text-white px-4 py-2 rounded-xl font-semibold text-sm tracking-wide
       cursor-pointer
@@ -145,9 +144,8 @@
     box-shadow: inset 0 2px 5px rgba(0, 0, 0, 0.35);
   }
 
-  /* ── Secondary Button ────────────────────────────────────────────────────
-     Warm earth glass — transparent tint with brand outline.
-     ──────────────────────────────────────────────────────────────────────── */
+  /* Secondary Button
+     Warm earth glass — transparent tint with brand outline. */
   .btn-secondary {
     @apply text-white/75 hover:text-white px-4 py-2 rounded-xl
       font-medium text-sm tracking-wide cursor-pointer
@@ -165,7 +163,7 @@
     background-color: rgba(196, 98, 58, 0.06);
   }
 
-  /* ── Danger Button ───────────────────────────────── */
+  /* Danger Button */
   .btn-danger {
     @apply text-red-300/70 hover:text-red-300 hover:bg-red-500/15
       px-3 py-1.5 rounded-lg text-sm font-medium cursor-pointer
@@ -175,9 +173,8 @@
     transform: translateY(-1px);
   }
 
-  /* ── Active Sidebar Item — glass pill ───────────────────────────────────
-     Gradient background + ring border; no cheap left-edge inset shadow.
-     ──────────────────────────────────────────────────────────────────────── */
+  /* Active Sidebar Item — glass pill
+     Gradient background + ring border; no cheap left-edge inset shadow. */
   .nav-active {
     color: var(--nav-active-text);
     background: linear-gradient(
@@ -188,7 +185,7 @@
     box-shadow: inset 0 0 0 1px var(--nav-active-ring);
   }
 
-  /* ── Glass Input ─────────────────────────────────── */
+  /* Glass Input */
   .input {
     background: var(--input-bg);
     border: 1px solid var(--input-border);
@@ -205,12 +202,12 @@
     border-color: var(--input-border-focus);
   }
 
-  /* ── Label ───────────────────────────────────────── */
+  /* Label */
   .label {
     @apply block text-xs font-medium text-white/40 mb-1.5 uppercase tracking-wider;
   }
 
-  /* ── Badge ───────────────────────────────────────── */
+  /* Badge */
   .badge {
     @apply inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium;
   }

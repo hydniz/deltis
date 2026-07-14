@@ -39,7 +39,7 @@ fi
 WITH_DB=false
 [ "${1:-}" = "--with-db" ] && WITH_DB=true
 
-# ── Read rollback info ───────────────────────────────────────────────────────
+# Read rollback info
 
 if [ ! -f "$ROLLBACK_INFO" ]; then
   err "No rollback info found ($ROLLBACK_INFO)."
@@ -61,7 +61,7 @@ if ! $RUNTIME image inspect "$PREVIOUS_IMAGE" >/dev/null 2>&1; then
   exit 1
 fi
 
-# ── Confirmation ─────────────────────────────────────────────────────────────
+# Confirmation
 
 echo ""
 echo -e "${BOLD}=== Habit Tracker – Rollback ===${NC}"
@@ -86,7 +86,7 @@ if [ "$CONFIRM" != "yes" ]; then
 fi
 echo ""
 
-# ── Point compose back at the previous image ─────────────────────────────────
+# Point compose back at the previous image
 
 info "Setting DELTIS_IMAGE=$PREVIOUS_IMAGE in .env ..."
 touch "$ENV_FILE"
@@ -104,7 +104,7 @@ else
 fi
 ok "App is running on $PREVIOUS_IMAGE again."
 
-# ── Optional DB restore ──────────────────────────────────────────────────────
+# Optional DB restore
 
 if $WITH_DB; then
   echo ""
