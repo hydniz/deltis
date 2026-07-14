@@ -1,6 +1,8 @@
+import { useState, useEffect } from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { APP_NAME } from '../config/branding';
+import api from '../utils/api';
 import {
   LayoutDashboard, Dumbbell, CalendarDays, Sparkles,
   Scale, Target, Settings, LogOut, Activity,
@@ -42,7 +44,7 @@ function NavItem({ to, icon: Icon, label, end }) {
   );
 }
 
-function AdminNavItem({ to, icon: Icon, label }) {
+function AdminNavItem({ to, icon: Icon, label, badge }) {
   return (
     <NavLink
       to={to}
@@ -55,14 +57,43 @@ function AdminNavItem({ to, icon: Icon, label }) {
       }
     >
       <Icon size={17} />
-      {label}
+      <span className="flex-1">{label}</span>
+      {badge && (
+        <span
+          className="w-2 h-2 rounded-full bg-amber-400 animate-pulse flex-shrink-0"
+          title="Update verfügbar"
+          data-testid="update-badge"
+        />
+      )}
     </NavLink>
   );
+}
+
+// Polls the cached backend update check so admins see an "update available"
+// dot on the Updates nav item without opening the page.
+function useUpdateAvailable(isAdmin) {
+  const [available, setAvailable] = useState(false);
+
+  useEffect(() => {
+    if (!isAdmin) return undefined;
+    let cancelled = false;
+    const fetchCheck = () => {
+      api.get('/admin/update/check')
+        .then(res => { if (!cancelled) setAvailable(res.data?.updateAvailable === true); })
+        .catch(() => { /* badge is best-effort */ });
+    };
+    fetchCheck();
+    const timer = setInterval(fetchCheck, 30 * 60 * 1000);
+    return () => { cancelled = true; clearInterval(timer); };
+  }, [isAdmin]);
+
+  return available;
 }
 
 export default function Sidebar() {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
+  const updateAvailable = useUpdateAvailable(!!user?.isAdmin);
 
   const handleLogout = () => {
     logout();
@@ -102,7 +133,11 @@ export default function Sidebar() {
               </div>
             </div>
             {adminNavItems.map(item => (
-              <AdminNavItem key={item.to} {...item} />
+              <AdminNavItem
+                key={item.to}
+                {...item}
+                badge={item.to === '/admin/updates' && updateAvailable}
+              />
             ))}
           </>
         )}

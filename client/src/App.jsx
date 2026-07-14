@@ -26,9 +26,17 @@ import { REQUIRED_API_VERSION } from './config/compatibility';
 
 function CompatibilityCheck({ children }) {
   const [mismatch, setMismatch] = useState(null); // null | { backendV: number }
+  const [emergency, setEmergency] = useState(false);
+  const [updateFailed, setUpdateFailed] = useState(false);
 
   useEffect(() => {
     api.get('').then(res => {
+      // Emergency / failed-update flags come first – they matter even in setup mode.
+      setEmergency(!!res.data.emergencyMode);
+      setUpdateFailed(!!res.data.updateFailed && !res.data.emergencyMode);
+
+      // Skip compatibility check in setup mode – API version is irrelevant then.
+      if (res.data.setupMode) return;
       const backendV = res.data.apiVersion ?? 1;
       const compatible = backendV === REQUIRED_API_VERSION;
       if (!compatible) setMismatch({ backendV });
@@ -44,6 +52,25 @@ function CompatibilityCheck({ children }) {
 
   return (
     <>
+      {emergency && (
+        <div className="fixed top-0 left-0 right-0 z-[210] flex items-center justify-center gap-2.5 px-4 py-2.5 bg-red-500/20 backdrop-blur-sm border-b border-red-500/40">
+          <AlertTriangle size={15} className="text-red-400 flex-shrink-0" />
+          <span className="text-red-200 text-sm">
+            Notfallbetrieb: Ein Update ist fehlgeschlagen. Als Admin anmelden und unter{' '}
+            <a href="/admin/updates" className="underline font-semibold">Admin&nbsp;→&nbsp;Updates</a>{' '}
+            den Rollback starten.
+          </span>
+        </div>
+      )}
+      {!emergency && updateFailed && (
+        <div className="fixed top-0 left-0 right-0 z-[205] flex items-center justify-center gap-2.5 px-4 py-2.5 bg-red-500/15 backdrop-blur-sm border-b border-red-500/30">
+          <AlertTriangle size={15} className="text-red-400 flex-shrink-0" />
+          <span className="text-red-200 text-sm">
+            Das letzte Update ist fehlgeschlagen – die vorherige Version läuft weiter. Details unter{' '}
+            <a href="/admin/updates" className="underline font-semibold">Admin&nbsp;→&nbsp;Updates</a>.
+          </span>
+        </div>
+      )}
       {mismatch && (
         <div className="fixed top-0 left-0 right-0 z-[200] flex items-center justify-center gap-2.5 px-4 py-2.5 bg-amber-500/15 backdrop-blur-sm border-b border-amber-500/30">
           <AlertTriangle size={15} className="text-amber-400 flex-shrink-0" />

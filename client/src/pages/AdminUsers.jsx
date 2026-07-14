@@ -1,8 +1,11 @@
 import { useState, useEffect, useCallback } from 'react';
 import {
-  UserPlus, Trash2, X, Pencil, AlertCircle, Eye, EyeOff, Lock, AtSign, Shield
+  Users, UserPlus, Trash2, X, Pencil, AlertCircle, Eye, EyeOff, Lock, AtSign, Shield
 } from 'lucide-react';
 import api from '../utils/api';
+import AdminPageHeader from '../components/admin/AdminPageHeader';
+import AdminSpinner from '../components/admin/AdminSpinner';
+import ErrorBanner from '../components/admin/ErrorBanner';
 
 // ── Toggle switch ─────────────────────────────────────────────────────────────
 
@@ -347,30 +350,25 @@ export default function AdminUsers() {
 
   return (
     <div className="p-6 max-w-3xl mx-auto">
-      <div className="flex items-center justify-between mb-6">
-        <div>
-          <h1 className="text-xl font-bold text-white">Nutzerverwaltung</h1>
-          <p className="text-slate-500 text-sm">{users.length} Nutzer registriert</p>
-        </div>
-        <button
-          onClick={() => setShowCreateModal(true)}
-          className="btn-primary flex items-center gap-2"
-        >
-          <UserPlus size={16} />
-          Neuer Nutzer
-        </button>
-      </div>
+      <AdminPageHeader
+        icon={Users}
+        title="Nutzerverwaltung"
+        description={`${users.length} Nutzer registriert`}
+        action={
+          <button
+            onClick={() => setShowCreateModal(true)}
+            className="btn-primary flex items-center gap-2"
+          >
+            <UserPlus size={16} />
+            Neuer Nutzer
+          </button>
+        }
+      />
 
-      {error && (
-        <div className="bg-red-900/20 border border-red-900/50 rounded-xl px-4 py-3 text-red-400 text-sm mb-4">
-          {error}
-        </div>
-      )}
+      <ErrorBanner message={error} />
 
       {loading ? (
-        <div className="flex justify-center py-12">
-          <div className="w-6 h-6 border-2 border-zinc-700 border-t-brand-500 rounded-full animate-spin" />
-        </div>
+        <AdminSpinner />
       ) : (
         <div className="card overflow-hidden">
           <table className="w-full">

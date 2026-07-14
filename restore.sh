@@ -5,8 +5,9 @@
 # MongoDB stays running throughout.
 #
 # Supports two backup formats:
-#   *.archive.gz   – mongodump archives created by backup.sh
+#   *.archive.gz   – mongodump archives created by backup.sh / CI pre-deploy backups
 #   *.ejson.gz     – EJSON snapshots created automatically before each migration
+#                    and before each OTA update
 #
 # Usage:
 #   ./restore.sh                      – list available backups
@@ -15,11 +16,19 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-CONTAINER_NAME="habit-tracker-mongo"
-APP_CONTAINER="habit-tracker-app"
-APP_IMAGE="habit-tracker:latest"
+
+# Instance config: the compose .env file (if present) defines DELTIS_INSTANCE
+# and DELTIS_IMAGE so multiple instances on one host use their own containers.
+if [ -f "$SCRIPT_DIR/.env" ]; then
+  # shellcheck disable=SC1091
+  set -a; . "$SCRIPT_DIR/.env"; set +a
+fi
+CONTAINER_NAME="${DELTIS_INSTANCE:-habit-tracker}-mongo"
+APP_CONTAINER="${DELTIS_INSTANCE:-habit-tracker}-app"
+APP_IMAGE="${DELTIS_IMAGE:-habit-tracker:latest}"
 BACKUP_DIR="$SCRIPT_DIR/backups"
 PRE_MIGRATION_DIR="$BACKUP_DIR/pre-migration"
+PRE_UPDATE_DIR="$BACKUP_DIR/pre-update"
 PID_FILE="$SCRIPT_DIR/.run.pid"
 LOG_FILE="$SCRIPT_DIR/.run.log"
 LOCK_FILE="$BACKUP_DIR/.backup.lock"
@@ -80,6 +89,19 @@ if [ -z "${1:-}" ]; then
       NAME="pre-migration/$(basename "$f")"
       echo -e "  ${SIZE}\t${NAME}"
     done < <(ls -1t "$PRE_MIGRATION_DIR"/*.ejson.gz)
+    echo ""
+  fi
+
+  if ls "$PRE_UPDATE_DIR"/*.ejson.gz 2>/dev/null | head -1 > /dev/null 2>&1; then
+    HAS_ANY=true
+    echo -e "  ${BOLD}Pre-update snapshots (EJSON):${NC}"
+    echo -e "  ${CYAN}Size    File${NC}"
+    echo -e "  ──────────────────────────────────────────────────────"
+    while IFS= read -r f; do
+      SIZE=$(du -sh "$f" | cut -f1)
+      NAME="pre-update/$(basename "$f")"
+      echo -e "  ${SIZE}\t${NAME}"
+    done < <(ls -1t "$PRE_UPDATE_DIR"/*.ejson.gz)
     echo ""
   fi
 

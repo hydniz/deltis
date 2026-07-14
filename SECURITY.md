@@ -115,10 +115,10 @@ npm run admin:reset-password
 
 ```bash
 # Via stdin (password not in process list)
-echo "NewPassword123" | node scripts/reset-admin-password.js
+printf '%s' "$NEW_ADMIN_PASSWORD" | node scripts/reset-admin-password.js
 
 # As argument (avoid on shared systems — appears in process list)
-node scripts/reset-admin-password.js --password "NewPassword123"
+node scripts/reset-admin-password.js --password "$NEW_ADMIN_PASSWORD"
 ```
 
 ### Password requirements

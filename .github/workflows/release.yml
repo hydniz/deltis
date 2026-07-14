@@ -58,10 +58,10 @@ jobs:
 
           # Generate a release-ready docker-compose.yml:
           #   - remove "build: ." so no source code is needed
-          #   - pin the image to the released version tag
+          #   - pin the DELTIS_IMAGE default to the released version tag
           sed \
             -e '/^\s*build:/d' \
-            -e 's|image: habit-tracker:latest|image: habit-tracker:${{ github.ref_name }}|g' \
+            -e 's|habit-tracker:latest|habit-tracker:${{ github.ref_name }}|g' \
             docker-compose.yml > release/docker-compose.yml
 
       - name: Upload assets to GitHub Release
@@ -84,6 +84,7 @@ jobs:
                docker compose up -d
                ```
           draft: false
-          prerelease: false
+          # Suffixed tags (v1.2.3-beta.1 / -alpha.1) are marked as pre-release.
+          prerelease: ${{ contains(github.ref_name, '-') }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

@@ -22,7 +22,17 @@ export const mockAdminUser = {
 
 export const handlers = [
   http.get('/api', () => {
-    return HttpResponse.json({ version: '1.0.0+test123', apiVersion: 2 });
+    return HttpResponse.json({
+      version: '1.0.0+test123',
+      apiVersion: 3,
+      emergencyMode: false,
+      updateFailed: false,
+    });
+  }),
+
+  // Cached update check (drives the sidebar badge).
+  http.get('/api/admin/update/check', () => {
+    return HttpResponse.json({ configured: false, checkedAt: new Date().toISOString() });
   }),
 
   // Session restore — returns mockUser when a valid cookie is present (simulated by default).

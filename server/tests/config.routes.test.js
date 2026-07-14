@@ -51,9 +51,36 @@ describe('GET /api/admin/config', () => {
     const keys = res.body.map(e => e.key);
     expect(keys).toContain('UPDATE_REPO_URL');
     expect(keys).toContain('UPDATE_BRANCH');
-    expect(keys).toContain('WATCHTOWER_API_TOKEN');
     expect(keys).toContain('JWT_SECRET');
     expect(keys).toContain('PEPPER_FILE');
+  });
+
+  it('ships the Deltis repository as default update source', async () => {
+    const envBackup = process.env.UPDATE_REPO_URL;
+    delete process.env.UPDATE_REPO_URL;
+
+    const { token } = await createAdminUser();
+    const res = await request(app)
+      .get('/api/admin/config')
+      .set(authHeader(token));
+    const entry = res.body.find(e => e.key === 'UPDATE_REPO_URL');
+    expect(entry.default).toBe('https://github.com/hydniz/deltis');
+    expect(entry.value).toBe('https://github.com/hydniz/deltis');
+    expect(entry.source).toBe('default');
+
+    if (envBackup !== undefined) process.env.UPDATE_REPO_URL = envBackup;
+  });
+
+  it('marks docker-only settings with context=docker', async () => {
+    const { token } = await createAdminUser();
+    const res = await request(app)
+      .get('/api/admin/config')
+      .set(authHeader(token));
+    const dockerImage = res.body.find(e => e.key === 'UPDATE_DOCKER_IMAGE');
+    expect(dockerImage.context).toBe('docker');
+    // Entries without an environment restriction carry no context field.
+    const repoUrl = res.body.find(e => e.key === 'UPDATE_REPO_URL');
+    expect(repoUrl.context).toBeUndefined();
   });
 
   it('returns source=default for entries with no env or DB value', async () => {

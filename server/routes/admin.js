@@ -5,6 +5,7 @@ const auth = require('../middleware/auth');
 const User = require('../models/User');
 const pw = require('../utils/password');
 const bootstrapConfig = require('../utils/bootstrapConfig');
+const serverState = require('../utils/serverState');
 
 const adminOnly = (req, res, next) => {
   if (!req.user?.isAdmin) return res.status(403).json({ error: 'Kein Zugriff' });
@@ -14,10 +15,70 @@ const adminOnly = (req, res, next) => {
 // ── Public setup routes (no auth required) ────────────────────────────────────
 
 router.get('/setup-status', async (req, res) => {
+  // Check whether security secrets are configured (env takes priority over bootstrap file).
+  const pepperConfigured = !!(
+    process.env.PEPPER_FILE || process.env.PASSWORD_PEPPER ||
+    bootstrapConfig.get('PEPPER_FILE') || bootstrapConfig.get('PASSWORD_PEPPER')
+  );
+  const jwtConfigured = !!(
+    process.env.JWT_SECRET || process.env.JWT_SECRET_FILE ||
+    bootstrapConfig.get('JWT_SECRET') || bootstrapConfig.get('JWT_SECRET_FILE')
+  );
+
+  if (serverState.setupMode) {
+    return res.json({ setupNeeded: true, setupMode: true, pepperConfigured, jwtConfigured });
+  }
   try {
     const admin = await User.findOne({ isAdmin: true }).select('+adminSecretHash +passwordHash');
     const setupNeeded = !admin || (!admin.passwordHash && !admin.adminSecretHash);
-    res.json({ setupNeeded });
+    res.json({ setupNeeded, setupMode: false, pepperConfigured, jwtConfigured });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /api/admin/setup/security-config
+// Saves JWT secret and/or pepper to the bootstrap file.
+// Available as long as no admin password has been set (pre-admin phase), regardless
+// of setup mode. This lets users configure security settings when MONGODB_URI is
+// already provided via .env but JWT/pepper are not yet configured.
+router.post('/setup/security-config', async (req, res) => {
+  try {
+    // Block once the first admin account is fully set up.
+    if (!serverState.setupMode) {
+      const admin = await User.findOne({ isAdmin: true }).select('+passwordHash');
+      if (admin?.passwordHash) {
+        return res.status(403).json({
+          error: 'Setup bereits abgeschlossen. Sicherheitskonfiguration im Admin-Bereich ändern.',
+        });
+      }
+    }
+
+    const { jwt_secret, jwt_secret_file, pepper_file, password_pepper } = req.body;
+
+    if (jwt_secret !== undefined) {
+      const s = String(jwt_secret).trim();
+      if (s) bootstrapConfig.set('JWT_SECRET', s); else bootstrapConfig.remove('JWT_SECRET');
+    }
+    if (jwt_secret_file !== undefined) {
+      const s = String(jwt_secret_file).trim();
+      if (s) bootstrapConfig.set('JWT_SECRET_FILE', s); else bootstrapConfig.remove('JWT_SECRET_FILE');
+    }
+    if (pepper_file !== undefined) {
+      const s = String(pepper_file).trim();
+      if (s) bootstrapConfig.set('PEPPER_FILE', s); else bootstrapConfig.remove('PEPPER_FILE');
+    }
+    if (password_pepper !== undefined) {
+      const s = String(password_pepper).trim();
+      if (s) bootstrapConfig.set('PASSWORD_PEPPER', s); else bootstrapConfig.remove('PASSWORD_PEPPER');
+    }
+
+    const pepperConfigured = !!(
+      process.env.PEPPER_FILE || process.env.PASSWORD_PEPPER ||
+      bootstrapConfig.get('PEPPER_FILE') || bootstrapConfig.get('PASSWORD_PEPPER')
+    );
+
+    res.json({ ok: true, pepperConfigured });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -50,35 +111,72 @@ router.post('/setup', async (req, res) => {
   }
 });
 
-// POST /api/admin/setup/system-config
-// Saves initial system configuration during the onboarding phase (before login).
-// Only available while setup has not yet been completed (no admin password set).
-// Accepts bootstrap settings like MONGODB_URI that must live in deltis.config.json.
-router.post('/setup/system-config', async (req, res) => {
+// POST /api/admin/setup/bootstrap
+// Public endpoint available only while the server is in setup mode.
+// Saves bootstrap configuration (MongoDB URI, JWT secret, pepper) to
+// /etc/deltis/deltis.config.json, then attempts a MongoDB reconnect.
+// On success the server exits setup mode and the wizard can proceed to
+// create the admin account.
+router.post('/setup/bootstrap', async (req, res) => {
+  if (!serverState.setupMode) {
+    return res.status(403).json({
+      error: 'Server nicht im Einrichtungsmodus. Konfiguration über den Admin-Bereich ändern.',
+    });
+  }
+
+  const { mongodb_uri, jwt_secret, jwt_secret_file, pepper_file, password_pepper } = req.body;
+
+  // ── Validate + save each field ──────────────────────────────────────────
+  if (mongodb_uri !== undefined) {
+    const uri = String(mongodb_uri).trim();
+    if (uri && !uri.startsWith('mongodb://') && !uri.startsWith('mongodb+srv://')) {
+      return res.status(400).json({ error: 'Ungültige MongoDB URI. Muss mit mongodb:// oder mongodb+srv:// beginnen.' });
+    }
+    if (uri) bootstrapConfig.set('MONGODB_URI', uri);
+    else bootstrapConfig.remove('MONGODB_URI');
+  }
+
+  if (jwt_secret !== undefined) {
+    const s = String(jwt_secret).trim();
+    if (s) bootstrapConfig.set('JWT_SECRET', s);
+    else bootstrapConfig.remove('JWT_SECRET');
+  }
+
+  if (jwt_secret_file !== undefined) {
+    const s = String(jwt_secret_file).trim();
+    if (s) bootstrapConfig.set('JWT_SECRET_FILE', s);
+    else bootstrapConfig.remove('JWT_SECRET_FILE');
+  }
+
+  if (pepper_file !== undefined) {
+    const s = String(pepper_file).trim();
+    if (s) bootstrapConfig.set('PEPPER_FILE', s);
+    else bootstrapConfig.remove('PEPPER_FILE');
+  }
+
+  if (password_pepper !== undefined) {
+    const s = String(password_pepper).trim();
+    if (s) bootstrapConfig.set('PASSWORD_PEPPER', s);
+    else bootstrapConfig.remove('PASSWORD_PEPPER');
+  }
+
+  // ── Attempt MongoDB reconnect ───────────────────────────────────────────
   try {
-    const admin = await User.findOne({ isAdmin: true }).select('+passwordHash');
-    const setupStillOpen = !admin?.passwordHash;
-    if (!setupStillOpen) {
-      return res.status(403).json({ error: 'Setup bereits abgeschlossen. Konfiguration nur im Admin-Bereich änderbar.' });
+    if (serverState.reconnect) {
+      await serverState.reconnect();
     }
-
-    const { mongodb_uri } = req.body;
-
-    if (mongodb_uri !== undefined) {
-      const uri = String(mongodb_uri).trim();
-      if (uri && !uri.startsWith('mongodb://') && !uri.startsWith('mongodb+srv://')) {
-        return res.status(400).json({ error: 'Ungültige MongoDB URI. Muss mit mongodb:// oder mongodb+srv:// beginnen.' });
-      }
-      if (uri) {
-        bootstrapConfig.set('MONGODB_URI', uri);
-      } else {
-        bootstrapConfig.remove('MONGODB_URI');
-      }
-    }
-
-    res.json({ ok: true, note: 'Neustart des Servers erforderlich, damit Änderungen wirksam werden.' });
+    res.json({
+      ok: true,
+      setupMode: serverState.setupMode,
+      note: serverState.setupMode
+        ? 'Konfiguration gespeichert. MongoDB-Verbindung konnte nicht hergestellt werden.'
+        : 'Konfiguration gespeichert. MongoDB verbunden.',
+    });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(502).json({
+      error: `MongoDB-Verbindung fehlgeschlagen: ${err.message}`,
+      note: 'Konfiguration wurde gespeichert. Überprüfe die MongoDB URI und versuche es erneut.',
+    });
   }
 });
 

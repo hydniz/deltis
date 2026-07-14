@@ -60,7 +60,7 @@ jobs:
       #   1.2.3   – exact version
       #   1.2     – major.minor (floating)
       #   1       – major (floating)
-      #   latest  – always the newest release
+      #   latest  – newest STABLE release only
       - name: Extract image metadata
         id: meta
         uses: docker/metadata-action@v5
@@ -70,7 +70,9 @@ jobs:
             type=semver,pattern={{version}}
             type=semver,pattern={{major}}.{{minor}}
             type=semver,pattern={{major}}
-            type=raw,value=latest
+            # 'latest' must only move on stable releases – a beta/alpha tag
+            # would otherwise be pulled by every latest-based deployment.
+            type=raw,value=latest,enable=${{ !contains(github.ref_name, '-') }}
 
       - name: Build and push
         uses: docker/build-push-action@v6

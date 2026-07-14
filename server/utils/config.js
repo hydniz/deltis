@@ -22,6 +22,25 @@ const DEFINITIONS = {
     editable: true,
     default: 'https://github.com/hydniz/deltis',
   },
+  UPDATE_BRANCH: {
+    label: 'Branch (Main-Kanal)',
+    group: 'OTA Update',
+    description: 'Git-Branch der verfolgt wird, wenn der Release-Kanal auf "main" gesetzt ist.',
+    type: 'text',
+    editable: true,
+    default: 'main',
+  },
+  UPDATE_DOCKER_IMAGE: {
+    label: 'Docker-Image',
+    group: 'OTA Update',
+    description: 'Docker-Hub-Image, das bei Updates im Docker-Modus gepullt wird.',
+    type: 'text',
+    editable: true,
+    default: 'hydniz/deltis',
+    // context: 'docker' | 'host' – the UI only shows the entry in the
+    // matching runtime environment (omitted = shown everywhere).
+    context: 'docker',
+  },
   UPDATE_RELEASE_CHANNEL: {
     label: 'Release-Kanal',
     group: 'OTA Update',
@@ -30,22 +49,6 @@ const DEFINITIONS = {
     options: ['stable', 'beta', 'alpha', 'main'],
     editable: true,
     default: 'stable',
-  },
-  WATCHTOWER_API_TOKEN: {
-    label: 'Watchtower API-Token',
-    group: 'OTA Update',
-    description: 'Muss mit WATCHTOWER_HTTP_API_TOKEN in docker-compose.yml übereinstimmen.',
-    type: 'password',
-    editable: true,
-    default: 'deltis-ota-token',
-  },
-  WATCHTOWER_HOST: {
-    label: 'Watchtower Host',
-    group: 'OTA Update',
-    description: 'Hostname des Watchtower-Containers im Docker-Netzwerk.',
-    type: 'text',
-    editable: true,
-    default: 'watchtower',
   },
   // ── Server ────────────────────────────────────────────────────────────────
   PORT: {
@@ -62,44 +65,53 @@ const DEFINITIONS = {
     group: 'Server',
     description: 'Verbindungszeichenkette für MongoDB. Neustart erforderlich. Wenn in .env gesetzt, überschreibt .env diesen Wert.',
     type: 'password',
-    editable: true,
-    bootstrap: true, // stored in deltis.config.json, not in DB (chicken-and-egg)
+    editable: false,  // cannot use the standard config route (chicken-and-egg problem)
+    bootstrap: true,  // writable via dedicated bootstrap route: PUT /api/admin/config/bootstrap/MONGODB_URI
     restartRequired: true,
     default: 'mongodb://localhost:27017/habit_tracker',
   },
   // ── Sicherheit ────────────────────────────────────────────────────────────
-  // These are read-only in the UI – they exist purely so the admin can see
-  // whether each secret is configured and where it comes from.
+  // editable: false keeps the standard PUT /api/admin/config/:key route from
+  // accepting writes (tests depend on this). Writes go through the dedicated
+  // PUT /api/admin/config/bootstrap/:key route instead (bootstrap: true).
   JWT_SECRET: {
     label: 'JWT Secret',
     group: 'Sicherheit',
-    description: 'Geheimnis für JWT-Session-Token. Nur per .env setzbar.',
-    type: 'status',
+    description: 'Geheimnis für JWT-Session-Token. Änderungen erfordern Neustart. .env hat Vorrang.',
+    type: 'password',
     editable: false,
+    bootstrap: true,
+    restartRequired: true,
     default: '',
   },
   JWT_SECRET_FILE: {
     label: 'JWT Secret Datei',
     group: 'Sicherheit',
-    description: 'Pfad zur Datei mit dem JWT Secret. Nur per .env setzbar.',
-    type: 'status',
+    description: 'Pfad zur Datei mit dem JWT Secret. Vorrang vor JWT_SECRET. Neustart erforderlich.',
+    type: 'text',
     editable: false,
+    bootstrap: true,
+    restartRequired: true,
     default: '',
   },
   PEPPER_FILE: {
     label: 'Pepper-Datei',
     group: 'Sicherheit',
-    description: 'Pfad zur Pepper-Datei für Passwort-Hashing. Niemals nach erstem Login ändern! Nur per .env setzbar.',
-    type: 'status',
+    description: 'Pfad zur Pepper-Datei für Passwort-Hashing. VOR dem ersten Nutzer setzen! Niemals danach ändern.',
+    type: 'text',
     editable: false,
+    bootstrap: true,
+    restartRequired: true,
     default: '',
   },
   PASSWORD_PEPPER: {
     label: 'Pepper (direkt)',
     group: 'Sicherheit',
-    description: 'Pepper-Wert direkt. Niemals nach erstem Login ändern! Nur per .env setzbar.',
-    type: 'status',
+    description: 'Pepper-Wert direkt (weniger sicher als Datei). VOR dem ersten Nutzer setzen! Niemals danach ändern.',
+    type: 'password',
     editable: false,
+    bootstrap: true,
+    restartRequired: true,
     default: '',
   },
 };

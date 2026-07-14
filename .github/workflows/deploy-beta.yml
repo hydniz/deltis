@@ -1,0 +1,29 @@
+name: CD – Deploy Beta
+
+# Every push to main updates the beta instance.
+# Stable releases (v*-tags) deploy to production via deploy-production.yml.
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  vars:
+    name: Compute image tag
+    runs-on: ubuntu-latest
+    outputs:
+      image_ref: ${{ steps.v.outputs.image_ref }}
+    steps:
+      - id: v
+        run: echo "image_ref=habit-tracker:beta-${GITHUB_SHA::7}" >> "$GITHUB_OUTPUT"
+
+  deploy:
+    name: Deploy
+    needs: vars
+    uses: ./.github/workflows/deploy.yml
+    with:
+      environment: beta
+      image_ref: ${{ needs.vars.outputs.image_ref }}
+      tag_prefix: beta-
+    secrets: inherit

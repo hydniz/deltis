@@ -1,21 +1,29 @@
 // Bootstrap configuration – values that must be known before the MongoDB
-// connection is established (e.g. MONGODB_URI itself).
+// connection is established, or that need to be readable on disk so they
+// survive container restarts without requiring a .env file.
 //
-// Stored on disk as <project-root>/deltis.config.json so the file survives
-// container restarts and does not depend on a running database.
+// Stored at /etc/deltis/deltis.config.json (mounted as a Docker volume).
+// In development the file is read from the same path if it exists, otherwise
+// the key simply falls back to the built-in default.
 //
 // Precedence (highest first):
 //   1. process.env    – .env / docker-compose environment
-//   2. deltis.config.json – saved by admin via the settings UI
-//   3. Hard-coded default
+//   2. /etc/deltis/deltis.config.json  – written by the setup wizard / admin UI
+//   3. Hard-coded default (empty string for secrets, sensible value for URI)
 
 const path = require('path');
 const fs = require('fs');
 
-const CONFIG_FILE = path.join(__dirname, '..', '..', 'deltis.config.json');
+const CONFIG_FILE = '/etc/deltis/deltis.config.json';
 
-// Keys managed by this module (kept small – only pre-DB necessities).
-const BOOTSTRAP_KEYS = ['MONGODB_URI'];
+// Keys managed here. All others go through the DB-backed config system.
+const BOOTSTRAP_KEYS = [
+  'MONGODB_URI',
+  'JWT_SECRET',
+  'JWT_SECRET_FILE',
+  'PEPPER_FILE',
+  'PASSWORD_PEPPER',
+];
 
 function _read() {
   try {
@@ -39,6 +47,9 @@ function getSource(key) {
 }
 
 function set(key, value) {
+  // Ensure the directory exists before writing.
+  const dir = path.dirname(CONFIG_FILE);
+  try { fs.mkdirSync(dir, { recursive: true }); } catch { /* already exists */ }
   const data = _read();
   data[key] = value;
   fs.writeFileSync(CONFIG_FILE, JSON.stringify(data, null, 2), 'utf8');

@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const auth = require('../middleware/auth');
 const config = require('../utils/config');
+const bootstrapConfig = require('../utils/bootstrapConfig');
 
 const adminOnly = (req, res, next) => {
   if (!req.user?.isAdmin) return res.status(403).json({ error: 'Kein Zugriff' });
@@ -31,9 +32,11 @@ router.get('/', auth, adminOnly, (req, res) => {
       description: def.description,
       type: def.type,
       editable: def.editable,
+      ...(def.bootstrap ? { bootstrap: true } : {}),
       ...(def.options ? { options: def.options } : {}),
       ...(def.default ? { default: def.default } : {}),
       ...(def.restartRequired ? { restartRequired: true } : {}),
+      ...(def.context ? { context: def.context } : {}),
       source,
       hasValue: Boolean(effective),
       value,
@@ -41,6 +44,49 @@ router.get('/', auth, adminOnly, (req, res) => {
   });
 
   res.json(entries);
+});
+
+// ── PUT /api/admin/config/bootstrap/:key ──────────────────────────────────
+// Writes a bootstrap-file override for keys that cannot use MongoDB storage
+// (chicken-and-egg problem – e.g. MONGODB_URI). These keys have
+// `editable: false` in DEFINITIONS so the standard PUT route rejects them,
+// but they are writable through this dedicated route.
+router.put('/bootstrap/:key', auth, adminOnly, (req, res) => {
+  const { key } = req.params;
+  const def = config.DEFINITIONS[key];
+
+  if (!def || !def.bootstrap) {
+    return res.status(400).json({ error: 'Schlüssel unterstützt keine Bootstrap-Konfiguration.' });
+  }
+
+  const envVal = process.env[key];
+  if (envVal !== undefined && envVal !== '') {
+    return res.status(400).json({
+      error: 'Wert ist in der Umgebungsvariable (.env) festgelegt und hat Vorrang. Bitte dort ändern.',
+    });
+  }
+
+  const value = String(req.body.value ?? '').trim();
+  if (!value) {
+    return res.status(400).json({ error: 'Wert darf nicht leer sein.' });
+  }
+
+  bootstrapConfig.set(key, value);
+  res.json({ ok: true, source: 'file', note: 'Neustart des Servers erforderlich.' });
+});
+
+// ── DELETE /api/admin/config/bootstrap/:key ───────────────────────────────
+// Removes the bootstrap-file override, falling back to env or the default.
+router.delete('/bootstrap/:key', auth, adminOnly, (req, res) => {
+  const { key } = req.params;
+  const def = config.DEFINITIONS[key];
+
+  if (!def || !def.bootstrap) {
+    return res.status(400).json({ error: 'Schlüssel unterstützt keine Bootstrap-Konfiguration.' });
+  }
+
+  bootstrapConfig.remove(key);
+  res.json({ ok: true, source: config.getSource(key) });
 });
 
 // ── PUT /api/admin/config/:key ────────────────────────────────────────────

@@ -7,7 +7,14 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-CONTAINER_NAME="habit-tracker-mongo"
+
+# Instance config: the compose .env file (if present) defines DELTIS_INSTANCE
+# so multiple instances (e.g. prod + beta) on one host use their own containers.
+if [ -f "$SCRIPT_DIR/.env" ]; then
+  # shellcheck disable=SC1091
+  set -a; . "$SCRIPT_DIR/.env"; set +a
+fi
+CONTAINER_NAME="${DELTIS_INSTANCE:-habit-tracker}-mongo"
 BACKUP_DIR="$SCRIPT_DIR/backups"
 LOCK_FILE="$BACKUP_DIR/.backup.lock"
 TIMESTAMP=$(date +%Y%m%d_%H%M%S)

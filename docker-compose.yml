@@ -1,13 +1,18 @@
 services:
 
   # ── MongoDB ────────────────────────────────────────────────────────────────
+  # DELTIS_INSTANCE / *_PORT / DELTIS_IMAGE are read from the .env file next to
+  # this compose file. Defaults keep the original single-instance names, so an
+  # existing deployment keeps its containers and volume without any .env file.
+  # A second instance on the same host (e.g. beta) sets its own values, see
+  # docs/DEPLOYMENT.md.
   mongo:
     image: mongo:7
-    container_name: habit-tracker-mongo
+    container_name: ${DELTIS_INSTANCE:-habit-tracker}-mongo
     volumes:
       - mongo_data:/data/db
     ports:
-      - "27017:27017"
+      - "${MONGO_PORT:-27017}:27017"
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "mongosh", "--quiet", "--eval", "db.runCommand('ping').ok"]
@@ -19,15 +24,20 @@ services:
   # ── App (Express + pre-built React frontend) ──────────────────────────────
   app:
     build: .
-    image: habit-tracker:latest
-    container_name: habit-tracker-app
+    image: ${DELTIS_IMAGE:-habit-tracker:latest}
+    container_name: ${DELTIS_INSTANCE:-habit-tracker}-app
     ports:
-      - "3001:3001"
+      - "${APP_PORT:-3001}:3001"
     volumes:
       # Mount backups dir so backup.sh and restore.sh can access it from the host
+      # (also carries update-state.json and update logs across container swaps)
       - ./backups:/app/backups
       # Mount pepper file read-only into the container
       - /etc/deltis/:/etc/deltis/
+      # Uncomment to enable full in-app OTA updates (docker-socket mode):
+      # the app pulls the new image and swaps its own container, with automatic
+      # recovery on failure. See docs/UPDATES.md.
+      # - /var/run/docker.sock:/var/run/docker.sock
     env_file:
       - .env.production
     environment:
@@ -42,4 +52,6 @@ services:
 
 volumes:
   mongo_data:
-    name: habit-tracker-mongo-data
+    # Instance-scoped volume name – two instances on one host must never share
+    # the same MongoDB data directory.
+    name: ${DELTIS_INSTANCE:-habit-tracker}-mongo-data

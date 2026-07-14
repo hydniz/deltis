@@ -1,11 +1,29 @@
-name: CD – Deploy to Production
+name: CD – Deploy (reusable)
 
-# Only triggers when commits land on main (via PR merge or direct push).
-# Tests run first; deploy is skipped if any test fails.
+# Reusable deploy pipeline shared by deploy-beta.yml and deploy-production.yml.
+# Authentication is SSH-key-only (secrets.SERVER_SSH_KEY) – no passwords.
+#
+# Secrets are scoped to the GitHub Environment passed via `environment`
+# (Settings → Environments → beta / production):
+#   SERVER_HOST, SERVER_USER, SERVER_SSH_KEY, TARGET_DIR
+# Both environments may point at the same host (different TARGET_DIRs) or at
+# two separate hosts – the pipeline does not care.
+
 on:
-  push:
-    branches:
-      - main
+  workflow_call:
+    inputs:
+      environment:
+        description: 'GitHub Environment to deploy to (beta | production)'
+        required: true
+        type: string
+      image_ref:
+        description: 'Full image ref to build and deploy (e.g. habit-tracker:v1.2.3)'
+        required: true
+        type: string
+      tag_prefix:
+        description: 'Image tag prefix owned by this instance (used for pruning old images)'
+        required: true
+        type: string
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
@@ -37,19 +55,22 @@ jobs:
         run: npm test --prefix client
 
   build-and-deploy:
-    name: Build & Deploy
+    name: Build & Deploy (${{ inputs.environment }})
     runs-on: ubuntu-latest
     needs: test
-    environment: production   # optional: add manual approval gate in GitHub settings
+    environment: ${{ inputs.environment }}   # optional: add manual approval gate in GitHub settings
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
       - name: Build Docker image
-        run: docker build -t habit-tracker:latest .
+        run: |
+          docker build \
+            --build-arg GIT_COMMIT=$(git rev-parse --short HEAD) \
+            -t '${{ inputs.image_ref }}' .
 
       - name: Export image as tar archive
-        run: docker save habit-tracker:latest | gzip > habit-tracker-deploy.tar.gz
+        run: docker save '${{ inputs.image_ref }}' | gzip > deltis-deploy.tar.gz
 
       - name: Copy files to server (SCP)
         uses: appleboy/scp-action@v0.1.7
@@ -57,7 +78,7 @@ jobs:
           host: ${{ secrets.SERVER_HOST }}
           username: ${{ secrets.SERVER_USER }}
           key: ${{ secrets.SERVER_SSH_KEY }}
-          source: "habit-tracker-deploy.tar.gz,docker-compose.yml,backup.sh,restore.sh"
+          source: "deltis-deploy.tar.gz,docker-compose.yml,backup.sh,restore.sh,rollback.sh,scripts/deploy-remote.sh"
           target: ${{ secrets.TARGET_DIR }}
           overwrite: true
 
@@ -70,26 +91,5 @@ jobs:
           script: |
             set -e
             cd ${{ secrets.TARGET_DIR }}
-
-            chmod +x ./backup.sh ./restore.sh
-
-            if docker container inspect habit-tracker-mongo >/dev/null 2>&1; then
-              echo "Running pre-deploy backup..."
-              BACKUP_FILE="predeploy_$(date +%Y%m%d_%H%M%S).archive.gz"
-              docker exec habit-tracker-mongo mongodump \
-                --db habit_tracker \
-                --archive=/tmp/pre_deploy.archive \
-                --gzip --quiet
-              docker cp habit-tracker-mongo:/tmp/pre_deploy.archive "./$BACKUP_FILE"
-              docker exec habit-tracker-mongo rm /tmp/pre_deploy.archive
-              ls -1t predeploy_*.archive.gz 2>/dev/null | tail -n +6 | xargs rm -f
-              echo "Backup: $BACKUP_FILE"
-            else
-              echo "First deploy – skipping backup."
-            fi
-
-            docker load < habit-tracker-deploy.tar.gz
-            rm habit-tracker-deploy.tar.gz
-            docker compose up -d --no-build --force-recreate
-
-            echo "Deploy successful!"
+            chmod +x ./backup.sh ./restore.sh ./rollback.sh ./scripts/deploy-remote.sh
+            bash scripts/deploy-remote.sh deltis-deploy.tar.gz '${{ inputs.image_ref }}' '${{ inputs.tag_prefix }}'

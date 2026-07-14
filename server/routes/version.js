@@ -19,7 +19,18 @@ const express = require('express');
 const router = express.Router();
 
 router.get('/', (_req, res) => {
-  res.json({ version: displayVersion, apiVersion: API_VERSION });
+  const serverState = require('../utils/serverState');
+  const updateState = require('../utils/updateState');
+  const phase = updateState.read().phase || 'idle';
+  res.json({
+    version: displayVersion,
+    apiVersion: API_VERSION,
+    setupMode: serverState.setupMode,
+    // Booleans only – details are admin-authenticated (/api/admin/update/status).
+    emergencyMode: !!serverState.emergencyMode,
+    updateFailed: phase === 'failed',
+    port: serverState.actualPort,
+  });
 });
 
 module.exports = { router, API_VERSION };

@@ -1,8 +1,9 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
-  Check, Eye, EyeOff, AlertCircle, Activity,
-  ShieldAlert, Database, Lock, AlertTriangle, Info, ChevronRight,
+  Check, Eye, EyeOff, AlertCircle, Activity, ShieldAlert,
+  Database, Lock, AlertTriangle, Info, ChevronRight, RefreshCw,
+  SlidersHorizontal,
 } from 'lucide-react';
 import { APP_NAME } from '../config/branding';
 import api from '../utils/api';
@@ -33,7 +34,271 @@ function Steps({ current, steps }) {
   );
 }
 
-// ── Step 1: Admin account ─────────────────────────────────────────────────────
+// ── Shared form building blocks ───────────────────────────────────────────────
+
+// Password-style input with a show/hide toggle.
+function SecretInput({ value, onChange, placeholder, disabled, autoFocus }) {
+  const [show, setShow] = useState(false);
+  return (
+    <div className="relative">
+      <input
+        type={show ? 'text' : 'password'}
+        value={value}
+        onChange={onChange}
+        className="input pr-10 font-mono text-sm"
+        placeholder={placeholder}
+        disabled={disabled}
+        autoFocus={autoFocus}
+      />
+      <button type="button" onClick={() => setShow(v => !v)}
+        className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-200 transition-colors" tabIndex={-1}>
+        {show ? <EyeOff size={15} /> : <Eye size={15} />}
+      </button>
+    </div>
+  );
+}
+
+// JWT secret + pepper fields shared by both config steps.
+function SecurityFields({ jwtSecret, setJwtSecret, pepperFile, setPepperFile, passwordPepper, setPasswordPepper }) {
+  return (
+    <>
+      <div>
+        <label className="label flex items-center gap-1.5">
+          <Lock size={12} />
+          JWT Secret
+          <span className="text-[10px] text-slate-500 font-normal ml-1">optional</span>
+        </label>
+        <SecretInput
+          value={jwtSecret}
+          onChange={e => setJwtSecret(e.target.value)}
+          placeholder="openssl rand -base64 64"
+        />
+        <div className="flex items-start gap-1.5 mt-1.5">
+          <Info size={11} className="text-slate-500 shrink-0 mt-0.5" />
+          <p className="text-xs text-slate-500">
+            Wenn leer: temporäres Zufalls-Secret — Sitzungen enden bei jedem Neustart.
+            Wirksam erst nach Neustart des Servers.
+          </p>
+        </div>
+      </div>
+
+      <div className="space-y-3">
+        <div className="flex items-start gap-2 bg-amber-500/8 border border-amber-500/20 rounded-xl px-3 py-3">
+          <AlertTriangle size={13} className="text-amber-400 shrink-0 mt-0.5" />
+          <p className="text-xs text-amber-300/80">
+            Den Pepper <strong>vor dem ersten Nutzer-Login</strong> konfigurieren.
+            Eine nachträgliche Änderung macht alle Passwörter ungültig.
+            Wirksam erst nach Neustart.
+          </p>
+        </div>
+
+        <div>
+          <label className="label">Pepper-Datei Pfad <span className="text-[10px] text-slate-500 font-normal ml-1">empfohlen</span></label>
+          <input
+            type="text"
+            value={pepperFile}
+            onChange={e => setPepperFile(e.target.value)}
+            className="input font-mono text-sm"
+            placeholder="/etc/deltis/pepper.key"
+          />
+          <p className="text-xs text-slate-600 mt-1">Pfad zu einer Datei außerhalb des App-Verzeichnisses. Sicherer als ein direkt gesetzter Wert.</p>
+        </div>
+
+        <div>
+          <label className="label">Pepper (direkt) <span className="text-[10px] text-slate-500 font-normal ml-1">alternative</span></label>
+          <SecretInput
+            value={passwordPepper}
+            onChange={e => setPasswordPepper(e.target.value)}
+            placeholder="langer zufälliger Wert"
+            disabled={!!pepperFile.trim()}
+          />
+          {pepperFile.trim() && (
+            <p className="text-xs text-slate-600 mt-1">Deaktiviert wenn Pepper-Datei gesetzt.</p>
+          )}
+        </div>
+      </div>
+    </>
+  );
+}
+
+// Warning card shown when the admin saved the config without any pepper.
+function PepperWarningCard({ onBack, onContinue }) {
+  return (
+    <div className="card p-6 space-y-5">
+      <div className="flex items-start gap-3">
+        <div className="w-10 h-10 rounded-full bg-red-900/30 border border-red-700/50 flex items-center justify-center shrink-0">
+          <AlertTriangle size={18} className="text-red-400" />
+        </div>
+        <div>
+          <h2 className="text-base font-semibold text-white mb-1">Kein Pepper konfiguriert!</h2>
+          <p className="text-sm text-slate-400">
+            Das Admin-Passwort wird <strong className="text-white">ohne Pepper</strong> gehasht.
+            Wenn du später einen Pepper hinzufügst, ist das Admin-Passwort nicht mehr gültig
+            und du wirst ausgesperrt.
+          </p>
+        </div>
+      </div>
+      <div className="bg-red-900/15 border border-red-800/40 rounded-xl px-4 py-3 text-xs text-red-300/80 space-y-1">
+        <p><strong>Empfehlung:</strong> Konfiguriere jetzt einen Pepper, bevor du das Admin-Konto erstellst.</p>
+        <p>Generiere einen sicheren Pepper: <code className="font-mono bg-slate-900 px-1 rounded">openssl rand -base64 48 {'>'} /etc/deltis/pepper.key</code></p>
+      </div>
+      <div className="flex gap-3">
+        <button
+          onClick={onBack}
+          className="btn-primary flex-1 flex items-center justify-center gap-2"
+        >
+          <ChevronRight size={15} className="rotate-180" />
+          Pepper jetzt setzen
+        </button>
+        <button
+          onClick={onContinue}
+          className="btn-secondary flex-1 text-red-400 hover:text-red-300 border-red-900/40 hover:border-red-800/60"
+        >
+          Trotzdem fortfahren
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// ── Step: Configuration ───────────────────────────────────────────────────────
+// One component for both variants:
+//   withMongo=true  → setup mode: MongoDB URI + JWT + pepper (POST /admin/setup/bootstrap)
+//   withMongo=false → DB already connected: JWT + pepper only (POST /admin/setup/security-config)
+
+function StepConfig({ withMongo, onDone }) {
+  const [mongoUri, setMongoUri] = useState('');
+  const [jwtSecret, setJwtSecret] = useState('');
+  const [pepperFile, setPepperFile] = useState('');
+  const [passwordPepper, setPasswordPepper] = useState('');
+
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState('');
+  const [mongoError, setMongoError] = useState('');
+  // Shown after a successful save when no pepper was configured
+  const [pepperWarning, setPepperWarning] = useState(false);
+
+  const pepperConfigured = pepperFile.trim() || passwordPepper.trim();
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    const uri = mongoUri.trim();
+    if (withMongo && uri && !uri.startsWith('mongodb://') && !uri.startsWith('mongodb+srv://')) {
+      setMongoError('Muss mit mongodb:// oder mongodb+srv:// beginnen.');
+      return;
+    }
+    setSubmitting(true);
+    setError('');
+    setMongoError('');
+    try {
+      const endpoint = withMongo ? '/admin/setup/bootstrap' : '/admin/setup/security-config';
+      const res = await api.post(endpoint, {
+        ...(withMongo && uri ? { mongodb_uri: uri } : {}),
+        ...(jwtSecret.trim() ? { jwt_secret: jwtSecret.trim() } : {}),
+        ...(pepperFile.trim() ? { pepper_file: pepperFile.trim() } : {}),
+        ...(passwordPepper.trim() ? { password_pepper: passwordPepper.trim() } : {}),
+      });
+      if (!res.data.ok) {
+        setError(res.data.note || 'Fehler beim Speichern.');
+        return;
+      }
+      if (withMongo && res.data.setupMode) {
+        setError(
+          uri
+            ? 'Konfiguration gespeichert, aber MongoDB konnte nicht verbunden werden. URI prüfen und erneut versuchen.'
+            : 'Konfiguration gespeichert. Gib eine MongoDB URI ein und speichere erneut um fortzufahren.'
+        );
+        return;
+      }
+      // Saved. Warn before advancing if no pepper was configured.
+      if (!pepperConfigured) {
+        setPepperWarning(true);
+        return;
+      }
+      onDone();
+    } catch (err) {
+      setError(err.response?.data?.error || (withMongo ? 'Verbindung fehlgeschlagen.' : 'Speichern fehlgeschlagen.'));
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  if (pepperWarning) {
+    return <PepperWarningCard onBack={() => setPepperWarning(false)} onContinue={onDone} />;
+  }
+
+  const HeaderIcon = withMongo ? Database : Lock;
+
+  return (
+    <div className="card p-6">
+      <div className="flex items-center gap-2 mb-2">
+        <HeaderIcon size={18} className="text-brand-400" />
+        <h2 className="text-base font-semibold text-white">
+          {withMongo ? 'Systemkonfiguration' : 'Sicherheitskonfiguration'}
+        </h2>
+      </div>
+
+      <p className="text-xs text-slate-500 mb-5">
+        Diese Werte werden in <code className="font-mono">/etc/deltis/deltis.config.json</code> gespeichert.
+        .env-Variablen haben immer Vorrang.
+      </p>
+
+      <form onSubmit={handleSubmit} className="space-y-5">
+        {withMongo && (
+          <div>
+            <label className="label flex items-center gap-1.5">
+              <Database size={12} />
+              MongoDB URI
+            </label>
+            <SecretInput
+              value={mongoUri}
+              onChange={e => { setMongoUri(e.target.value); setMongoError(''); }}
+              placeholder="mongodb://localhost:27017/habit_tracker"
+              autoFocus
+            />
+            {mongoError && <p className="text-xs text-red-400 mt-1">{mongoError}</p>}
+            <p className="text-xs text-slate-600 mt-1">
+              Ohne MongoDB URI kann der Server nicht vollständig starten. JWT-Secret und Pepper
+              können aber bereits jetzt gespeichert werden.
+            </p>
+          </div>
+        )}
+
+        <SecurityFields
+          jwtSecret={jwtSecret} setJwtSecret={setJwtSecret}
+          pepperFile={pepperFile} setPepperFile={setPepperFile}
+          passwordPepper={passwordPepper} setPasswordPepper={setPasswordPepper}
+        />
+
+        {error && (
+          <div className={`flex items-start gap-2 text-sm rounded-xl px-3 py-2 ${
+            error.includes('gespeichert')
+              ? 'text-amber-400 bg-amber-900/20 border border-amber-900/50'
+              : 'text-red-400 bg-red-900/20 border border-red-900/50'
+          }`}>
+            <AlertCircle size={14} className="shrink-0 mt-0.5" />
+            {error}
+          </div>
+        )}
+
+        <button
+          type="submit"
+          disabled={submitting}
+          className="btn-primary w-full py-3 flex items-center justify-center gap-2"
+        >
+          {submitting
+            ? <RefreshCw size={16} className="animate-spin" />
+            : <ChevronRight size={16} />}
+          {submitting
+            ? (withMongo ? 'Verbinde …' : 'Speichere …')
+            : (withMongo ? 'Speichern & verbinden' : 'Speichern & weiter')}
+        </button>
+      </form>
+    </div>
+  );
+}
+
+// ── Step: Admin account ───────────────────────────────────────────────────────
 
 function StepAccount({ onDone }) {
   const [username, setUsername] = useState('');
@@ -69,47 +334,26 @@ function StepAccount({ onDone }) {
       <form onSubmit={handleSubmit} className="space-y-4">
         <div>
           <label className="label">Benutzername</label>
-          <input
-            type="text"
-            value={username}
-            onChange={e => setUsername(e.target.value)}
-            className="input"
-            placeholder="Mindestens 3 Zeichen"
-            autoComplete="username"
-            autoFocus
-          />
+          <input type="text" value={username} onChange={e => setUsername(e.target.value)}
+            className="input" placeholder="Mindestens 3 Zeichen" autoComplete="username" autoFocus />
         </div>
         <div>
           <label className="label">Passwort</label>
           <div className="relative">
-            <input
-              type={showPw ? 'text' : 'password'}
-              value={password}
+            <input type={showPw ? 'text' : 'password'} value={password}
               onChange={e => setPassword(e.target.value)}
-              className="input pr-10"
-              placeholder="Mindestens 8 Zeichen"
-              autoComplete="new-password"
-            />
-            <button
-              type="button"
-              onClick={() => setShowPw(v => !v)}
-              className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-200 transition-colors"
-              tabIndex={-1}
-            >
+              className="input pr-10" placeholder="Mindestens 8 Zeichen" autoComplete="new-password" />
+            <button type="button" onClick={() => setShowPw(v => !v)}
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-200 transition-colors" tabIndex={-1}>
               {showPw ? <EyeOff size={16} /> : <Eye size={16} />}
             </button>
           </div>
         </div>
         <div>
           <label className="label">Passwort bestätigen</label>
-          <input
-            type={showPw ? 'text' : 'password'}
-            value={confirm}
+          <input type={showPw ? 'text' : 'password'} value={confirm}
             onChange={e => setConfirm(e.target.value)}
-            className="input"
-            placeholder="Passwort wiederholen"
-            autoComplete="new-password"
-          />
+            className="input" placeholder="Passwort wiederholen" autoComplete="new-password" />
         </div>
 
         {error && (
@@ -119,182 +363,17 @@ function StepAccount({ onDone }) {
           </div>
         )}
 
-        <button
-          type="submit"
-          disabled={submitting || !username || !password || !confirm}
-          className="btn-primary w-full py-3 flex items-center justify-center gap-2"
-        >
+        <button type="submit" disabled={submitting || !username || !password || !confirm}
+          className="btn-primary w-full py-3 flex items-center justify-center gap-2">
           {submitting && <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />}
-          Weiter
-          <ChevronRight size={16} />
+          Weiter <ChevronRight size={16} />
         </button>
       </form>
     </div>
   );
 }
 
-// ── Step 2: System configuration ──────────────────────────────────────────────
-
-function StepSystemConfig({ onDone, onSkip }) {
-  const [mongoUri, setMongoUri] = useState('');
-  const [showMongoUri, setShowMongoUri] = useState(false);
-  const [submitting, setSubmitting] = useState(false);
-  const [error, setError] = useState('');
-  const [envMongoUri, setEnvMongoUri] = useState(false);
-
-  useEffect(() => {
-    // Check if MongoDB URI is already provided via env
-    api.get('/admin/config')
-      .then(res => {
-        const mongoEntry = res.data.find(c => c.key === 'MONGODB_URI');
-        if (mongoEntry?.source === 'env') setEnvMongoUri(true);
-        if (mongoEntry?.value) setMongoUri(mongoEntry.value);
-      })
-      .catch(() => {});
-  }, []);
-
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    setSubmitting(true);
-    setError('');
-    try {
-      const uri = mongoUri.trim();
-      if (uri && !uri.startsWith('mongodb://') && !uri.startsWith('mongodb+srv://')) {
-        setError('Ungültige MongoDB URI. Muss mit mongodb:// oder mongodb+srv:// beginnen.');
-        setSubmitting(false);
-        return;
-      }
-      await api.post('/admin/setup/system-config', {
-        mongodb_uri: uri || undefined,
-      });
-      onDone();
-    } catch (err) {
-      setError(err.response?.data?.error || 'Fehler beim Speichern.');
-    } finally {
-      setSubmitting(false);
-    }
-  };
-
-  return (
-    <div className="card p-6">
-      <div className="flex items-center gap-2 mb-5">
-        <Database size={18} className="text-brand-400" />
-        <h2 className="text-base font-semibold text-white">Systemkonfiguration</h2>
-      </div>
-
-      <form onSubmit={handleSubmit} className="space-y-5">
-        {/* MongoDB URI */}
-        <div>
-          <label className="label flex items-center gap-1.5">
-            <Database size={13} />
-            MongoDB URI
-          </label>
-
-          {envMongoUri ? (
-            <div className="flex items-start gap-2 bg-amber-500/10 border border-amber-500/25 rounded-xl px-3 py-3">
-              <AlertTriangle size={14} className="text-amber-400 shrink-0 mt-0.5" />
-              <p className="text-xs text-amber-300/80">
-                MongoDB URI ist bereits über die Umgebungsvariable (<code className="font-mono">.env</code> /{' '}
-                <code className="font-mono">docker-compose.yml</code>) gesetzt und hat Vorrang.
-                Der hier eingetragene Wert wird ignoriert, solange die Umgebungsvariable gesetzt ist.
-              </p>
-            </div>
-          ) : (
-            <>
-              <div className="relative">
-                <input
-                  type={showMongoUri ? 'text' : 'password'}
-                  value={mongoUri}
-                  onChange={e => setMongoUri(e.target.value)}
-                  className="input pr-10 font-mono text-sm"
-                  placeholder="mongodb://localhost:27017/habit_tracker"
-                  autoComplete="off"
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowMongoUri(v => !v)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-200 transition-colors"
-                  tabIndex={-1}
-                >
-                  {showMongoUri ? <EyeOff size={16} /> : <Eye size={16} />}
-                </button>
-              </div>
-              <p className="text-xs text-slate-500 mt-1">
-                Leer lassen für Standardwert (<code className="font-mono">mongodb://localhost:27017/habit_tracker</code>).
-                Änderungen werden in <code className="font-mono">deltis.config.json</code> gespeichert
-                und erfordern einen Serverneustart.
-              </p>
-            </>
-          )}
-        </div>
-
-        {/* Security info */}
-        <div className="bg-slate-800/40 border border-slate-700 rounded-xl px-4 py-4 space-y-3">
-          <div className="flex items-center gap-2">
-            <Lock size={14} className="text-slate-400" />
-            <span className="text-sm font-medium text-slate-300">Sicherheitskonfiguration</span>
-          </div>
-          <div className="space-y-2">
-            <div className="flex items-start gap-2">
-              <Info size={13} className="text-brand-400 shrink-0 mt-0.5" />
-              <p className="text-xs text-slate-400">
-                <strong className="text-slate-300">Pepper-Datei</strong> — Wird über die Umgebungsvariable{' '}
-                <code className="font-mono">PEPPER_FILE</code> (Pfad zur Datei) oder{' '}
-                <code className="font-mono">PASSWORD_PEPPER</code> (direkter Wert) gesetzt.
-                Diese Werte können nur in <code className="font-mono">.env</code> oder{' '}
-                <code className="font-mono">docker-compose.yml</code> konfiguriert werden.
-              </p>
-            </div>
-            <div className="flex items-start gap-2">
-              <AlertTriangle size={13} className="text-amber-400 shrink-0 mt-0.5" />
-              <p className="text-xs text-amber-300/70">
-                Den Pepper <strong>niemals</strong> nach dem ersten Login eines Nutzers ändern!
-                Alle Passwörter werden damit gehasht – eine Änderung macht alle Accounts unbrauchbar.
-              </p>
-            </div>
-            <div className="flex items-start gap-2">
-              <Info size={13} className="text-brand-400 shrink-0 mt-0.5" />
-              <p className="text-xs text-slate-400">
-                <strong className="text-slate-300">JWT Secret</strong> — Über{' '}
-                <code className="font-mono">JWT_SECRET</code> oder{' '}
-                <code className="font-mono">JWT_SECRET_FILE</code> setzen. Änderungen invalidieren
-                alle aktiven Sessions.
-              </p>
-            </div>
-          </div>
-        </div>
-
-        {error && (
-          <div className="flex items-center gap-2 text-red-400 text-sm bg-red-900/20 border border-red-900/50 rounded-xl px-3 py-2">
-            <AlertCircle size={15} />
-            {error}
-          </div>
-        )}
-
-        <div className="flex gap-3">
-          <button
-            type="button"
-            onClick={onSkip}
-            className="btn-secondary flex-1"
-          >
-            Überspringen
-          </button>
-          <button
-            type="submit"
-            disabled={submitting}
-            className="btn-primary flex-1 flex items-center justify-center gap-2"
-          >
-            {submitting && <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />}
-            Weiter
-            <ChevronRight size={16} />
-          </button>
-        </div>
-      </form>
-    </div>
-  );
-}
-
-// ── Step 3: Done ──────────────────────────────────────────────────────────────
+// ── Step: Done ────────────────────────────────────────────────────────────────
 
 function StepDone({ navigate }) {
   return (
@@ -304,17 +383,16 @@ function StepDone({ navigate }) {
       </div>
       <div>
         <h2 className="text-lg font-semibold text-white mb-1">Setup abgeschlossen!</h2>
-        <p className="text-slate-400 text-sm">
-          Melde dich jetzt mit deinem Benutzernamen und Passwort an.
+        <p className="text-slate-400 text-sm">Melde dich jetzt mit deinem Benutzernamen und Passwort an.</p>
+      </div>
+      <div className="flex items-start gap-2 bg-slate-800/60 border border-slate-700 rounded-xl px-4 py-3 text-left">
+        <SlidersHorizontal size={14} className="text-amber-400 shrink-0 mt-0.5" />
+        <p className="text-xs text-slate-400">
+          JWT Secret und Pepper werden nach einem <strong className="text-slate-300">Server-Neustart</strong> aktiv.
+          Weitere Einstellungen sind im <strong className="text-slate-300">Admin-Bereich</strong> verfügbar.
         </p>
       </div>
-      <p className="text-xs text-slate-600">
-        Weitere Einstellungen (OTA, Systemkonfiguration) sind nach dem Login im Admin-Bereich verfügbar.
-      </p>
-      <button
-        onClick={() => navigate('/login')}
-        className="btn-primary w-full py-3"
-      >
+      <button onClick={() => navigate('/login')} className="btn-primary w-full py-3">
         Zur Anmeldung
       </button>
     </div>
@@ -323,23 +401,30 @@ function StepDone({ navigate }) {
 
 // ── Main component ────────────────────────────────────────────────────────────
 
-const STEPS = ['Konto', 'System', 'Fertig'];
-
 export default function AdminSetup() {
   const navigate = useNavigate();
-  const [step, setStep] = useState(0);
-  const [loading, setLoading] = useState(true);
+  const [step, setStep] = useState(null); // null = loading
+  const [setupMode, setSetupMode] = useState(false);
+  const [needsSecurityConfig, setNeedsSecurityConfig] = useState(false);
 
   useEffect(() => {
     api.get('/admin/setup-status')
       .then(res => {
-        if (!res.data.setupNeeded) navigate('/login', { replace: true });
+        if (!res.data.setupNeeded) {
+          navigate('/login', { replace: true });
+          return;
+        }
+        const sm = Boolean(res.data.setupMode);
+        setSetupMode(sm);
+        // Show security config step when pepper is not yet configured,
+        // regardless of whether we're in setup mode or not.
+        setNeedsSecurityConfig(!res.data.pepperConfigured);
+        setStep(0);
       })
-      .catch(() => navigate('/login', { replace: true }))
-      .finally(() => setLoading(false));
+      .catch(() => navigate('/login', { replace: true }));
   }, [navigate]);
 
-  if (loading) {
+  if (step === null) {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <div className="w-8 h-8 border-2 border-zinc-700 border-t-brand-500 rounded-full animate-spin" />
@@ -347,10 +432,36 @@ export default function AdminSetup() {
     );
   }
 
+  // Build step list based on what still needs to be configured.
+  // setupMode=true   → always show system config (MongoDB + JWT + Pepper)
+  // !pepperConfigured → show security config (JWT + Pepper) before account creation
+  // otherwise        → just account + done
+  let STEPS, renderStep;
+  if (setupMode) {
+    STEPS = ['System', 'Konto', 'Fertig'];
+    renderStep = [
+      <StepConfig withMongo onDone={() => setStep(1)} />,
+      <StepAccount onDone={() => setStep(2)} />,
+      <StepDone navigate={navigate} />,
+    ];
+  } else if (needsSecurityConfig) {
+    STEPS = ['Sicherheit', 'Konto', 'Fertig'];
+    renderStep = [
+      <StepConfig withMongo={false} onDone={() => setStep(1)} />,
+      <StepAccount onDone={() => setStep(2)} />,
+      <StepDone navigate={navigate} />,
+    ];
+  } else {
+    STEPS = ['Konto', 'Fertig'];
+    renderStep = [
+      <StepAccount onDone={() => setStep(1)} />,
+      <StepDone navigate={navigate} />,
+    ];
+  }
+
   return (
     <div className="min-h-screen flex items-center justify-center p-4">
       <div className="w-full max-w-md">
-        {/* Logo */}
         <div className="text-center mb-8">
           <div className="flex items-center justify-center gap-2.5 mb-6">
             <div className="w-5 h-5 rounded bg-brand-600 flex items-center justify-center">
@@ -359,19 +470,12 @@ export default function AdminSetup() {
             <span className="font-semibold text-zinc-100 text-sm">{APP_NAME}</span>
           </div>
           <h1 className="text-2xl font-semibold text-zinc-100 mb-1">Ersteinrichtung</h1>
-          <p className="text-zinc-500 text-sm">System-Setup für Deltis</p>
+          <p className="text-zinc-500 text-sm">Admin-Konto für Deltis einrichten</p>
         </div>
 
         <Steps current={step} steps={STEPS} />
 
-        {step === 0 && <StepAccount onDone={() => setStep(1)} />}
-        {step === 1 && (
-          <StepSystemConfig
-            onDone={() => setStep(2)}
-            onSkip={() => setStep(2)}
-          />
-        )}
-        {step === 2 && <StepDone navigate={navigate} />}
+        {renderStep[step]}
       </div>
     </div>
   );
