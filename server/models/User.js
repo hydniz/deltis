@@ -11,6 +11,13 @@ const userSchema = new mongoose.Schema({
   isAdmin: { type: Boolean, default: false },
   adminSecretHash: { type: String, select: false },
   weightUnit: { type: String, default: 'kg' },
+  // First-login setup wizard. Only users created after this feature get
+  // `onboardingPending: true`; existing accounts (field absent → false)
+  // never see the wizard. `onboardingStep` lets the client resume exactly
+  // where the user left off; `onboardedAt` marks completion.
+  onboardingPending: { type: Boolean, default: false },
+  onboardingStep: { type: Number, default: 0 },
+  onboardedAt: { type: Date, default: null },
   createdAt: { type: Date, default: Date.now }
 });
 

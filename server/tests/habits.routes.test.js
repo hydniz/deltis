@@ -142,12 +142,50 @@ describe('DELETE /api/habits/definitions/:id', () => {
     expect(res.body.success).toBe(true);
   });
 
-  it('returns 404 when trying to delete a predefined habit', async () => {
-    const { token } = await createUser();
-    const predefined = await HabitDefinition.create({ userId: null, name: 'Koffein', unitSymbol: 'mg', type: 'amount', isPredefined: true, version: 1, nameHistory: [] });
+  it('hides a predefined habit for this user only and allows restoring it', async () => {
+    const { token, user } = await createUser();
+    const { token: otherToken } = await createUser();
+    const predefined = await HabitDefinition.create({
+      userId: null, name: 'Wasser', unitSymbol: 'ml', type: 'amount',
+      isPredefined: true, version: 1, nameHistory: [],
+    });
+
+    const delRes = await request(app)
+      .delete(`/api/habits/definitions/${predefined._id}`)
+      .set(authHeader(token));
+    expect(delRes.status).toBe(200);
+    expect(delRes.body.hidden).toBe(true);
+
+    // Global definition still exists, only hidden for this user
+    expect(await HabitDefinition.findById(predefined._id)).not.toBeNull();
+    const mine = await request(app).get('/api/habits/definitions').set(authHeader(token));
+    expect(mine.body.find(d => d._id === predefined._id.toString())).toBeUndefined();
+    const others = await request(app).get('/api/habits/definitions').set(authHeader(otherToken));
+    expect(others.body.find(d => d._id === predefined._id.toString())).toBeDefined();
+
+    // includeHidden exposes it with the hidden flag for the manage modal
+    const withHidden = await request(app)
+      .get('/api/habits/definitions?includeHidden=true')
+      .set(authHeader(token));
+    const hiddenDef = withHidden.body.find(d => d._id === predefined._id.toString());
+    expect(hiddenDef.hidden).toBe(true);
+    expect(hiddenDef.selected).toBe(false);
+
+    // Restore brings it back
+    await request(app)
+      .post(`/api/habits/definitions/${predefined._id}/restore`)
+      .set(authHeader(token));
+    const restored = await request(app).get('/api/habits/definitions').set(authHeader(token));
+    expect(restored.body.find(d => d._id === predefined._id.toString())).toBeDefined();
+  });
+
+  it('returns 404 for a definition that does not exist', async () => {
+    const { token, user } = await createUser();
+    const def = await createHabitDef(user._id);
+    await HabitDefinition.deleteOne({ _id: def._id });
 
     const res = await request(app)
-      .delete(`/api/habits/definitions/${predefined._id}`)
+      .delete(`/api/habits/definitions/${def._id}`)
       .set(authHeader(token));
     expect(res.status).toBe(404);
   });
@@ -178,6 +216,88 @@ describe('PUT /api/habits/settings/:id', () => {
       .send({ missingDayMode: 'zero', defaultValue: 0 });
     expect(res.status).toBe(200);
     expect(res.body.success).toBe(true);
+  });
+
+  it('persists scheduleDays and returns them via GET /definitions', async () => {
+    const { token, user } = await createUser();
+    const def = await createHabitDef(user._id);
+
+    const putRes = await request(app)
+      .put(`/api/habits/settings/${def._id}`)
+      .set(authHeader(token))
+      .send({ missingDayMode: 'none', defaultValue: 0, scheduleDays: [1, 3, 5] });
+    expect(putRes.status).toBe(200);
+
+    const getRes = await request(app)
+      .get('/api/habits/definitions')
+      .set(authHeader(token));
+    expect(getRes.status).toBe(200);
+    const habit = getRes.body.find(d => d._id === def._id.toString());
+    expect(habit.scheduleDays).toEqual([1, 3, 5]);
+  });
+
+  it('sanitizes invalid scheduleDays values', async () => {
+    const { token, user } = await createUser();
+    const def = await createHabitDef(user._id);
+
+    await request(app)
+      .put(`/api/habits/settings/${def._id}`)
+      .set(authHeader(token))
+      .send({ missingDayMode: 'none', defaultValue: 0, scheduleDays: [5, 5, -1, 7, 'x', 2.5, 0] });
+
+    const getRes = await request(app)
+      .get('/api/habits/definitions')
+      .set(authHeader(token));
+    const habit = getRes.body.find(d => d._id === def._id.toString());
+    expect(habit.scheduleDays).toEqual([0, 5]);
+  });
+
+  it('persists a one-off scheduleDate and returns it via GET /definitions', async () => {
+    const { token, user } = await createUser();
+    const def = await createHabitDef(user._id);
+
+    await request(app)
+      .put(`/api/habits/settings/${def._id}`)
+      .set(authHeader(token))
+      .send({ missingDayMode: 'none', defaultValue: 0, scheduleDate: '2026-07-20' });
+
+    const getRes = await request(app)
+      .get('/api/habits/definitions')
+      .set(authHeader(token));
+    const habit = getRes.body.find(d => d._id === def._id.toString());
+    expect(habit.scheduleDate).toBe('2026-07-20');
+  });
+
+  it('rejects malformed scheduleDate values as null', async () => {
+    const { token, user } = await createUser();
+    const def = await createHabitDef(user._id);
+
+    await request(app)
+      .put(`/api/habits/settings/${def._id}`)
+      .set(authHeader(token))
+      .send({ missingDayMode: 'none', defaultValue: 0, scheduleDate: '20.07.2026' });
+
+    const getRes = await request(app)
+      .get('/api/habits/definitions')
+      .set(authHeader(token));
+    const habit = getRes.body.find(d => d._id === def._id.toString());
+    expect(habit.scheduleDate).toBeNull();
+  });
+
+  it('defaults scheduleDays to an empty array when not provided', async () => {
+    const { token, user } = await createUser();
+    const def = await createHabitDef(user._id);
+
+    await request(app)
+      .put(`/api/habits/settings/${def._id}`)
+      .set(authHeader(token))
+      .send({ missingDayMode: 'default', defaultValue: 2 });
+
+    const getRes = await request(app)
+      .get('/api/habits/definitions')
+      .set(authHeader(token));
+    const habit = getRes.body.find(d => d._id === def._id.toString());
+    expect(habit.scheduleDays).toEqual([]);
   });
 });
 

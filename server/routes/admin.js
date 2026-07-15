@@ -231,6 +231,7 @@ router.post('/users', auth, adminOnly, async (req, res) => {
       mustChangePassword: true,
       name: name?.trim() || normalized,
       isAdmin: !!makeAdmin,
+      onboardingPending: true,
     });
 
     res.status(201).json({

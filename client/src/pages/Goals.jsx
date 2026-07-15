@@ -14,7 +14,7 @@ import {
   IconButton, EmptyState, PageLoader, ProgressBar, useChart,
 } from '../components/ui';
 import ActivityTypeWizard from '../components/ActivityTypeWizard';
-import NewHabitModal from '../components/NewHabitModal';
+import ManageHabitsModal from '../components/ManageHabitsModal';
 
 // Interval helpers
 
@@ -476,15 +476,19 @@ function CreateGoalModal({ activityTypes, habits, onSave, onClose, onTargetsChan
     setShowCreateType(false);
   };
 
-  const handleHabitCreated = async (created) => {
+  // The central manage modal reports the most recently created habit so the
+  // wizard can preselect it as the goal target.
+  const handleHabitsManaged = async (lastCreated) => {
     await onTargetsChanged?.();
-    setForm(f => ({
-      ...f,
-      targetRef: created._id,
-      conditions: f.conditions.map(c =>
-        c.metric === 'value' ? { ...c, unitSymbol: created.unitSymbol || '' } : c
-      ),
-    }));
+    if (lastCreated) {
+      setForm(f => ({
+        ...f,
+        targetRef: lastCreated._id,
+        conditions: f.conditions.map(c =>
+          c.metric === 'value' ? { ...c, unitSymbol: lastCreated.unitSymbol || '' } : c
+        ),
+      }));
+    }
     setShowCreateHabit(false);
   };
 
@@ -1082,8 +1086,10 @@ function CreateGoalModal({ activityTypes, habits, onSave, onClose, onTargetsChan
       />
     )}
     {showCreateHabit && (
-      <NewHabitModal
-        onCreated={handleHabitCreated}
+      <ManageHabitsModal
+        zIndex="z-[60]"
+        initialShowAdd
+        onSave={handleHabitsManaged}
         onClose={() => setShowCreateHabit(false)}
       />
     )}

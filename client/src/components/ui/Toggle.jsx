@@ -11,7 +11,9 @@ export default function Toggle({ value, onChange, label }) {
         value ? 'bg-brand-500' : 'bg-ink-200'
       }`}
     >
-      <span className={`absolute top-1 w-4 h-4 bg-white rounded-full shadow transition-transform ${
+      {/* left-0 anchors the knob explicitly — without it the absolute span
+          starts at the button's centered text position and overflows. */}
+      <span className={`absolute left-0 top-1 w-4 h-4 bg-white rounded-full shadow transition-transform ${
         value ? 'translate-x-5' : 'translate-x-1'
       }`} />
     </button>

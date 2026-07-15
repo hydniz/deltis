@@ -101,6 +101,29 @@ router.put('/me', auth, async (req, res) => {
   }
 });
 
+// Onboarding wizard state: persist the current step so the user resumes
+// exactly where they left off, or mark the whole setup as completed.
+router.put('/me/onboarding', auth, async (req, res) => {
+  try {
+    if (!req.user.onboardingPending) {
+      return res.status(400).json({ error: 'Einrichtung ist bereits abgeschlossen.' });
+    }
+    const { step, completed } = req.body;
+    const update = {};
+    if (Number.isInteger(step) && step >= 0 && step <= 10) update.onboardingStep = step;
+    if (completed === true) {
+      update.onboardingPending = false;
+      update.onboardedAt = new Date();
+    }
+    const user = await User.findByIdAndUpdate(req.user._id, update, { new: true });
+    const data = user.toJSON();
+    data.hasPassword = req.user._hasPassword;
+    res.json(data);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // Initial migration setup OR username change.
 // Password required when user has neither passwordHash nor adminSecretHash.
 router.put('/me/username', auth, async (req, res) => {

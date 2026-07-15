@@ -610,26 +610,30 @@ export default function Activities() {
         }
       />
 
-      {/* Filter chips + type management */}
-      <div className="flex gap-2 flex-wrap items-center">
-        <Chip
-          color="stone"
-          active={!filter}
-          onClick={() => { setFilter(''); setPage(0); setShowChart(false); }}
-        >
-          Alle
-        </Chip>
-        {activityTypes.map(t => (
+      {/* Filter chips (horizontally scrollable when many types) + management */}
+      <div className="flex items-center gap-2">
+        <div className="flex-1 min-w-0 flex flex-nowrap items-center gap-2 overflow-x-auto no-scrollbar -my-1 py-1">
           <Chip
-            key={t._id}
-            color={chipColorFor(t._id)}
-            active={filter === t._id}
-            onClick={() => { setFilter(t._id); setPage(0); }}
+            color="stone"
+            active={!filter}
+            className="flex-shrink-0"
+            onClick={() => { setFilter(''); setPage(0); setShowChart(false); }}
           >
-            {t.label}
+            Alle
           </Chip>
-        ))}
-        <div className="ml-auto flex items-center gap-1">
+          {activityTypes.map(t => (
+            <Chip
+              key={t._id}
+              color={chipColorFor(t._id)}
+              active={filter === t._id}
+              className="flex-shrink-0"
+              onClick={() => { setFilter(t._id); setPage(0); }}
+            >
+              {t.label}
+            </Chip>
+          ))}
+        </div>
+        <div className="flex items-center gap-1 flex-shrink-0">
           {filteredType && (
             <Button
               variant="ghost"

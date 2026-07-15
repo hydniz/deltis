@@ -45,13 +45,49 @@ function preserveExistingKeys(incoming = [], current = []) {
   });
 }
 
+// Static list of the predefined types — used by the onboarding wizard to
+// let new users pick their set before anything is created.
+router.get('/defaults', auth, (_req, res) => {
+  res.json(DEFAULTS);
+});
+
+// Onboarding: create exactly the chosen predefined types (idempotent).
+router.post('/setup', auth, async (req, res) => {
+  try {
+    const { labels } = req.body;
+    const wanted = Array.isArray(labels) ? labels : [];
+    const chosen = DEFAULTS.filter(d => wanted.includes(d.label));
+    const existing = await ActivityType.find({ userId: req.user._id }).select('label');
+    const existingLabels = new Set(existing.map(t => t.label));
+    const toCreate = chosen.filter(d => !existingLabels.has(d.label));
+    if (toCreate.length > 0) {
+      await ActivityType.insertMany(
+        toCreate.map(d => ({ ...d, userId: req.user._id, version: 1, nameHistory: [] }))
+      );
+    }
+    const types = await ActivityType.find({ userId: req.user._id }).sort({ createdAt: 1 });
+    res.status(201).json(types);
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
 router.get('/', auth, async (req, res) => {
   try {
     let types = await ActivityType.find({ userId: req.user._id }).sort({ createdAt: 1 });
-    if (types.length === 0) {
-      types = await ActivityType.insertMany(
-        DEFAULTS.map(d => ({ ...d, userId: req.user._id, version: 1, nameHistory: [] }))
-      );
+    // Legacy auto-seed: only for accounts that never went through the
+    // onboarding wizard. Onboarded users chose their set deliberately —
+    // an empty list must stay empty. Upserts keep the seed race-safe when
+    // several pages request the types in parallel on first load.
+    if (types.length === 0 && !req.user.onboardingPending && !req.user.onboardedAt) {
+      for (const d of DEFAULTS) {
+        await ActivityType.findOneAndUpdate(
+          { userId: req.user._id, label: d.label },
+          { $setOnInsert: { ...d, userId: req.user._id, version: 1, nameHistory: [] } },
+          { upsert: true }
+        );
+      }
+      types = await ActivityType.find({ userId: req.user._id }).sort({ createdAt: 1 });
     }
     res.json(types);
   } catch (err) {

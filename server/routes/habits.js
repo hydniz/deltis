@@ -33,18 +33,35 @@ router.get('/definitions', auth, async (req, res) => {
     ]);
 
     const selectedIds = (settings?.selectedHabitIds || []).map(id => id.toString());
-    const noneSelected = selectedIds.length === 0;
+    const hiddenIds = (settings?.hiddenHabitIds || []).map(id => id.toString());
+    // Without an explicit selection every habit counts as selected (legacy
+    // default); once the user saved a choice, an empty list means none.
+    const noneSelected = selectedIds.length === 0 && !settings?.hasSelection;
     const habitSettings = settings?.habitSettings || {};
 
-    const result = definitions.map(d => {
+    let result = definitions.map(d => {
       const s = habitSettings[d._id.toString()] || {};
+      const hidden = hiddenIds.includes(d._id.toString());
       return {
         ...d.toObject(),
-        selected: noneSelected || selectedIds.includes(d._id.toString()),
+        hidden,
+        selected: !hidden && (noneSelected || selectedIds.includes(d._id.toString())),
         missingDayMode: s.missingDayMode || 'none',
         defaultValue: s.defaultValue ?? 0,
+        // Weekdays (0 = Sunday … 6 = Saturday) the habit is scheduled on;
+        // empty array = every day (default behaviour).
+        scheduleDays: Array.isArray(s.scheduleDays) ? s.scheduleDays : [],
+        // One-off schedule: habit is only due on this local date (YYYY-MM-DD).
+        // Takes precedence over scheduleDays; null = not date-bound.
+        scheduleDate: typeof s.scheduleDate === 'string' ? s.scheduleDate : null,
       };
     });
+
+    // Hidden ("deleted") predefined habits stay out of every normal listing;
+    // the manage modal requests them explicitly to offer restoration.
+    if (req.query.includeHidden !== 'true') {
+      result = result.filter(d => !d.hidden);
+    }
 
     res.json(result);
   } catch (err) {
@@ -58,7 +75,7 @@ router.put('/selection', auth, async (req, res) => {
     const { selectedIds } = req.body;
     await UserHabitSettings.findOneAndUpdate(
       { userId: req.user._id },
-      { $set: { selectedHabitIds: selectedIds } },
+      { $set: { selectedHabitIds: selectedIds, hasSelection: true } },
       { upsert: true }
     );
     res.json({ success: true });
@@ -129,21 +146,61 @@ router.put('/definitions/:id', auth, async (req, res) => {
 
 router.delete('/definitions/:id', auth, async (req, res) => {
   try {
+    const def = await HabitDefinition.findById(req.params.id);
+    if (!def) return res.status(404).json({ error: 'Nicht gefunden' });
+
+    // Predefined habits are global and re-seeded on startup — "deleting"
+    // them hides them for this user only (restorable via /restore).
+    if (!def.userId) {
+      await UserHabitSettings.findOneAndUpdate(
+        { userId: req.user._id },
+        { $addToSet: { hiddenHabitIds: def._id }, $pull: { selectedHabitIds: def._id } },
+        { upsert: true }
+      );
+      return res.json({ success: true, hidden: true });
+    }
+
     const result = await HabitDefinition.findOneAndDelete({ _id: req.params.id, userId: req.user._id });
-    if (!result) return res.status(404).json({ error: 'Nicht gefunden oder vordefiniert' });
+    if (!result) return res.status(404).json({ error: 'Nicht gefunden' });
     res.json({ success: true });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });
 
-// Persist per-user habit settings (missing-day mode, default value)
-router.put('/settings/:id', auth, async (req, res) => {
+// Bring a hidden ("deleted") predefined habit back for this user.
+router.post('/definitions/:id/restore', auth, async (req, res) => {
   try {
-    const { missingDayMode, defaultValue } = req.body;
     await UserHabitSettings.findOneAndUpdate(
       { userId: req.user._id },
-      { $set: { [`habitSettings.${req.params.id}`]: { missingDayMode, defaultValue: +defaultValue } } },
+      { $pull: { hiddenHabitIds: req.params.id } }
+    );
+    res.json({ success: true });
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+// Persist per-user habit settings (missing-day mode, default value, schedule)
+router.put('/settings/:id', auth, async (req, res) => {
+  try {
+    const { missingDayMode, defaultValue, scheduleDays, scheduleDate } = req.body;
+    // Sanitize schedule: unique integer weekdays 0–6, sorted; [] = every day.
+    const days = Array.isArray(scheduleDays)
+      ? [...new Set(scheduleDays.map(Number).filter(d => Number.isInteger(d) && d >= 0 && d <= 6))].sort()
+      : [];
+    // One-off date must be a plain local date string; anything else = unset.
+    const dateOnly = typeof scheduleDate === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(scheduleDate)
+      ? scheduleDate
+      : null;
+    await UserHabitSettings.findOneAndUpdate(
+      { userId: req.user._id },
+      { $set: { [`habitSettings.${req.params.id}`]: {
+        missingDayMode,
+        defaultValue: +defaultValue,
+        scheduleDays: days,
+        scheduleDate: dateOnly,
+      } } },
       { upsert: true }
     );
     res.json({ success: true });

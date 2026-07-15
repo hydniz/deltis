@@ -3,10 +3,12 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { ThemeProvider } from './contexts/ThemeContext';
 import Layout from './components/Layout';
+import Onboarding from './components/Onboarding';
 import AdminLayout from './components/admin/AdminLayout';
 import Landing from './pages/Landing';
 import Login from './pages/Login';
 import Dashboard from './pages/Dashboard';
+import Today from './pages/Today';
 import Activities from './pages/Activities';
 import Planner from './pages/Planner';
 import Habits from './pages/Habits';
@@ -275,6 +277,15 @@ function MustChangePasswordModal() {
   );
 }
 
+// First-login setup wizard — shown once credentials are settled (username
+// chosen, forced password change done) and until the user completes it.
+function OnboardingGate() {
+  const { user } = useAuth();
+  if (!user?.onboardingPending) return null;
+  if (!user.username || user.mustChangePassword) return null;
+  return <Onboarding />;
+}
+
 // Root route: Landing page for guests, redirect to /dashboard for logged-in users
 function RootRoute() {
   const { user, loading } = useAuth();
@@ -327,6 +338,7 @@ function AppInner() {
       <BrowserRouter>
         <UsernameSetupModal />
         <MustChangePasswordModal />
+        <OnboardingGate />
         <Routes>
           {/* Public routes */}
           <Route path="/"            element={<RootRoute />} />
@@ -346,6 +358,7 @@ function AppInner() {
             }
           >
             <Route path="dashboard"  element={<Dashboard />} />
+            <Route path="today"      element={<Today />} />
             <Route path="activities" element={<Activities />} />
             <Route path="planner"    element={<Planner />} />
             <Route path="habits"     element={<Habits />} />

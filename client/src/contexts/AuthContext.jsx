@@ -1,7 +1,7 @@
 // Global authentication state: current user, login/logout and profile update
 // helpers backed by the /api/auth endpoints.
-import { createContext, useContext, useState, useEffect } from 'react';
-import api from '../utils/api';
+import { createContext, useContext, useState, useEffect, useRef } from 'react';
+import api, { setUnauthorizedHandler, SESSION_EXPIRED_KEY } from '../utils/api';
 import { clearSessionGreeting } from '../utils/greetings';
 
 const AuthContext = createContext(null);
@@ -9,6 +9,23 @@ const AuthContext = createContext(null);
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
+
+  const userRef = useRef(null);
+  useEffect(() => { userRef.current = user; }, [user]);
+
+  // Mid-session 401 (expired or invalidated cookie): drop the auth state so
+  // ProtectedRoute redirects to /login, and leave a hint for the login page.
+  // The userRef guard skips 401s while nobody is logged in — e.g. the
+  // initial session-restore call on a fresh visit.
+  useEffect(() => {
+    setUnauthorizedHandler(() => {
+      if (!userRef.current) return;
+      try { sessionStorage.setItem(SESSION_EXPIRED_KEY, '1'); } catch { /* hint only */ }
+      clearSessionGreeting();
+      setUser(null);
+    });
+    return () => setUnauthorizedHandler(null);
+  }, []);
 
   // Restore session from httpOnly cookie on mount.
   // If the cookie is missing or expired the server returns 401 — stay logged out.

@@ -1,5 +1,6 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { SESSION_EXPIRED_KEY } from '../utils/api';
 import { useAuth } from '../contexts/AuthContext';
 import { APP_NAME, APP_SLOGAN } from '../config/branding';
 import { DeltaMark } from '../components/Logo';
@@ -11,8 +12,19 @@ export default function Login() {
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [sessionExpired, setSessionExpired] = useState(false);
   const { login } = useAuth();
   const navigate = useNavigate();
+
+  // Show a one-time notice when the user was logged out mid-session.
+  useEffect(() => {
+    try {
+      if (sessionStorage.getItem(SESSION_EXPIRED_KEY)) {
+        setSessionExpired(true);
+        sessionStorage.removeItem(SESSION_EXPIRED_KEY);
+      }
+    } catch { /* hint only */ }
+  }, []);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -63,6 +75,12 @@ export default function Login() {
           <h1 className="display text-4xl mb-1.5">{APP_NAME}</h1>
           <p className="text-ink-400 text-sm">{APP_SLOGAN}</p>
         </div>
+
+        {sessionExpired && (
+          <Alert tone="warning" className="mb-4">
+            Deine Sitzung ist abgelaufen. Bitte melde dich erneut an.
+          </Alert>
+        )}
 
         <div className="card rounded-3xl p-6 sm:p-7">
           <form onSubmit={handleSubmit} className="space-y-4">

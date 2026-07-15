@@ -2,270 +2,17 @@ import { useState, useEffect, useCallback } from 'react';
 import api from '../utils/api';
 import { format, subDays, parseISO, startOfDay } from 'date-fns';
 import { de } from 'date-fns/locale';
-import { Plus, Trash2, TrendingUp, Sparkles, Settings2, Check, Pencil, ChevronUp } from 'lucide-react';
+import { Plus, TrendingUp, Sparkles, Settings2, Check, CalendarOff } from 'lucide-react';
+import { isDueOn, formatScheduleBadge } from '../utils/habitSchedule';
 import {
   ResponsiveContainer, LineChart, Line, XAxis, YAxis, Tooltip, CartesianGrid
 } from 'recharts';
 import {
-  PageHeader, Button, Field, Input, Select, Checkbox, Modal, IconButton,
+  PageHeader, Button, Input, IconButton,
   EmptyState, PageLoader, Spinner, useChart, chipColorFor,
   TONE_BUBBLE, TONE_ACCENT_BORDER,
 } from '../components/ui';
-
-// Editable row for custom habits
-
-function CustomHabitRow({ def, selected, onToggle, onDelete, onUpdate }) {
-  const [editing, setEditing] = useState(false);
-  const [form, setForm] = useState({ name: def.name, unitSymbol: def.unitSymbol, type: def.type });
-  const [saving, setSaving] = useState(false);
-
-  const handleSave = async () => {
-    setSaving(true);
-    try {
-      const res = await api.put(`/habits/definitions/${def._id}`, form);
-      onUpdate(res.data);
-      setEditing(false);
-    } catch (err) {
-      alert('Fehler: ' + err.message);
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const handleCancel = () => {
-    setForm({ name: def.name, unitSymbol: def.unitSymbol, type: def.type });
-    setEditing(false);
-  };
-
-  return (
-    <div className="rounded-xl hover:bg-paper-50 transition-colors">
-      <div className="flex items-center gap-1 p-2.5">
-        <Checkbox
-          checked={selected}
-          onChange={onToggle}
-          label={def.name}
-          description={def.unitSymbol}
-          className="flex-1"
-        />
-        <IconButton
-          icon={editing ? ChevronUp : Pencil}
-          label="Bearbeiten"
-          tone="brand"
-          size={14}
-          active={editing}
-          onClick={() => setEditing(v => !v)}
-        />
-        <IconButton icon={Trash2} label="Löschen" tone="danger" size={14} onClick={onDelete} />
-      </div>
-
-      {editing && (
-        <form
-          onSubmit={e => { e.preventDefault(); handleSave(); }}
-          className="px-3 pb-3 pt-3 space-y-3 border-t hairline mx-1"
-        >
-          <Field label="Name">
-            <Input
-              value={form.name}
-              onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
-              autoFocus
-            />
-          </Field>
-          <div className="grid grid-cols-2 gap-2">
-            <Field label="Einheit">
-              <Input
-                value={form.unitSymbol}
-                onChange={e => setForm(f => ({ ...f, unitSymbol: e.target.value }))}
-                placeholder="z.B. min, ml"
-              />
-            </Field>
-            <Field label="Typ">
-              <Select value={form.type} onChange={e => setForm(f => ({ ...f, type: e.target.value }))}>
-                <option value="amount">Menge</option>
-                <option value="duration">Dauer</option>
-              </Select>
-            </Field>
-          </div>
-          <div className="flex gap-2 pt-0.5">
-            <Button variant="secondary" size="sm" className="flex-1" onClick={handleCancel}>Abbrechen</Button>
-            <Button type="submit" size="sm" className="flex-1" loading={saving}>Speichern</Button>
-          </div>
-        </form>
-      )}
-    </div>
-  );
-}
-
-// Management modal
-
-function ManageHabitsModal({ definitions, onSave, onClose }) {
-  const [selected, setSelected] = useState(
-    new Set(definitions.filter(d => d.selected).map(d => d._id))
-  );
-  const [newHabit, setNewHabit] = useState({ name: '', unitSymbol: '', type: 'amount' });
-  // Without any definition there is nothing to select — jump straight to
-  // creating the first habit.
-  const [showAddForm, setShowAddForm] = useState(definitions.length === 0);
-  const [saving, setSaving] = useState(false);
-  const [addingSaving, setAddingSaving] = useState(false);
-  const [localDefs, setLocalDefs] = useState(definitions);
-
-  const toggle = (id) => {
-    setSelected(prev => {
-      const next = new Set(prev);
-      next.has(id) ? next.delete(id) : next.add(id);
-      return next;
-    });
-  };
-
-  const handleSave = async () => {
-    setSaving(true);
-    try {
-      await api.put('/habits/selection', { selectedIds: [...selected] });
-      onSave();
-    } catch (err) {
-      alert('Fehler: ' + err.message);
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const handleAddHabit = async (e) => {
-    e.preventDefault();
-    if (!newHabit.name.trim() || !newHabit.unitSymbol.trim()) return;
-    setAddingSaving(true);
-    try {
-      const res = await api.post('/habits/definitions', newHabit);
-      const created = { ...res.data, selected: true };
-      setLocalDefs(d => [...d, created]);
-      setSelected(prev => new Set([...prev, created._id]));
-      setNewHabit({ name: '', unitSymbol: '', type: 'amount' });
-      setShowAddForm(false);
-    } catch (err) {
-      alert('Fehler: ' + err.message);
-    } finally {
-      setAddingSaving(false);
-    }
-  };
-
-  const handleDelete = async (id) => {
-    if (!confirm('Gewohnheit löschen? Bestehende Einträge bleiben erhalten.')) return;
-    try {
-      await api.delete(`/habits/definitions/${id}`);
-      setLocalDefs(d => d.filter(def => def._id !== id));
-      setSelected(prev => { const next = new Set(prev); next.delete(id); return next; });
-    } catch {
-      alert('Vordefinierte Gewohnheiten können nicht gelöscht werden.');
-    }
-  };
-
-  const handleUpdate = (updated) => {
-    setLocalDefs(d => d.map(def => def._id === updated._id ? { ...def, ...updated } : def));
-  };
-
-  const predefined = localDefs.filter(d => d.isPredefined);
-  const custom = localDefs.filter(d => !d.isPredefined);
-
-  return (
-    <Modal
-      onClose={onClose}
-      title="Gewohnheiten verwalten"
-      subtitle="Was möchtest du täglich tracken?"
-      icon={Sparkles}
-      footer={
-        <>
-          <Button variant="secondary" className="flex-1" onClick={onClose}>Abbrechen</Button>
-          <Button className="flex-1" loading={saving} icon={Check} onClick={handleSave}>
-            {selected.size} aktiv – Speichern
-          </Button>
-        </>
-      }
-    >
-      <div className="space-y-6">
-        {/* Predefined */}
-        {predefined.length > 0 && (
-          <div>
-            <p className="label mb-2">Voreingestellt</p>
-            <div className="space-y-0.5">
-              {predefined.map(d => (
-                <div key={d._id} className="rounded-xl hover:bg-paper-50 transition-colors p-2.5">
-                  <Checkbox
-                    checked={selected.has(d._id)}
-                    onChange={() => toggle(d._id)}
-                    label={d.name}
-                    description={d.unitSymbol}
-                  />
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {/* Custom */}
-        {(custom.length > 0 || showAddForm) && (
-          <div>
-            <p className="label mb-2">Eigene</p>
-            <div className="space-y-0.5">
-              {custom.map(d => (
-                <CustomHabitRow
-                  key={d._id}
-                  def={d}
-                  selected={selected.has(d._id)}
-                  onToggle={() => toggle(d._id)}
-                  onDelete={() => handleDelete(d._id)}
-                  onUpdate={handleUpdate}
-                />
-              ))}
-            </div>
-          </div>
-        )}
-
-        {/* Add new habit */}
-        {showAddForm ? (
-          <form onSubmit={handleAddHabit} className="panel p-4 space-y-3">
-            <p className="display text-base">Neue Gewohnheit</p>
-            <Field label="Name">
-              <Input
-                value={newHabit.name}
-                onChange={e => setNewHabit(h => ({ ...h, name: e.target.value }))}
-                placeholder="z.B. Vitamine, Stretching …"
-                autoFocus
-                required
-              />
-            </Field>
-            <div className="grid grid-cols-2 gap-2">
-              <Field label="Einheit">
-                <Input
-                  value={newHabit.unitSymbol}
-                  onChange={e => setNewHabit(h => ({ ...h, unitSymbol: e.target.value }))}
-                  placeholder="z.B. min, ml, Stück"
-                  required
-                />
-              </Field>
-              <Field label="Typ">
-                <Select value={newHabit.type} onChange={e => setNewHabit(h => ({ ...h, type: e.target.value }))}>
-                  <option value="amount">Menge</option>
-                  <option value="duration">Dauer</option>
-                </Select>
-              </Field>
-            </div>
-            <div className="flex gap-2">
-              <Button variant="secondary" size="sm" className="flex-1" onClick={() => setShowAddForm(false)}>Abbrechen</Button>
-              <Button type="submit" size="sm" className="flex-1" loading={addingSaving}>Hinzufügen</Button>
-            </div>
-          </form>
-        ) : (
-          <button
-            onClick={() => setShowAddForm(true)}
-            className="flex items-center gap-2 text-sm font-semibold text-brand-600 hover:text-brand-700 transition-colors py-1"
-          >
-            <Plus size={16} />
-            Eigene Gewohnheit hinzufügen
-          </button>
-        )}
-      </div>
-    </Modal>
-  );
-}
+import ManageHabitsModal from '../components/ManageHabitsModal';
 
 // Habit card
 
@@ -283,11 +30,8 @@ function HabitCard({ habit, todayLog, onLog }) {
   const [showChart, setShowChart] = useState(false);
   const [chartData, setChartData] = useState([]);
 
-  // Settings for missing days
-  const [showSettings, setShowSettings] = useState(false);
-  const [settingsMode, setSettingsMode] = useState(habit.missingDayMode ?? 'none');
-  const [settingsDefaultVal, setSettingsDefaultVal] = useState(habit.defaultValue ?? 0);
-  const [savingSettings, setSavingSettings] = useState(false);
+  // Configuration lives centrally in the manage modal — the card only logs.
+  const dueToday = isDueOn(habit);
 
   // Sync today's log from parent whenever parent reloads
   useEffect(() => {
@@ -345,20 +89,6 @@ function HabitCard({ habit, todayLog, onLog }) {
     }
   };
 
-  const handleSaveSettings = async () => {
-    setSavingSettings(true);
-    try {
-      await api.put(`/habits/settings/${habit._id}`, { missingDayMode: settingsMode, defaultValue: +settingsDefaultVal });
-      setChartData([]);
-      setShowChart(false);
-      setShowSettings(false);
-    } catch (err) {
-      alert('Fehler: ' + err.message);
-    } finally {
-      setSavingSettings(false);
-    }
-  };
-
   const loadChart = async () => {
     if (chartData.length > 0) { setShowChart(v => !v); return; }
     const end = new Date();
@@ -372,7 +102,9 @@ function HabitCard({ habit, todayLog, onLog }) {
         const dayKey = format(d, 'yyyy-MM-dd');
         const log = res.data.find(l => format(parseISO(l.date), 'yyyy-MM-dd') === dayKey);
         const realValue = log?.value ?? null;
-        const value = realValue !== null ? realValue : (settingsMode === 'default' ? +settingsDefaultVal : null);
+        const value = realValue !== null
+          ? realValue
+          : (habit.missingDayMode === 'default' ? +(habit.defaultValue ?? 0) : null);
         return { date: format(d, 'd. MMM', { locale: de }), value, isDefault: realValue === null && value !== null };
       }).filter(d => d.value !== null);
       setChartData(data);
@@ -394,51 +126,22 @@ function HabitCard({ habit, todayLog, onLog }) {
           </div>
           <div className="min-w-0">
             <h3 className="display text-lg leading-snug truncate">{habit.name}</h3>
-            <p className="text-xs text-ink-400 mt-0.5">in {habit.unitSymbol}</p>
+            <p className="text-xs text-ink-400 mt-0.5 truncate">
+              in {habit.unitSymbol}
+              {formatScheduleBadge(habit) && (
+                <span className="text-brand-600 font-medium"> · {formatScheduleBadge(habit)}</span>
+              )}
+            </p>
           </div>
         </div>
-        <div className="flex items-center gap-0.5">
-          <IconButton
-            icon={Settings2}
-            label="Einstellungen"
-            tone="brand"
-            size={15}
-            active={showSettings}
-            onClick={() => setShowSettings(v => !v)}
-          />
-          <IconButton icon={TrendingUp} label="Verlauf anzeigen" tone="brand" size={16} active={showChart} onClick={loadChart} />
-        </div>
+        <IconButton icon={TrendingUp} label="Verlauf anzeigen" tone="brand" size={16} active={showChart} onClick={loadChart} />
       </div>
 
-      {showSettings && (
-        <div className="mb-4 panel p-3.5 space-y-2.5">
-          <p className="text-xs font-semibold text-ink-600">Fehlende Tage in Statistik</p>
-          <Select
-            className="!text-sm"
-            value={settingsMode}
-            onChange={e => setSettingsMode(e.target.value)}
-          >
-            <option value="none">Nicht eingetragen = kein Wert</option>
-            <option value="default">Standardwert für fehlende Tage</option>
-          </Select>
-          {settingsMode === 'default' && (
-            <div className="flex items-center gap-2">
-              <span className="text-xs text-ink-500 whitespace-nowrap">Standardwert:</span>
-              <Input
-                type="number"
-                className="flex-1 !text-sm"
-                value={settingsDefaultVal}
-                onChange={e => setSettingsDefaultVal(e.target.value)}
-                min="0"
-                step="0.1"
-                placeholder={`in ${habit.unitSymbol}`}
-              />
-            </div>
-          )}
-          <Button size="sm" className="w-full" loading={savingSettings} onClick={handleSaveSettings}>
-            Übernehmen
-          </Button>
-        </div>
+      {!dueToday && (
+        <p className="-mt-2 mb-3 text-[11px] font-medium text-ink-400 flex items-center gap-1.5">
+          <CalendarOff size={11} />
+          Heute nicht geplant – Eintragen ist trotzdem möglich.
+        </p>
       )}
 
       {/* Date row */}
@@ -523,7 +226,7 @@ function HabitCard({ habit, todayLog, onLog }) {
               />
             </LineChart>
           </ResponsiveContainer>
-          {settingsMode === 'default' && chartData.some(d => d.isDefault) && (
+          {habit.missingDayMode === 'default' && chartData.some(d => d.isDefault) && (
             <p className="text-xs text-ink-400 mt-1 flex items-center gap-1.5">
               <span className="inline-block w-2 h-2 rounded-full bg-ink-300" />
               Grau = Standardwert (nicht eingetragen)
@@ -571,7 +274,10 @@ export default function Habits() {
 
   if (loading) return <PageLoader />;
 
-  const loggedCount = activeHabits.filter(h => getTodayLog(h._id)).length;
+  // Habits due today come first; the counter only tracks today's schedule.
+  const sortedHabits = [...activeHabits].sort((a, b) => isDueOn(b) - isDueOn(a));
+  const dueTodayCount = activeHabits.filter(h => isDueOn(h)).length;
+  const loggedCount = activeHabits.filter(h => isDueOn(h) && getTodayLog(h._id)).length;
 
   return (
     <div className="space-y-6">
@@ -583,7 +289,12 @@ export default function Habits() {
           <>
             {format(new Date(), 'EEEE, d. MMMM', { locale: de })}
             {activeHabits.length > 0 && (
-              <span className="text-ink-400"> · {loggedCount}/{activeHabits.length} eingetragen</span>
+              <span className="text-ink-400">
+                {' · '}
+                {dueTodayCount > 0
+                  ? `${loggedCount}/${dueTodayCount} für heute eingetragen`
+                  : 'für heute keine geplant'}
+              </span>
             )}
           </>
         }
@@ -612,7 +323,7 @@ export default function Habits() {
         />
       ) : (
         <div className="grid sm:grid-cols-2 gap-4">
-          {activeHabits.map(habit => (
+          {sortedHabits.map(habit => (
             <HabitCard
               key={habit._id}
               habit={habit}
@@ -625,9 +336,8 @@ export default function Habits() {
 
       {showManage && (
         <ManageHabitsModal
-          definitions={definitions}
           onSave={() => { setShowManage(false); load(); }}
-          onClose={() => setShowManage(false)}
+          onClose={() => { setShowManage(false); load(); }}
         />
       )}
     </div>
