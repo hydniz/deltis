@@ -18,7 +18,7 @@ import Settings from './pages/Settings';
 import AdminUsers from './pages/AdminUsers';
 import AdminConfig from './pages/AdminConfig';
 import AdminUpdates from './pages/AdminUpdates';
-import AdminSetup from './pages/AdminSetup';
+import Init from './pages/Init';
 import api from './utils/api';
 import { AlertTriangle } from 'lucide-react';
 import { REQUIRED_API_VERSION } from './config/compatibility';
@@ -286,12 +286,29 @@ function OnboardingGate() {
   return <Onboarding />;
 }
 
+// First-installation gate for guest entry points: as long as no admin
+// account exists, every visitor is funnelled into the /init wizard.
+// Errors fail open (initialized) — the auth flow reports connection problems.
+function InitCheck({ children }) {
+  const [initNeeded, setInitNeeded] = useState(null);
+
+  useEffect(() => {
+    api.get('/init/status')
+      .then(res => setInitNeeded(!!res.data.initNeeded))
+      .catch(() => setInitNeeded(false));
+  }, []);
+
+  if (initNeeded === null) return <CenteredSpinner />;
+  if (initNeeded) return <Navigate to="/init" replace />;
+  return children;
+}
+
 // Root route: Landing page for guests, redirect to /dashboard for logged-in users
 function RootRoute() {
   const { user, loading } = useAuth();
   if (loading) return <CenteredSpinner />;
   if (user) return <Navigate to="/dashboard" replace />;
-  return <Landing />;
+  return <InitCheck><Landing /></InitCheck>;
 }
 
 function ProtectedRoute({ children }) {
@@ -316,7 +333,7 @@ function AdminArea() {
 
   if (loading || (!user?.isAdmin && setupNeeded === null)) return <CenteredSpinner />;
   if (!user?.isAdmin) {
-    if (setupNeeded) return <Navigate to="/admin/setup" replace />;
+    if (setupNeeded) return <Navigate to="/init" replace />;
     return <Navigate to="/login" replace />;
   }
 
@@ -342,9 +359,11 @@ function AppInner() {
         <Routes>
           {/* Public routes */}
           <Route path="/"            element={<RootRoute />} />
-          <Route path="/login"       element={<Login />} />
+          <Route path="/login"       element={<InitCheck><Login /></InitCheck>} />
           <Route path="/register"    element={<Register />} />
-          <Route path="/admin/setup" element={<AdminSetup />} />
+          <Route path="/init"        element={<Init />} />
+          {/* Legacy setup URL — the /init wizard covers everything now */}
+          <Route path="/admin/setup" element={<Navigate to="/init" replace />} />
 
           {/* Admin sub-routes */}
           <Route path="/admin/*" element={<AdminArea />} />

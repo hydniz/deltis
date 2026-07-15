@@ -66,6 +66,14 @@ PASSWORD_PEPPER=your_very_long_random_secret_here
 
 Less secure — the value may appear in process listings.
 
+#### Option C: First-installation wizard
+
+If neither option is set, the `/init` wizard offers a security step **before**
+the admin account is created: it generates a cryptographically random pepper
+(and JWT secret) with one click and stores it in
+`/etc/deltis/deltis.config.json`. `.env` values always take precedence and are
+shown as locked in the wizard.
+
 #### No pepper
 
 Without configuration the server starts with a warning. Passwords are hashed with bcrypt only, without a pepper. Functionally correct, but weaker against database leaks.

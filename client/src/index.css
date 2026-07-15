@@ -567,6 +567,17 @@
   .anim-float {
     animation: float-slow 7s ease-in-out infinite;
   }
+
+  /* Confetti rain (init wizard finale). Colour, delay, duration, drift and
+     spin are set per piece via inline style custom properties. */
+  .confetti-piece {
+    position: absolute;
+    top: -16px;
+    width: 8px;
+    height: 14px;
+    border-radius: 2px;
+    animation: confetti-fall 3.2s cubic-bezier(0.25, 0.46, 0.45, 0.94) both;
+  }
 }
 
 @keyframes fade-up {
@@ -582,7 +593,13 @@
   0%, 100% { transform: translate3d(0, 0, 0); }
   50%      { transform: translate3d(0, -14px, 0); }
 }
+@keyframes confetti-fall {
+  0%   { opacity: 1; transform: translate3d(0, 0, 0) rotateZ(0deg); }
+  85%  { opacity: 1; }
+  100% { opacity: 0; transform: translate3d(var(--confetti-drift, 0px), 105vh, 0) rotateZ(var(--confetti-spin, 540deg)); }
+}
 
 @media (prefers-reduced-motion: reduce) {
   .anim-fade-up, .anim-pop, .anim-float { animation: none; }
+  .confetti-piece { animation: none; opacity: 0; }
 }
