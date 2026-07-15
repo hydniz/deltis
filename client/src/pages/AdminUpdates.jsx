@@ -49,7 +49,7 @@ function ModePanel({ mode, dockerImage }) {
     <Alert tone={cfg.tone} title={cfg.title}>
       <p>{cfg.text}</p>
       {mode === 'docker-manual' && (
-        <pre className="bg-ink-900 text-paper-100 rounded-lg px-3 py-2.5 mt-2 text-xs font-mono overflow-x-auto">
+        <pre className="bg-charcoal text-cream rounded-lg px-3 py-2.5 mt-2 text-xs font-mono overflow-x-auto">
 {`docker pull ${dockerImage || 'hydniz/deltis:latest'}
 cd <deltis-verzeichnis>   # dort liegt docker-compose.yml
 ./backup.sh               # Datensicherung vor dem Update!
@@ -166,7 +166,7 @@ function UpdateLog({ lines }) {
   }, [lines]);
 
   return (
-    <div className="bg-ink-900 rounded-xl p-4 h-56 overflow-y-auto font-mono text-xs">
+    <div className="bg-charcoal rounded-xl p-4 h-56 overflow-y-auto font-mono text-xs">
       {lines.length === 0 && (
         <p className="text-ink-400 italic">Bereit.</p>
       )}
@@ -177,8 +177,8 @@ function UpdateLog({ lines }) {
             line.startsWith('✗') ? 'text-red-400' :
             line.startsWith('✓') ? 'text-emerald-400' :
             line.startsWith('⚠') ? 'text-amber-400' :
-            line.startsWith('→') ? 'text-brand-300' :
-            'text-paper-200/70'
+            line.startsWith('→') ? 'text-brand-300 dark:text-brand-400' :
+            'text-cream/70'
           }`}
         >
           {line || ' '}

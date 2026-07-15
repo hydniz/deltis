@@ -37,7 +37,7 @@ export default function Layout({ children }) {
       </main>
 
       {/* Tab bar – mobile only */}
-      <nav className="lg:hidden fixed bottom-0 left-0 right-0 z-40 bg-white/90 backdrop-blur-xl
+      <nav className="lg:hidden fixed bottom-0 left-0 right-0 z-40 bg-surface/90 backdrop-blur-xl
         border-t hairline pb-[env(safe-area-inset-bottom)]">
         <div className="flex items-stretch">
           {mobileNav.map(({ to, icon: Icon, label, end }) => (

@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { APP_NAME, APP_SLOGAN } from '../config/branding';
 import { DeltaMark } from '../components/Logo';
+import ThemeToggle from '../components/ThemeToggle';
 import { Button, Field, Input, PasswordInput, Alert } from '../components/ui';
 
 export default function Login() {
@@ -42,9 +43,12 @@ export default function Login() {
 
   return (
     <div className="relative min-h-screen flex items-center justify-center p-4 overflow-hidden">
+      <div className="absolute top-4 right-4 z-10">
+        <ThemeToggle />
+      </div>
       {/* Soft halo behind the card */}
       <div aria-hidden="true" className="absolute inset-0 pointer-events-none">
-        <div className="orb w-[22rem] h-[22rem] sm:w-[30rem] sm:h-[30rem] left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 bg-white/80" />
+        <div className="orb w-[22rem] h-[22rem] sm:w-[30rem] sm:h-[30rem] left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 bg-white/80 dark:bg-brand-400/[.13]" />
         <div className="orb w-56 h-56 left-[10%] top-[10%] bg-brand-200/50" />
         <div className="orb w-56 h-56 right-[8%] bottom-[12%] bg-rose-200/45" />
       </div>

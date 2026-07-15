@@ -44,7 +44,7 @@ function TabItem({ to, icon: Icon, label, badge }) {
       className={({ isActive }) =>
         `relative flex items-center gap-2 px-4 py-2 rounded-full text-xs font-semibold whitespace-nowrap transition-colors ${
           isActive
-            ? 'bg-white text-ink-900 shadow-sm'
+            ? 'bg-white dark:bg-ink-200 text-ink-900 shadow-sm'
             : 'text-white/60 hover:text-white'
         }`
       }
@@ -62,7 +62,7 @@ export default function AdminLayout({ children }) {
   return (
     <div className="min-h-screen">
       {/* Dark control bar — visually separates administration from the app */}
-      <header className="sticky top-0 z-40 bg-ink-900 shadow-md">
+      <header className="sticky top-0 z-40 bg-charcoal shadow-md">
         <div className="flex items-center gap-3 px-4 sm:px-6 h-14 max-w-6xl mx-auto">
           <Link
             to="/dashboard"

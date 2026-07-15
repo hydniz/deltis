@@ -1,8 +1,11 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
+import { useTheme } from '../contexts/ThemeContext';
 import api from '../utils/api';
-import { Settings, ShieldCheck, LogOut, ChevronsUpDown } from 'lucide-react';
+import {
+  Settings, ShieldCheck, LogOut, ChevronsUpDown, Sun, Moon, MonitorSmartphone, SunMoon,
+} from 'lucide-react';
 
 // Polls the cached backend update check so admins see an "update available"
 // dot on the Administration entry without opening the admin area.
@@ -33,6 +36,42 @@ export function Avatar({ name, size = 'md' }) {
       style={{ background: 'linear-gradient(135deg, var(--brand-400), var(--brand-600))' }}
     >
       {name?.charAt(0)?.toUpperCase() || 'U'}
+    </div>
+  );
+}
+
+// Compact three-way theme switcher rendered as a menu row.
+const THEME_SWITCH = [
+  { value: 'light', icon: Sun, label: 'Helles Design' },
+  { value: 'dark', icon: Moon, label: 'Dunkles Design' },
+  { value: 'system', icon: MonitorSmartphone, label: 'Systemeinstellung' },
+];
+
+function ThemeSwitchRow() {
+  const { theme, setTheme } = useTheme();
+  return (
+    <div className="flex items-center gap-3 px-3.5 py-2">
+      <SunMoon size={16} className="text-ink-700 flex-shrink-0" />
+      <span className="flex-1 text-left text-sm font-medium text-ink-700">Design</span>
+      <div className="flex gap-0.5 bg-paper-100 border border-paper-200 rounded-full p-0.5">
+        {THEME_SWITCH.map(({ value, icon: Icon, label }) => (
+          <button
+            key={value}
+            type="button"
+            onClick={() => setTheme(value)}
+            aria-label={label}
+            title={label}
+            aria-pressed={theme === value}
+            className={`p-1.5 rounded-full transition-colors ${
+              theme === value
+                ? 'bg-white dark:bg-ink-200 text-brand-600 shadow-sm'
+                : 'text-ink-400 hover:text-ink-600'
+            }`}
+          >
+            <Icon size={13} />
+          </button>
+        ))}
+      </div>
     </div>
   );
 }
@@ -111,14 +150,14 @@ export default function UserMenu({ direction = 'up', showName = false }) {
           </>
         )}
         {!showName && user?.isAdmin && updateAvailable && (
-          <span className="absolute -top-0.5 -right-0.5 w-2.5 h-2.5 rounded-full bg-ocher-400 border-2 border-white" />
+          <span className="absolute -top-0.5 -right-0.5 w-2.5 h-2.5 rounded-full bg-ocher-400 border-2 border-paper-50" />
         )}
       </button>
 
       {open && (
         <div
           className={`absolute ${direction === 'up' ? 'bottom-full mb-2 left-0' : 'top-full mt-2 right-0'}
-            w-60 bg-white border hairline rounded-2xl shadow-pop p-1.5 z-50`}
+            w-60 bg-surface border hairline rounded-2xl shadow-pop p-1.5 z-50`}
           role="menu"
         >
           <div className="px-3.5 pt-2.5 pb-3 border-b hairline mb-1.5">
@@ -133,6 +172,9 @@ export default function UserMenu({ direction = 'up', showName = false }) {
               Administration
             </MenuItem>
           )}
+
+          <div className="border-t hairline my-1.5" />
+          <ThemeSwitchRow />
 
           <div className="border-t hairline my-1.5" />
           <MenuItem icon={LogOut} tone="danger" onClick={handleLogout}>Abmelden</MenuItem>

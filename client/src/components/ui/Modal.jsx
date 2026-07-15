@@ -49,13 +49,13 @@ export default function Modal({
 
   return (
     <div
-      className={`fixed inset-0 ${zIndex} bg-ink-900/40 backdrop-blur-[2px] flex items-end sm:items-center justify-center sm:p-4`}
+      className={`fixed inset-0 ${zIndex} bg-scrim/40 dark:bg-scrim/60 backdrop-blur-[2px] flex items-end sm:items-center justify-center sm:p-4`}
       onMouseDown={e => { if (e.target === e.currentTarget) onClose?.(); }}
     >
       <div
         role="dialog"
         aria-modal="true"
-        className={`bg-white w-full ${SIZES[size]} rounded-t-3xl sm:rounded-3xl shadow-pop flex flex-col`}
+        className={`bg-surface w-full ${SIZES[size]} rounded-t-3xl sm:rounded-3xl shadow-pop flex flex-col`}
         style={{ maxHeight: '92dvh' }}
       >
         {/* Drag handle – mobile only */}

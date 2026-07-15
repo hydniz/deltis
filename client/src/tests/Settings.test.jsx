@@ -6,12 +6,14 @@ import { server } from './mocks/server';
 import { http, HttpResponse } from 'msw';
 import Settings from '../pages/Settings';
 import { AuthProvider } from '../contexts/AuthContext';
+import { ThemeProvider, THEME_STORAGE_KEY } from '../contexts/ThemeContext';
 import { mockUser } from './mocks/handlers';
 
 beforeAll(() => server.listen());
 afterEach(() => {
   server.resetHandlers();
   localStorage.clear();
+  document.documentElement.classList.remove('dark');
 });
 afterAll(() => server.close());
 
@@ -27,11 +29,13 @@ function renderSettings(userOverride = {}) {
   );
   localStorage.setItem('auth_token', 'valid-token');
   return render(
-    <AuthProvider>
-      <MemoryRouter>
-        <Settings />
-      </MemoryRouter>
-    </AuthProvider>
+    <ThemeProvider>
+      <AuthProvider>
+        <MemoryRouter>
+          <Settings />
+        </MemoryRouter>
+      </AuthProvider>
+    </ThemeProvider>
   );
 }
 
@@ -107,6 +111,40 @@ describe('Settings – Versionen', () => {
     );
     renderSettings();
     await waitFor(() => expect(screen.getByText('–')).toBeInTheDocument());
+  });
+});
+
+describe('Settings – Erscheinungsbild', () => {
+  it('renders the three theme options with System active by default', async () => {
+    renderSettings();
+    await waitFor(() =>
+      expect(screen.getByText('Erscheinungsbild')).toBeInTheDocument()
+    );
+    expect(screen.getByRole('button', { name: 'Hell' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Dunkel' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'System' })).toHaveAttribute('aria-pressed', 'true');
+  });
+
+  it('activates dark mode when Dunkel is selected', async () => {
+    const user = userEvent.setup();
+    renderSettings();
+    await waitFor(() => screen.getByRole('button', { name: 'Dunkel' }));
+    await user.click(screen.getByRole('button', { name: 'Dunkel' }));
+
+    expect(screen.getByRole('button', { name: 'Dunkel' })).toHaveAttribute('aria-pressed', 'true');
+    expect(localStorage.getItem(THEME_STORAGE_KEY)).toBe('dark');
+    expect(document.documentElement.classList.contains('dark')).toBe(true);
+  });
+
+  it('switches back to light mode when Hell is selected', async () => {
+    localStorage.setItem(THEME_STORAGE_KEY, 'dark');
+    const user = userEvent.setup();
+    renderSettings();
+    await waitFor(() => screen.getByRole('button', { name: 'Hell' }));
+    await user.click(screen.getByRole('button', { name: 'Hell' }));
+
+    expect(localStorage.getItem(THEME_STORAGE_KEY)).toBe('light');
+    expect(document.documentElement.classList.contains('dark')).toBe(false);
   });
 });
 

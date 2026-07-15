@@ -8,7 +8,7 @@ import {
 } from 'recharts';
 import {
   PageHeader, Button, Field, Input, Select, Textarea, Chip,
-  chipColorFor, Modal, IconButton, EmptyState, PageLoader, Spinner, CHART,
+  chipColorFor, Modal, IconButton, EmptyState, PageLoader, Spinner, useChart,
   TONE_ACCENT_BORDER,
 } from '../components/ui';
 import ActivityTypeWizard from '../components/ActivityTypeWizard';
@@ -290,6 +290,7 @@ function ActivityForm({ activityTypes, onSave, onClose }) {
 // History chart
 
 function ActivityChart({ typeId, typeLabel, onClose }) {
+  const CHART = useChart();
   const [data, setData] = useState([]);
   const [loading, setLoading] = useState(true);
 
@@ -534,6 +535,7 @@ export default function Activities() {
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
+  const [showFirstTypeWizard, setShowFirstTypeWizard] = useState(false);
   const [showTypesModal, setShowTypesModal] = useState(false);
   const [filter, setFilter] = useState(''); // activityType._id
   const [showChart, setShowChart] = useState(false);
@@ -575,6 +577,23 @@ export default function Activities() {
     loadActivities();
   };
 
+  // Without any activity type the log form would be empty — guide the user
+  // through creating the first type, then continue straight to logging.
+  const handleOpenForm = () => {
+    if (activityTypes.length === 0) {
+      setShowFirstTypeWizard(true);
+      return;
+    }
+    setShowForm(true);
+  };
+
+  const handleCreateFirstType = async (form) => {
+    await api.post('/activity-types', form);
+    await loadTypes();
+    setShowFirstTypeWizard(false);
+    setShowForm(true);
+  };
+
   const filteredType = activityTypes.find(t => t._id === filter) || null;
 
   return (
@@ -585,7 +604,7 @@ export default function Activities() {
         tone="clay"
         subtitle={`${total} Einheiten insgesamt`}
         action={
-          <Button icon={Plus} onClick={() => setShowForm(true)}>
+          <Button icon={Plus} onClick={handleOpenForm}>
             <span className="hidden sm:inline">Eintragen</span>
           </Button>
         }
@@ -649,10 +668,12 @@ export default function Activities() {
         <EmptyState
           icon={Dumbbell}
           title="Noch keine Aktivitäten"
-          text="Halte dein erstes Workout, deinen ersten Lauf oder deine erste Einheit fest."
+          text={activityTypes.length === 0
+            ? 'Lege zuerst einen Aktivitätstyp an – z. B. Laufen, Krafttraining oder Yoga – und trage danach deine erste Einheit ein.'
+            : 'Halte dein erstes Workout, deinen ersten Lauf oder deine erste Einheit fest.'}
           action={
-            <Button icon={Plus} onClick={() => setShowForm(true)}>
-              Erste Aktivität eintragen
+            <Button icon={Plus} onClick={handleOpenForm}>
+              {activityTypes.length === 0 ? 'Ersten Typ erstellen' : 'Erste Aktivität eintragen'}
             </Button>
           }
         />
@@ -686,6 +707,16 @@ export default function Activities() {
           activityTypes={activityTypes}
           onSave={handleSave}
           onClose={() => setShowForm(false)}
+        />
+      )}
+
+      {showFirstTypeWizard && (
+        <ActivityTypeWizard
+          title="Ersten Aktivitätstyp erstellen"
+          submitLabel="Erstellen & eintragen"
+          initialForm={{ label: '', showDuration: true, showDistance: false, customFields: [] }}
+          onSubmit={handleCreateFirstType}
+          onClose={() => setShowFirstTypeWizard(false)}
         />
       )}
 

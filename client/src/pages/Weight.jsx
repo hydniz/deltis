@@ -8,10 +8,11 @@ import {
   Tooltip, CartesianGrid, ReferenceLine
 } from 'recharts';
 import {
-  PageHeader, Button, Field, Input, Select, IconButton, EmptyState, Stat, CHART,
+  PageHeader, Button, Field, Input, Select, IconButton, EmptyState, Stat, useChart,
 } from '../components/ui';
 
 export default function Weight() {
+  const CHART = useChart();
   const [logs, setLogs] = useState([]);
   const [loading, setLoading] = useState(true);
   const [form, setForm] = useState({

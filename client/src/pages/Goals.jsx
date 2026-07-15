@@ -11,7 +11,7 @@ import {
 } from 'recharts';
 import {
   PageHeader, Button, Field, Input, Select, Chip, Segmented, Modal,
-  IconButton, EmptyState, PageLoader, ProgressBar, CHART,
+  IconButton, EmptyState, PageLoader, ProgressBar, useChart,
 } from '../components/ui';
 import ActivityTypeWizard from '../components/ActivityTypeWizard';
 import NewHabitModal from '../components/NewHabitModal';
@@ -77,6 +77,7 @@ const CONDITION_OPTIONS = [
 // overlap the chips on narrow screens.
 
 function GoalProgress({ goal, actions }) {
+  const CHART = useChart();
   const [progress, setProgress] = useState(null);
   const [showChart, setShowChart] = useState(false);
 
@@ -252,7 +253,7 @@ function GoalProgress({ goal, actions }) {
               const isPast = step.isPast;
               const met = step.met;
               const iconClass = !isPast
-                ? 'border border-ink-200 text-ink-400 bg-white'
+                ? 'border border-ink-200 text-ink-400 bg-surface'
                 : met
                   ? 'bg-emerald-50 border border-emerald-400 text-emerald-600'
                   : 'bg-red-50 border border-red-300 text-red-500';
@@ -381,7 +382,7 @@ function ActivityFilterEditor({ filters, filterFields, onAdd, onUpdate, onRemove
         const field = filterFields.find(f => f.key === filter.fieldKey) || filterFields[0];
         const isNum = (filter.fieldType || 'select') === 'number';
         return (
-          <div key={fi} className="bg-white border hairline rounded-xl p-2.5 space-y-2">
+          <div key={fi} className="bg-surface border hairline rounded-xl p-2.5 space-y-2">
             <div className="flex items-center gap-2">
               <Select
                 className="!text-xs !py-1.5 flex-1"

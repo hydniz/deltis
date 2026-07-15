@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
+import { ThemeProvider } from './contexts/ThemeContext';
 import Layout from './components/Layout';
 import AdminLayout from './components/admin/AdminLayout';
 import Landing from './pages/Landing';
@@ -136,7 +137,7 @@ function UsernameSetupModal() {
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-ink-900/40 backdrop-blur-[2px] flex items-center justify-center p-4">
+    <div className="fixed inset-0 z-50 bg-scrim/40 dark:bg-scrim/60 backdrop-blur-[2px] flex items-center justify-center p-4">
       <div className="card shadow-pop rounded-3xl p-6 sm:p-7 w-full max-w-sm space-y-5">
         <div>
           <h2 className="display text-xl">Zugangsdaten einrichten</h2>
@@ -228,7 +229,7 @@ function MustChangePasswordModal() {
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-ink-900/40 backdrop-blur-[2px] flex items-center justify-center p-4">
+    <div className="fixed inset-0 z-50 bg-scrim/40 dark:bg-scrim/60 backdrop-blur-[2px] flex items-center justify-center p-4">
       <div className="card shadow-pop rounded-3xl p-6 sm:p-7 w-full max-w-sm space-y-5">
         <div>
           <h2 className="display text-xl">Passwort ändern</h2>
@@ -363,8 +364,10 @@ function AppInner() {
 
 export default function App() {
   return (
-    <CompatibilityCheck>
-      <AppInner />
-    </CompatibilityCheck>
+    <ThemeProvider>
+      <CompatibilityCheck>
+        <AppInner />
+      </CompatibilityCheck>
+    </ThemeProvider>
   );
 }

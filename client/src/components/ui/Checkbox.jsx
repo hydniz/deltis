@@ -8,7 +8,7 @@ export default function Checkbox({ checked, onChange, label, description, classN
       <span className={`w-5 h-5 rounded-md border-2 flex items-center justify-center flex-shrink-0 transition-colors ${
         checked
           ? 'bg-brand-500 border-brand-500'
-          : 'bg-white border-ink-200 group-hover:border-ink-300'
+          : 'bg-surface border-ink-200 group-hover:border-ink-300'
       }`}>
         {checked && <Check size={12} className="text-white" strokeWidth={3} />}
       </span>

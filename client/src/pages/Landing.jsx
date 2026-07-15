@@ -1,6 +1,7 @@
 import { Link } from 'react-router-dom';
 import { APP_NAME } from '../config/branding';
 import Logo from '../components/Logo';
+import ThemeToggle from '../components/ThemeToggle';
 import Chip from '../components/ui/Chip';
 import {
   Dumbbell, Sparkles, Scale, Target, CalendarDays, ArrowRight,
@@ -22,18 +23,21 @@ export default function Landing() {
 
       <header className="relative flex items-center justify-between px-5 sm:px-8 py-5 max-w-6xl mx-auto w-full">
         <Logo />
-        <Link
-          to="/login"
-          className="flex items-center gap-1.5 text-sm font-medium text-ink-500 hover:text-ink-900 transition-colors"
-        >
-          Anmelden <ArrowRight size={14} />
-        </Link>
+        <div className="flex items-center gap-1.5">
+          <ThemeToggle />
+          <Link
+            to="/login"
+            className="flex items-center gap-1.5 text-sm font-medium text-ink-500 hover:text-ink-900 transition-colors"
+          >
+            Anmelden <ArrowRight size={14} />
+          </Link>
+        </div>
       </header>
 
       <main className="relative flex-1 flex flex-col items-center justify-center px-5 py-20 sm:py-28 text-center">
         {/* Blurred colour circles with a bright core behind the hero */}
         <div aria-hidden="true" className="absolute inset-0 pointer-events-none">
-          <div className="orb w-[24rem] h-[24rem] sm:w-[38rem] sm:h-[38rem] left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 bg-white/90" />
+          <div className="orb w-[24rem] h-[24rem] sm:w-[38rem] sm:h-[38rem] left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 bg-white/90 dark:bg-brand-400/[.12]" />
           <div className="orb w-56 h-56 sm:w-80 sm:h-80 left-[6%] top-[6%] bg-brand-200/60" />
           <div className="orb w-56 h-56 sm:w-80 sm:h-80 right-[4%] top-[18%] bg-rose-200/60" />
           <div className="orb w-52 h-52 sm:w-72 sm:h-72 left-[14%] bottom-[2%] bg-ocher-200/70" />

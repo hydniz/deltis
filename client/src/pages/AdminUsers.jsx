@@ -103,7 +103,7 @@ function NewUserModal({ onClose, onCreate }) {
           <p className="text-sm mt-1">
             Zugangsdaten für <span className="font-semibold">{created.name}</span>:
           </p>
-          <div className="bg-white border border-emerald-200 rounded-lg px-3 py-2 my-2">
+          <div className="bg-surface border border-emerald-200 rounded-lg px-3 py-2 my-2">
             <p className="text-xs text-ink-400">Benutzername</p>
             <code className="text-brand-600 text-sm font-mono">{created.username}</code>
           </div>
@@ -267,7 +267,7 @@ export default function AdminUsers() {
                 <th className="px-4 py-3 w-20"></th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-[#ece4d6]">
+            <tbody className="divide-y divide-[color:var(--surface-border)]">
               {users.map(user => (
                 <tr key={user._id} className="hover:bg-paper-50 transition-colors">
                   <td className="px-4 py-3">

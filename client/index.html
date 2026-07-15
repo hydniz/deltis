@@ -7,6 +7,22 @@
     <meta name="theme-color" content="#faf7f2" />
     <meta name="description" content="Deltis – Data-driven Habit tracking" />
     <link rel="manifest" href="/manifest.json" />
+    <script>
+      // Apply the stored theme before first paint to avoid a light flash.
+      // Kept in sync with ThemeContext.jsx (key 'deltis-theme').
+      (function () {
+        try {
+          var theme = localStorage.getItem('deltis-theme');
+          var dark = theme === 'dark' || (theme !== 'light'
+            && window.matchMedia('(prefers-color-scheme: dark)').matches);
+          if (dark) {
+            document.documentElement.classList.add('dark');
+            var meta = document.querySelector('meta[name="theme-color"]');
+            if (meta) meta.setAttribute('content', '#17110d');
+          }
+        } catch (e) { /* default to light */ }
+      })();
+    </script>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,500;0,9..144,600;1,9..144,400;1,9..144,500&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />

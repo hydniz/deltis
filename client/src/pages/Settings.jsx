@@ -1,10 +1,11 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
+import { useTheme } from '../contexts/ThemeContext';
 import api from '../utils/api';
 import {
   Check, LogOut, User, Save, Download, Upload, AtSign, Lock, Server, Monitor,
-  Settings as SettingsIcon,
+  Settings as SettingsIcon, Sun, Moon, MonitorSmartphone, SunMoon,
 } from 'lucide-react';
 import {
   PageHeader, Button, Field, Input, Select, PasswordInput, Alert, TONE_BUBBLE,
@@ -44,6 +45,100 @@ function SettingsCard({ icon: Icon, tone = 'clay', title, children }) {
       </h2>
       {children}
     </div>
+  );
+}
+
+// Appearance — theme picker with miniature app previews
+
+const THEME_OPTIONS = [
+  { value: 'light', label: 'Hell', icon: Sun },
+  { value: 'dark', label: 'Dunkel', icon: Moon },
+  { value: 'system', label: 'System', icon: MonitorSmartphone },
+];
+
+// Colours are intentionally hard-coded here: each tile always previews its
+// own theme, regardless of the currently active one.
+const PREVIEW_THEMES = {
+  light: {
+    bg: '#faf7f2', card: '#ffffff', border: '#ece4d6', line: '#dbd2c4',
+    orb: 'rgba(232, 158, 112, 0.55)', accent: '#c4623a',
+  },
+  dark: {
+    bg: '#17110d', card: '#241c16', border: '#382c21', line: '#453e33',
+    orb: 'rgba(224, 137, 90, 0.30)', accent: '#e0895a',
+  },
+};
+
+function MiniTheme({ t }) {
+  return (
+    <div className="absolute inset-0" style={{ background: t.bg }}>
+      <div
+        className="absolute -top-3 -right-3 w-12 h-12 rounded-full"
+        style={{ background: t.orb, filter: 'blur(10px)' }}
+      />
+      <div
+        className="absolute left-2 right-2 top-4 bottom-2 rounded-md border"
+        style={{ background: t.card, borderColor: t.border }}
+      >
+        <div className="mx-2 mt-2 h-1 w-1/2 rounded-full" style={{ background: t.accent }} />
+        <div className="mx-2 mt-1.5 h-1 rounded-full" style={{ background: t.line }} />
+        <div className="mx-2 mt-1 h-1 w-2/3 rounded-full" style={{ background: t.line }} />
+      </div>
+    </div>
+  );
+}
+
+function MiniPreview({ variant }) {
+  return (
+    <div className="relative h-16 rounded-lg overflow-hidden" aria-hidden="true">
+      <MiniTheme t={variant === 'dark' ? PREVIEW_THEMES.dark : PREVIEW_THEMES.light} />
+      {variant === 'system' && (
+        <div
+          className="absolute inset-0"
+          style={{ clipPath: 'polygon(60% 0, 100% 0, 100% 100%, 40% 100%)' }}
+        >
+          <MiniTheme t={PREVIEW_THEMES.dark} />
+        </div>
+      )}
+    </div>
+  );
+}
+
+function AppearanceCard() {
+  const { theme, setTheme } = useTheme();
+  return (
+    <SettingsCard icon={SunMoon} tone="olive" title="Erscheinungsbild">
+      <p className="text-xs text-ink-400 -mt-2 mb-4">
+        „System“ folgt automatisch der Einstellung deines Geräts.
+      </p>
+      <div className="grid grid-cols-3 gap-3">
+        {THEME_OPTIONS.map(({ value, label, icon: Icon }) => {
+          const active = theme === value;
+          return (
+            <button
+              key={value}
+              type="button"
+              onClick={() => setTheme(value)}
+              aria-pressed={active}
+              className={`rounded-xl border p-1.5 pb-2 text-left transition-all ${
+                active
+                  ? 'border-brand-400 ring-2 ring-brand-400/30'
+                  : 'hairline hover:border-ink-300'
+              }`}
+            >
+              <MiniPreview variant={value} />
+              <span className={`mt-2 px-1 flex items-center gap-1.5 text-xs font-semibold ${
+                active ? 'text-brand-600' : 'text-ink-500'
+              }`}>
+                <Icon size={13} />
+                {label}
+                {active && <Check size={12} className="ml-auto" />}
+              </span>
+            </button>
+          );
+        })}
+      </div>
+    </SettingsCard>
   );
 }
 
@@ -351,6 +446,9 @@ export default function Settings() {
 
         {/* Right column */}
         <div className="space-y-5">
+
+          {/* Appearance */}
+          <AppearanceCard />
 
           {/* Password */}
           {user?.username && user?.hasPassword && (

@@ -8,7 +8,7 @@ import {
 } from 'recharts';
 import {
   PageHeader, Button, Field, Input, Select, Checkbox, Modal, IconButton,
-  EmptyState, PageLoader, Spinner, CHART, chipColorFor,
+  EmptyState, PageLoader, Spinner, useChart, chipColorFor,
   TONE_BUBBLE, TONE_ACCENT_BORDER,
 } from '../components/ui';
 
@@ -102,7 +102,9 @@ function ManageHabitsModal({ definitions, onSave, onClose }) {
     new Set(definitions.filter(d => d.selected).map(d => d._id))
   );
   const [newHabit, setNewHabit] = useState({ name: '', unitSymbol: '', type: 'amount' });
-  const [showAddForm, setShowAddForm] = useState(false);
+  // Without any definition there is nothing to select — jump straight to
+  // creating the first habit.
+  const [showAddForm, setShowAddForm] = useState(definitions.length === 0);
   const [saving, setSaving] = useState(false);
   const [addingSaving, setAddingSaving] = useState(false);
   const [localDefs, setLocalDefs] = useState(definitions);
@@ -180,21 +182,23 @@ function ManageHabitsModal({ definitions, onSave, onClose }) {
     >
       <div className="space-y-6">
         {/* Predefined */}
-        <div>
-          <p className="label mb-2">Voreingestellt</p>
-          <div className="space-y-0.5">
-            {predefined.map(d => (
-              <div key={d._id} className="rounded-xl hover:bg-paper-50 transition-colors p-2.5">
-                <Checkbox
-                  checked={selected.has(d._id)}
-                  onChange={() => toggle(d._id)}
-                  label={d.name}
-                  description={d.unitSymbol}
-                />
-              </div>
-            ))}
+        {predefined.length > 0 && (
+          <div>
+            <p className="label mb-2">Voreingestellt</p>
+            <div className="space-y-0.5">
+              {predefined.map(d => (
+                <div key={d._id} className="rounded-xl hover:bg-paper-50 transition-colors p-2.5">
+                  <Checkbox
+                    checked={selected.has(d._id)}
+                    onChange={() => toggle(d._id)}
+                    label={d.name}
+                    description={d.unitSymbol}
+                  />
+                </div>
+              ))}
+            </div>
           </div>
-        </div>
+        )}
 
         {/* Custom */}
         {(custom.length > 0 || showAddForm) && (
@@ -266,6 +270,7 @@ function ManageHabitsModal({ definitions, onSave, onClose }) {
 // Habit card
 
 function HabitCard({ habit, todayLog, onLog }) {
+  const CHART = useChart();
   const todayStr = format(new Date(), 'yyyy-MM-dd');
   const [selectedDate, setSelectedDate] = useState(todayStr);
   const isToday = selectedDate === todayStr;
@@ -593,11 +598,15 @@ export default function Habits() {
         <EmptyState
           icon={Sparkles}
           tone="sage"
-          title="Keine Gewohnheiten ausgewählt"
-          text="Wähle aus, welche Gewohnheiten du täglich tracken möchtest."
+          title={definitions.length === 0
+            ? 'Noch keine Gewohnheiten definiert'
+            : 'Keine Gewohnheiten ausgewählt'}
+          text={definitions.length === 0
+            ? 'Lege zuerst fest, was du täglich tracken möchtest – z. B. Wasser, Schlaf oder Lesen.'
+            : 'Wähle aus, welche Gewohnheiten du täglich tracken möchtest.'}
           action={
-            <Button icon={Settings2} onClick={() => setShowManage(true)}>
-              Gewohnheiten auswählen
+            <Button icon={definitions.length === 0 ? Plus : Settings2} onClick={() => setShowManage(true)}>
+              {definitions.length === 0 ? 'Erste Gewohnheit anlegen' : 'Gewohnheiten auswählen'}
             </Button>
           }
         />

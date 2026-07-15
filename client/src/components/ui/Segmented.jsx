@@ -7,7 +7,7 @@ export default function Segmented({ options, value, onChange, className = '' }) 
         const active = value === opt.value;
         const activeCls = opt.tone === 'warn'
           ? 'bg-ocher-400 text-white shadow-sm'
-          : 'bg-white text-ink-900 shadow-sm';
+          : 'bg-white dark:bg-ink-200 text-ink-900 shadow-sm';
         return (
           <button
             key={opt.value}

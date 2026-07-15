@@ -1,10 +1,122 @@
 /* ══════════════════════════════════════════════════════════════════════════
-   DESIGN TOKENS — "Warm Paper" theme
-   Editorial, warm and light: paper background, ink typography, terracotta
-   accents. Edit this block to retheme the entire app.
+   DESIGN TOKENS
+   Two complete themes driven entirely by CSS variables:
+
+   ── "Warm Paper" (light) ── editorial, warm and light: paper background,
+      ink typography, terracotta accents.
+   ── "Ember" (dark) ──────── the same warmth after sundown: deep roasted
+      charcoal, cream ink, glowing terracotta embers and candlelit cards.
+
+   `--c-*` variables are RGB triplets consumed by tailwind.config.js via
+   `rgb(var(--c-…) / <alpha-value>)`, so every utility class is theme-aware.
+   Semantic variables (surfaces, inputs, shadows) are used directly below.
+   Edit these two blocks to retheme the entire app.
    ══════════════════════════════════════════════════════════════════════════ */
 :root {
-  /* Brand palette — terracotta */
+  color-scheme: light;
+
+  /* ── Tailwind palette (RGB triplets) ── */
+
+  /* Brand — terracotta */
+  --c-brand-50:  253 244 239;
+  --c-brand-100: 250 228 213;
+  --c-brand-200: 244 197 160;
+  --c-brand-300: 232 158 112;
+  --c-brand-400: 216 124 78;
+  --c-brand-500: 196 98 58;
+  --c-brand-600: 168 78 42;
+  --c-brand-700: 138 60 30;
+  --c-brand-800: 110 46 20;
+  --c-brand-900: 60 22 10;
+  --c-brand-950: 30 11 5;
+
+  /* Ink — warm near-black text */
+  --c-ink-50:  247 244 239;
+  --c-ink-100: 236 230 220;
+  --c-ink-200: 219 210 196;
+  --c-ink-300: 191 180 163;
+  --c-ink-400: 163 152 138;
+  --c-ink-500: 132 121 107;
+  --c-ink-600: 102 92 80;
+  --c-ink-700: 74 66 56;
+  --c-ink-800: 51 44 36;
+  --c-ink-900: 33 27 20;
+
+  /* Paper — warm background tones */
+  --c-paper:     250 247 242;
+  --c-paper-50:  253 251 247;
+  --c-paper-100: 245 240 231;
+  --c-paper-200: 237 229 216;
+
+  /* Sage — secondary accent */
+  --c-sage-100: 230 237 226;
+  --c-sage-200: 205 220 197;
+  --c-sage-300: 157 184 148;
+  --c-sage-400: 125 159 116;
+  --c-sage-500: 95 133 86;
+  --c-sage-600: 74 107 66;
+  --c-sage-700: 57 82 47;
+
+  /* Ocher — warm amber accent */
+  --c-ocher-100: 247 236 212;
+  --c-ocher-200: 238 218 159;
+  --c-ocher-300: 230 192 122;
+  --c-ocher-400: 212 164 78;
+  --c-ocher-500: 184 137 42;
+  --c-ocher-600: 154 112 32;
+  --c-ocher-700: 122 88 26;
+
+  /* Semantic surfaces */
+  --c-surface:  255 255 255;   /* cards, sheets, popovers */
+  --c-charcoal: 33 27 20;      /* always-dark: admin bar, terminal */
+  --c-cream:    245 240 231;   /* always-light text on charcoal */
+  --c-scrim:    33 27 20;      /* modal overlay tint */
+
+  /* Status palettes (light = Tailwind defaults) */
+  --c-red-50:  254 242 242;
+  --c-red-100: 254 226 226;
+  --c-red-200: 254 202 202;
+  --c-red-300: 252 165 165;
+  --c-red-400: 248 113 113;
+  --c-red-500: 239 68 68;
+  --c-red-600: 220 38 38;
+  --c-red-700: 185 28 28;
+  --c-red-800: 153 27 27;
+
+  --c-rose-50:  255 241 242;
+  --c-rose-100: 255 228 230;
+  --c-rose-200: 254 205 211;
+  --c-rose-300: 253 164 175;
+  --c-rose-400: 251 113 133;
+  --c-rose-500: 244 63 94;
+  --c-rose-600: 225 29 72;
+
+  --c-emerald-50:  236 253 245;
+  --c-emerald-200: 167 243 208;
+  --c-emerald-400: 52 211 153;
+  --c-emerald-500: 16 185 129;
+  --c-emerald-600: 5 150 105;
+  --c-emerald-700: 4 120 87;
+  --c-emerald-800: 6 95 70;
+
+  --c-lime-50:  247 254 231;
+  --c-lime-100: 236 252 203;
+  --c-lime-200: 217 249 157;
+  --c-lime-500: 132 204 22;
+  --c-lime-600: 101 163 13;
+  --c-lime-700: 77 124 15;
+  --c-lime-800: 63 98 18;
+
+  --c-amber-50:  255 251 235;
+  --c-amber-200: 253 230 138;
+  --c-amber-400: 251 191 36;
+  --c-amber-500: 245 158 11;
+  --c-amber-700: 180 83 9;
+  --c-amber-900: 120 53 15;
+
+  /* ── Semantic tokens ── */
+
+  /* Brand tones for gradients (buttons, avatar, logo) */
   --brand-100: #fae4d5;
   --brand-200: #f4c5a0;
   --brand-300: #e89e70;
@@ -36,9 +148,168 @@
   --input-border-hover: #cfc4af;
   --input-border-focus: var(--brand-400);
   --input-placeholder:  #b3a897;
+  --input-focus-glow:   rgba(216, 124, 78, 0.15);
 
   /* Focus ring */
   --focus-ring: rgba(196, 98, 58, 0.55);
+
+  /* Shadows — warm brown in light mode */
+  --shadow-card: 0 1px 2px rgba(60, 42, 24, 0.05), 0 8px 24px -8px rgba(60, 42, 24, 0.08);
+  --shadow-card-hover: 0 2px 4px rgba(60, 42, 24, 0.06), 0 16px 32px -8px rgba(60, 42, 24, 0.12);
+  --shadow-pop: 0 4px 12px rgba(60, 42, 24, 0.08), 0 24px 48px -12px rgba(60, 42, 24, 0.18);
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   "EMBER" — dark theme.
+   The tinted scales are lightness-inverted: light tints (50–200) become deep
+   tinted surfaces, dark text tones (600–900) become luminous pastels. Every
+   `bg-*-50 text-*-700` pairing therefore keeps its contrast automatically.
+   ══════════════════════════════════════════════════════════════════════════ */
+:root.dark {
+  color-scheme: dark;
+
+  /* Brand — glowing terracotta embers */
+  --c-brand-50:  56 33 22;
+  --c-brand-100: 74 43 28;
+  --c-brand-200: 107 60 37;
+  --c-brand-300: 176 106 66;
+  --c-brand-400: 224 137 90;
+  --c-brand-500: 203 105 62;
+  --c-brand-600: 232 158 112;
+  --c-brand-700: 240 181 141;
+  --c-brand-800: 244 197 160;
+  --c-brand-900: 250 228 213;
+  --c-brand-950: 253 244 239;
+
+  /* Ink — warm cream text on charcoal. 300 stays legible for tab-bar icons
+     and placeholders while remaining clearly below 400 in the hierarchy. */
+  --c-ink-50:  38 33 25;
+  --c-ink-100: 50 44 35;
+  --c-ink-200: 69 62 51;
+  --c-ink-300: 108 98 84;
+  --c-ink-400: 138 125 107;
+  --c-ink-500: 154 142 124;
+  --c-ink-600: 184 172 153;
+  --c-ink-700: 214 204 188;
+  --c-ink-800: 232 224 212;
+  --c-ink-900: 242 236 227;
+
+  /* Paper — roasted depths (panels sit slightly above the base) */
+  --c-paper:     23 17 13;
+  --c-paper-50:  32 25 19;
+  --c-paper-100: 42 33 25;
+  --c-paper-200: 55 44 34;
+
+  /* Sage — moss by candlelight */
+  --c-sage-100: 36 46 30;
+  --c-sage-200: 52 66 44;
+  --c-sage-300: 78 99 66;
+  --c-sage-400: 141 177 129;
+  --c-sage-500: 111 154 99;
+  --c-sage-600: 157 184 148;
+  --c-sage-700: 181 205 172;
+
+  /* Ocher — burnished gold */
+  --c-ocher-100: 58 45 20;
+  --c-ocher-200: 77 60 26;
+  --c-ocher-300: 214 174 90;
+  --c-ocher-400: 218 170 84;
+  --c-ocher-500: 217 178 100;
+  --c-ocher-600: 230 192 122;
+  --c-ocher-700: 238 218 159;
+
+  /* Semantic surfaces */
+  --c-surface:  36 28 22;
+  --c-charcoal: 19 14 10;
+  --c-cream:    245 240 231;
+  --c-scrim:    8 5 3;
+
+  /* Status palettes — deep tinted surfaces, luminous text tones */
+  --c-red-50:  62 24 22;
+  --c-red-100: 80 31 28;
+  --c-red-200: 110 42 38;
+  --c-red-300: 158 60 55;
+  --c-red-400: 240 116 108;
+  --c-red-500: 237 90 82;
+  --c-red-600: 224 75 66;
+  --c-red-700: 248 133 125;
+  --c-red-800: 252 178 172;
+
+  --c-rose-50:  61 26 32;
+  --c-rose-100: 79 33 41;
+  --c-rose-200: 109 44 56;
+  --c-rose-300: 158 62 79;
+  --c-rose-400: 244 99 125;
+  --c-rose-500: 226 72 100;
+  --c-rose-600: 249 148 166;
+
+  --c-emerald-50:  16 46 37;
+  --c-emerald-200: 26 77 60;
+  --c-emerald-400: 82 212 160;
+  --c-emerald-500: 46 190 138;
+  --c-emerald-600: 74 210 158;
+  --c-emerald-700: 134 226 186;
+  --c-emerald-800: 167 243 208;
+
+  --c-lime-50:  34 42 14;
+  --c-lime-100: 46 56 19;
+  --c-lime-200: 65 79 27;
+  --c-lime-500: 154 213 58;
+  --c-lime-600: 132 190 42;
+  --c-lime-700: 183 216 108;
+  --c-lime-800: 201 231 142;
+
+  --c-amber-50:  61 45 16;
+  --c-amber-200: 92 69 26;
+  --c-amber-400: 240 185 70;
+  --c-amber-500: 235 168 50;
+  --c-amber-700: 247 205 116;
+  --c-amber-900: 253 230 168;
+
+  /* ── Semantic tokens ── */
+
+  /* Brand gradient tones stay rich and saturated (never text-light) */
+  --brand-100: #4a2b1c;
+  --brand-200: #6b3c25;
+  --brand-300: #b06a42;
+  --brand-400: #e0895a;
+  --brand-500: #cb693e;
+  --brand-600: #a8512b;
+  --brand-700: #8f421f;
+
+  /* Ink */
+  --ink-900: #f2ece3;
+  --ink-600: #b8ac99;
+  --ink-400: #8a7d6b;
+  --ink-200: #453e33;
+
+  /* App background — embers glowing in roasted charcoal. The bottom-centre
+     orb doubles as a faint hearth glow. */
+  --bg-base:  #17110d;
+  --bg-orb-a: rgba(216, 124, 78, 0.14);    /* ember peach */
+  --bg-orb-b: rgba(199, 94, 134, 0.09);    /* smouldering rose */
+  --bg-orb-c: rgba(212, 164, 78, 0.10);    /* hearth amber */
+  --bg-orb-d: rgba(125, 159, 116, 0.07);   /* night moss */
+
+  /* Surfaces */
+  --surface-bg:     #241c16;
+  --surface-border: #382c21;
+
+  /* Inputs — slightly recessed below the card surface */
+  --input-bg:           #1c1510;
+  --input-border:       #443628;
+  --input-border-hover: #59483a;
+  --input-border-focus: var(--brand-400);
+  --input-placeholder:  #7a6d5c;
+  --input-focus-glow:   rgba(224, 137, 90, 0.22);
+
+  /* Focus ring */
+  --focus-ring: rgba(224, 137, 90, 0.6);
+
+  /* Shadows — deep black pools */
+  --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.4), 0 8px 24px -8px rgba(0, 0, 0, 0.55);
+  --shadow-card-hover: 0 2px 4px rgba(0, 0, 0, 0.45), 0 16px 32px -8px rgba(0, 0, 0, 0.65);
+  --shadow-pop: 0 4px 12px rgba(0, 0, 0, 0.5), 0 24px 48px -12px rgba(0, 0, 0, 0.75);
 }
 
 /* ══════════════════════════════════════════════════════════════════════════ */
@@ -58,7 +329,8 @@
   }
 
   /* Blurred colour circles floating behind all content (mymind-esque).
-     Pure gradients — no filter, so it stays cheap on mobile GPUs. */
+     Pure gradients — no filter, so it stays cheap on mobile GPUs.
+     In dark mode the same geometry renders as glowing embers. */
   body::before {
     content: '';
     position: fixed;
@@ -71,6 +343,7 @@
       radial-gradient(circle 340px at 26% -10%, var(--bg-orb-d) 0%, transparent 68%),
       radial-gradient(circle 380px at 104% 70%, var(--bg-orb-b) 0%, transparent 68%),
       var(--bg-base);
+    transition: background 0.3s ease;
   }
 
   button:focus-visible,
@@ -94,6 +367,10 @@
     background: rgba(60, 42, 24, 0.15);
     border-radius: 9999px;
   }
+  :root.dark::-webkit-scrollbar-thumb,
+  .dark ::-webkit-scrollbar-thumb {
+    background: rgba(255, 240, 220, 0.14);
+  }
 
   ::selection {
     background: var(--brand-200);
@@ -111,8 +388,16 @@
     @apply rounded-2xl shadow-card;
   }
 
+  /* Candlelit edge: a whisper of warm light along the top of dark cards */
+  .dark .card {
+    box-shadow: var(--shadow-card), inset 0 1px 0 rgba(255, 233, 205, 0.05);
+  }
+
   .card-hover {
     @apply transition-all duration-200 hover:shadow-card-hover hover:-translate-y-0.5;
+  }
+  .dark .card-hover:hover {
+    box-shadow: var(--shadow-card-hover), inset 0 1px 0 rgba(255, 233, 205, 0.07);
   }
 
   /* Subtle inset panel inside a card (forms, nested groups) */
@@ -152,14 +437,28 @@
     background-image: linear-gradient(170deg, var(--brand-600) 0%, var(--brand-700) 100%);
     box-shadow: 0 1px 2px rgba(110, 46, 20, 0.25);
   }
+  /* Dark: the button glows like an ember instead of casting a brown shadow */
+  .dark .btn-primary {
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.5), 0 6px 18px -6px rgba(224, 137, 90, 0.4);
+  }
+  .dark .btn-primary:hover:not(:disabled) {
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.4), 0 10px 26px -6px rgba(224, 137, 90, 0.5);
+  }
+  .dark .btn-primary:active:not(:disabled) {
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
+  }
 
   .btn-secondary {
     @apply inline-flex items-center justify-center gap-2 text-ink-700 px-5 py-2.5
-      rounded-full font-semibold text-sm cursor-pointer select-none bg-white
+      rounded-full font-semibold text-sm cursor-pointer select-none
       transition-all duration-150
       disabled:opacity-40 disabled:cursor-not-allowed;
+    background: var(--surface-bg);
     border: 1px solid var(--input-border);
     box-shadow: 0 1px 2px rgba(60, 42, 24, 0.04);
+  }
+  .dark .btn-secondary {
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
   }
   .btn-secondary:hover:not(:disabled) {
     @apply bg-paper-50 text-ink-900;
@@ -191,6 +490,10 @@
     background: linear-gradient(100deg, rgba(196, 98, 58, 0.13) 0%, rgba(196, 98, 58, 0.05) 100%);
     box-shadow: inset 0 0 0 1px rgba(196, 98, 58, 0.18);
   }
+  .dark .nav-active {
+    background: linear-gradient(100deg, rgba(224, 137, 90, 0.16) 0%, rgba(224, 137, 90, 0.05) 100%);
+    box-shadow: inset 0 0 0 1px rgba(224, 137, 90, 0.24);
+  }
 
   /* ── Inputs ───────────────────────────────────────────────────────────── */
 
@@ -204,12 +507,15 @@
   .input:hover:not(:focus):not(:disabled) { border-color: var(--input-border-hover); }
   .input:focus {
     border-color: var(--input-border-focus);
-    box-shadow: 0 0 0 3px rgba(216, 124, 78, 0.15);
+    box-shadow: 0 0 0 3px var(--input-focus-glow);
   }
   .input:disabled { @apply opacity-50 cursor-not-allowed bg-paper-100; }
   select.input { @apply pr-9 appearance-none bg-no-repeat cursor-pointer;
     background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='%23a3988a' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
     background-position: right 0.8rem center;
+  }
+  .dark select.input {
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='%238a7d6b' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
   }
 
   /* ── Badges & Chips ───────────────────────────────────────────────────── */
@@ -218,10 +524,11 @@
     @apply inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium;
   }
 
-  /* mymind-esque outlined pill chips — white core, tinted border and text */
+  /* mymind-esque outlined pill chips — surface core, tinted border and text */
   .chip {
     @apply inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs
-      font-semibold bg-white border transition-colors duration-150;
+      font-semibold border transition-colors duration-150;
+    background: var(--surface-bg);
   }
   .chip-clay   { @apply border-brand-300 text-brand-600; }
   .chip-rose   { @apply border-rose-300 text-rose-600; }

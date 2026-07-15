@@ -19,8 +19,10 @@ const SOLID = {
   sage: 'border-sage-500 bg-sage-500 text-white',
   amber: 'border-ocher-400 bg-ocher-400 text-white',
   rose: 'border-rose-500 bg-rose-500 text-white',
-  olive: 'border-lime-700 bg-lime-700 text-white',
-  stone: 'border-ink-700 bg-ink-700 text-white',
+  // Olive and stone fills invert to light tones in dark mode, so their text
+  // uses tokens that invert alongside instead of fixed white.
+  olive: 'border-lime-700 bg-lime-700 text-lime-50',
+  stone: 'border-ink-700 bg-ink-700 text-ink-50',
 };
 
 // Softly filled chips — carry more colour than outline, used for

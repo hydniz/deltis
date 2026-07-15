@@ -12,5 +12,5 @@ export { default as PageHeader } from './PageHeader';
 export { default as ProgressBar } from './ProgressBar';
 export { default as Stat } from './Stat';
 export { Spinner, PageLoader } from './Spinner';
-export { CHART } from './chartTheme';
+export { useChart, CHART_LIGHT, CHART_DARK } from './chartTheme';
 export { TONE_BUBBLE, TONE_ACCENT_BORDER } from './tones';
