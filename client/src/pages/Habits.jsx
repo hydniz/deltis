@@ -2,8 +2,10 @@ import { useState, useEffect, useCallback } from 'react';
 import api from '../utils/api';
 import { format, subDays, parseISO, startOfDay } from 'date-fns';
 import { de } from 'date-fns/locale';
-import { Plus, TrendingUp, Sparkles, Settings2, Check, CalendarOff } from 'lucide-react';
+import { Plus, TrendingUp, Sparkles, Settings2, Check, CalendarOff, LayoutGrid, Undo2 } from 'lucide-react';
 import { isDueOn, formatScheduleBadge } from '../utils/habitSchedule';
+import { meetsTarget, formatTarget } from '../utils/habitTarget';
+import HabitHeatmap from '../components/HabitHeatmap';
 import {
   ResponsiveContainer, LineChart, Line, XAxis, YAxis, Tooltip, CartesianGrid
 } from 'recharts';
@@ -28,10 +30,12 @@ function HabitCard({ habit, todayLog, onLog }) {
   const [loadingLog, setLoadingLog] = useState(false);
   const [saving, setSaving] = useState(false);
   const [showChart, setShowChart] = useState(false);
+  const [showHeatmap, setShowHeatmap] = useState(false);
   const [chartData, setChartData] = useState([]);
 
   // Configuration lives centrally in the manage modal — the card only logs.
   const dueToday = isDueOn(habit);
+  const isBoolean = habit.type === 'boolean';
 
   // Sync today's log from parent whenever parent reloads
   useEffect(() => {
@@ -62,26 +66,48 @@ function HabitCard({ habit, todayLog, onLog }) {
     setValue('');
   };
 
-  const handleLog = async () => {
-    if (value === '') return;
+  // Refresh after a write: parent reload for today, targeted refetch otherwise.
+  const refreshAfterWrite = async () => {
+    if (isToday) {
+      onLog();
+      return;
+    }
+    const d = new Date(selectedDate + 'T00:00:00');
+    const end = new Date(d.getFullYear(), d.getMonth(), d.getDate(), 23, 59, 59, 999);
+    const res = await api.get('/habits/logs', {
+      params: { habitId: habit._id, startDate: d.toISOString(), endDate: end.toISOString() }
+    });
+    setCurrentLog(res.data[0] ?? null);
+  };
+
+  const submitLog = async (logValue) => {
     setSaving(true);
     try {
       await api.post('/habits/logs', {
         habitId: habit._id,
         date: new Date(selectedDate + 'T12:00:00').toISOString(),
-        value: +value,
+        value: logValue,
       });
-      if (isToday) {
-        onLog();
-      } else {
-        // Re-fetch the entry for the selected non-today date
-        const d = new Date(selectedDate + 'T00:00:00');
-        const end = new Date(d.getFullYear(), d.getMonth(), d.getDate(), 23, 59, 59, 999);
-        const res = await api.get('/habits/logs', {
-          params: { habitId: habit._id, startDate: d.toISOString(), endDate: end.toISOString() }
-        });
-        setCurrentLog(res.data[0] ?? null);
-      }
+      await refreshAfterWrite();
+    } catch (err) {
+      alert('Fehler: ' + err.message);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleLog = () => {
+    if (value === '') return;
+    submitLog(+value);
+  };
+
+  // Boolean habits: un-doing removes the day's log entirely.
+  const handleUnlog = async () => {
+    if (!currentLog?._id) return;
+    setSaving(true);
+    try {
+      await api.delete(`/habits/logs/${currentLog._id}`);
+      await refreshAfterWrite();
     } catch (err) {
       alert('Fehler: ' + err.message);
     } finally {
@@ -127,14 +153,29 @@ function HabitCard({ habit, todayLog, onLog }) {
           <div className="min-w-0">
             <h3 className="display text-lg leading-snug truncate">{habit.name}</h3>
             <p className="text-xs text-ink-400 mt-0.5 truncate">
-              in {habit.unitSymbol}
+              {isBoolean ? 'Ja/Nein' : `in ${habit.unitSymbol}`}
+              {formatTarget(habit) && (
+                <span className="text-ocher-600 font-medium"> · {formatTarget(habit)}</span>
+              )}
               {formatScheduleBadge(habit) && (
                 <span className="text-brand-600 font-medium"> · {formatScheduleBadge(habit)}</span>
               )}
             </p>
           </div>
         </div>
-        <IconButton icon={TrendingUp} label="Verlauf anzeigen" tone="brand" size={16} active={showChart} onClick={loadChart} />
+        <div className="flex items-center gap-0.5">
+          <IconButton
+            icon={LayoutGrid}
+            label="Heatmap anzeigen"
+            tone="brand"
+            size={15}
+            active={showHeatmap}
+            onClick={() => setShowHeatmap(v => !v)}
+          />
+          {!isBoolean && (
+            <IconButton icon={TrendingUp} label="Verlauf anzeigen" tone="brand" size={16} active={showChart} onClick={loadChart} />
+          )}
+        </div>
       </div>
 
       {!dueToday && (
@@ -170,6 +211,22 @@ function HabitCard({ habit, todayLog, onLog }) {
         <div className="flex items-center justify-center py-3">
           <Spinner size="sm" />
         </div>
+      ) : isBoolean ? (
+        currentLog ? (
+          <div className="flex items-center justify-between gap-2">
+            <p className="text-sm text-emerald-600 font-semibold flex items-center gap-1.5">
+              <Check size={15} strokeWidth={3} />
+              {isToday ? 'Heute erledigt' : `Erledigt am ${format(parseISO(selectedDate), 'd. MMM', { locale: de })}`}
+            </p>
+            <Button variant="ghost" size="sm" icon={Undo2} loading={saving} onClick={handleUnlog}>
+              Rückgängig
+            </Button>
+          </div>
+        ) : (
+          <Button className="w-full" icon={Check} loading={saving} onClick={() => submitLog(1)}>
+            Als erledigt markieren
+          </Button>
+        )
       ) : (
         <form onSubmit={e => { e.preventDefault(); handleLog(); }} className="flex gap-2">
           <Input
@@ -187,17 +244,21 @@ function HabitCard({ habit, todayLog, onLog }) {
         </form>
       )}
 
-      {currentLog && (
-        <p className="text-xs text-emerald-600 font-medium mt-2 flex items-center gap-1">
-          <Check size={12} strokeWidth={3} />
-          {(() => {
-            const unit = currentLog.historicalUnit || habit.unitSymbol;
-            const suffix = currentLog.historicalUnit ? ` ${currentLog.historicalUnit} (jetzt: ${habit.unitSymbol})` : ` ${unit}`;
-            const datePrefix = isToday ? 'Heute' : format(parseISO(selectedDate), 'd. MMM', { locale: de });
-            return `${datePrefix}: ${currentLog.value}${suffix}`;
-          })()}
-        </p>
-      )}
+      {currentLog && !isBoolean && (() => {
+        const fulfilled = meetsTarget(habit, currentLog.value);
+        const unit = currentLog.historicalUnit || habit.unitSymbol;
+        const suffix = currentLog.historicalUnit ? ` ${currentLog.historicalUnit} (jetzt: ${habit.unitSymbol})` : ` ${unit}`;
+        const datePrefix = isToday ? 'Heute' : format(parseISO(selectedDate), 'd. MMM', { locale: de });
+        return (
+          <p className={`text-xs font-medium mt-2 flex items-center gap-1 ${fulfilled ? 'text-emerald-600' : 'text-ocher-600'}`}>
+            {fulfilled && <Check size={12} strokeWidth={3} />}
+            {`${datePrefix}: ${currentLog.value}${suffix}`}
+            {!fulfilled && ` · Ziel: ${formatTarget(habit)}`}
+          </p>
+        );
+      })()}
+
+      {showHeatmap && <HabitHeatmap habit={habit} />}
 
       {showChart && chartData.length > 0 && (
         <div className="mt-4">
@@ -274,10 +335,15 @@ export default function Habits() {
 
   if (loading) return <PageLoader />;
 
-  // Habits due today come first; the counter only tracks today's schedule.
+  // Habits due today come first; the counter only tracks today's schedule
+  // and counts a day as done when the completion target is met.
   const sortedHabits = [...activeHabits].sort((a, b) => isDueOn(b) - isDueOn(a));
   const dueTodayCount = activeHabits.filter(h => isDueOn(h)).length;
-  const loggedCount = activeHabits.filter(h => isDueOn(h) && getTodayLog(h._id)).length;
+  const loggedCount = activeHabits.filter(h => {
+    if (!isDueOn(h)) return false;
+    const log = getTodayLog(h._id);
+    return log && meetsTarget(h, log.value);
+  }).length;
 
   return (
     <div className="space-y-6">
@@ -292,7 +358,7 @@ export default function Habits() {
               <span className="text-ink-400">
                 {' · '}
                 {dueTodayCount > 0
-                  ? `${loggedCount}/${dueTodayCount} für heute eingetragen`
+                  ? `${loggedCount}/${dueTodayCount} für heute erfüllt`
                   : 'für heute keine geplant'}
               </span>
             )}

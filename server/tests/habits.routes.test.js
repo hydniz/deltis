@@ -284,6 +284,40 @@ describe('PUT /api/habits/settings/:id', () => {
     expect(habit.scheduleDate).toBeNull();
   });
 
+  it('persists a completion target and returns it via GET /definitions', async () => {
+    const { token, user } = await createUser();
+    const def = await createHabitDef(user._id);
+
+    await request(app)
+      .put(`/api/habits/settings/${def._id}`)
+      .set(authHeader(token))
+      .send({ missingDayMode: 'none', defaultValue: 0, targetCondition: 'min', targetValue: 8 });
+
+    const getRes = await request(app)
+      .get('/api/habits/definitions')
+      .set(authHeader(token));
+    const habit = getRes.body.find(d => d._id === def._id.toString());
+    expect(habit.targetCondition).toBe('min');
+    expect(habit.targetValue).toBe(8);
+  });
+
+  it('sanitizes invalid target settings to none', async () => {
+    const { token, user } = await createUser();
+    const def = await createHabitDef(user._id);
+
+    await request(app)
+      .put(`/api/habits/settings/${def._id}`)
+      .set(authHeader(token))
+      .send({ missingDayMode: 'none', defaultValue: 0, targetCondition: 'banana', targetValue: -5 });
+
+    const getRes = await request(app)
+      .get('/api/habits/definitions')
+      .set(authHeader(token));
+    const habit = getRes.body.find(d => d._id === def._id.toString());
+    expect(habit.targetCondition).toBe('none');
+    expect(habit.targetValue).toBe(0);
+  });
+
   it('defaults scheduleDays to an empty array when not provided', async () => {
     const { token, user } = await createUser();
     const def = await createHabitDef(user._id);

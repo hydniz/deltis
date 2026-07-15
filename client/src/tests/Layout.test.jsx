@@ -56,11 +56,10 @@ describe('Layout', () => {
     renderLayout();
     await screen.findByTestId('outlet');
     expect(screen.getByText('Home')).toBeInTheDocument();
-    expect(screen.getByText('Heute')).toBeInTheDocument();
     expect(screen.getByText('Sport')).toBeInTheDocument();
+    expect(screen.getByText('Planer')).toBeInTheDocument();
     expect(screen.getByText('Habits')).toBeInTheDocument();
     expect(screen.getByText('Mehr')).toBeInTheDocument();
-    expect(screen.queryByText('Planer')).not.toBeInTheDocument();
     expect(screen.queryByText('Gewicht')).not.toBeInTheDocument();
     expect(screen.queryByText('Ziele')).not.toBeInTheDocument();
   });
@@ -70,13 +69,12 @@ describe('Layout', () => {
     renderLayout();
     await screen.findByTestId('outlet');
     await user.click(screen.getByText('Mehr'));
-    expect(screen.getByText('Planer')).toBeInTheDocument();
     expect(screen.getByText('Gewicht')).toBeInTheDocument();
     expect(screen.getByText('Ziele')).toBeInTheDocument();
 
     // Navigating from the sheet closes it again
-    await user.click(screen.getByText('Planer'));
-    expect(screen.queryByText('Gewicht')).not.toBeInTheDocument();
+    await user.click(screen.getByText('Gewicht'));
+    expect(screen.queryByText('Ziele')).not.toBeInTheDocument();
   });
 
   it('renders the user menu in the mobile top bar', async () => {

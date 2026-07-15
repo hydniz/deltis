@@ -13,19 +13,17 @@ const adminOnly = (req, res, next) => {
 
 // GET /api/admin/config
 // Returns all config definitions together with current effective values and
-// their sources. Sensitive env values are never exposed – only their
-// presence is indicated via `hasValue`.
+// their sources. What may be shown is decided per key by its `expose` policy
+// (see utils/config.js) – NOT by the source. An env-provided port is just as
+// harmless to display as a default one, while a secret stays hidden wherever
+// it comes from; for those only `hasValue` reports presence.
 router.get('/', auth, adminOnly, (req, res) => {
   const entries = Object.entries(config.DEFINITIONS).map(([key, def]) => {
     const source = config.getSource(key);
     const effective = config.get(key);
-
-    // Never expose the raw value for 'status' keys or env-sourced values.
-    // For 'password' fields the caller must decide whether to show/mask.
-    let value = null;
-    if (def.type !== 'status' && source !== 'env') {
-      value = effective || null;
-    }
+    const display = def.type === 'status'
+      ? { value: null, masked: false }
+      : config.getDisplayValue(key);
 
     return {
       key,
@@ -41,7 +39,9 @@ router.get('/', auth, adminOnly, (req, res) => {
       ...(def.context ? { context: def.context } : {}),
       source,
       hasValue: Boolean(effective),
-      value,
+      value: display.value,
+      // true → `value` is a redacted preview, never a usable edit draft.
+      ...(display.masked ? { masked: true } : {}),
     };
   });
 

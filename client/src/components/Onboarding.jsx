@@ -334,8 +334,8 @@ export default function Onboarding() {
                 </div>
                 <h2 className="display text-3xl anim-fade-up">Alles bereit!</h2>
                 <p className="text-ink-500 text-sm mt-3 max-w-sm mx-auto leading-relaxed anim-fade-up" style={{ animationDelay: '90ms' }}>
-                  Dein Deltis ist eingerichtet. Starte mit deiner „Heute“-Ansicht —
-                  dort siehst du jeden Tag auf einen Blick, was ansteht.
+                  Dein Deltis ist eingerichtet. Dein Feed auf der Startseite zeigt
+                  dir jeden Tag auf einen Blick, was ansteht.
                 </p>
               </div>
             )}

@@ -6,6 +6,7 @@ export { default as Toggle } from './Toggle';
 export { default as Segmented } from './Segmented';
 export { default as Chip, chipColorFor, CHIP_COLORS } from './Chip';
 export { default as Alert } from './Alert';
+export { default as HelpTip } from './HelpTip';
 export { default as EmptyState } from './EmptyState';
 export { default as Modal, StepDots } from './Modal';
 export { default as PageHeader } from './PageHeader';

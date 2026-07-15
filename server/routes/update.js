@@ -35,6 +35,9 @@ const repoUrl = () => appConfig.get('UPDATE_REPO_URL') || '';
 const releaseChannel = () => appConfig.get('UPDATE_RELEASE_CHANNEL') || 'stable';
 const dockerImageRepo = () => appConfig.get('UPDATE_DOCKER_IMAGE') || 'hydniz/deltis';
 
+// The 'main' channel always follows this branch; it is not configurable.
+const MAIN_BRANCH = appConfig.MAIN_BRANCH;
+
 // Module-level update state
 let updateInProgress = false;
 const logBuffer = [];
@@ -124,11 +127,11 @@ async function fetchLatestForChannel(url, channel) {
   if (!parsed) throw new Error('Ungültige GitHub-URL.');
 
   if (channel === 'main') {
-    // HEAD commit on the configured branch via ls-remote (no API auth needed)
-    const trackBranch = appConfig.get('UPDATE_BRANCH') || 'main';
-    const raw = await capture('git', ['ls-remote', url, `refs/heads/${trackBranch}`]);
+    // HEAD commit on the main branch via ls-remote (no API auth needed).
+    // The tracked branch is fixed – see appConfig.MAIN_BRANCH.
+    const raw = await capture('git', ['ls-remote', url, `refs/heads/${MAIN_BRANCH}`]);
     const sha = raw.split('\t')[0].substring(0, 7);
-    return { version: null, commitSha: sha, tagName: trackBranch };
+    return { version: null, commitSha: sha, tagName: MAIN_BRANCH };
   }
 
   const releases = await fetchGitHubJson(`/repos/${parsed.owner}/${parsed.repo}/releases`);
@@ -224,6 +227,30 @@ function computeUpdateAvailable(latest, channel) {
   // Not valid semver on either side → fall back to reporting any difference.
   if (cmp === null) return latest.version !== currentVersionWithStage();
   return cmp > 0;
+}
+
+// Why an update must not be started right now – null means "go ahead".
+//   'check-failed' – GitHub did not answer, target version unknown
+//   'unknown'      – versions are not comparable
+//   'up-to-date'   – the channel's latest version is already installed
+//   'downgrade'    – the channel's latest version is OLDER than the installed
+//                    one. Happens after switching to a channel that trails the
+//                    installed build (e.g. stable v1.2.3 → alpha v1.2.0-alpha).
+//                    Applying it would silently roll the app back, so a channel
+//                    switch never downgrades: it waits until the new channel
+//                    has caught up.
+function updateBlockReason(latest, channel, checkError) {
+  if (checkError || !latest) return 'check-failed';
+
+  const available = computeUpdateAvailable(latest, channel);
+  if (available === true) return null;
+  if (available === null) return 'unknown';
+
+  if (channel !== 'main' && latest.version) {
+    const cmp = compareSemver(latest.version, currentVersionWithStage());
+    if (cmp !== null && cmp < 0) return 'downgrade';
+  }
+  return 'up-to-date';
 }
 
 // Maps a GitHub release to the Docker-Hub tag published by CI:
@@ -345,6 +372,8 @@ router.get('/status', auth, adminOnly, async (req, res) => {
     currentVersion: currentVersion(),
     currentCommit: currentCommit(),
     channel,
+    // Drives the disabled "Update starten" button and its explanation.
+    blockReason: updateBlockReason(latest, channel, checkError),
     repoUrl: url,
     inDocker,
     mode,
@@ -446,6 +475,17 @@ router.post('/rollback', auth, adminOnly, async (req, res) => {
 
 const BAR = '══════════════════════════════════════════════';
 
+// Log lines for a blocked update run, keyed by updateBlockReason().
+const BLOCK_MESSAGES = {
+  'check-failed': () => 'Zielversion konnte nicht ermittelt werden – Update abgebrochen.',
+  unknown: () => 'Versionen sind nicht vergleichbar – Update abgebrochen.',
+  'up-to-date': () => 'Die installierte Version ist bereits aktuell – kein Update nötig.',
+  downgrade: (latest, channel) =>
+    `Kein Update: Die neueste ${channel}-Version (${latest.version}) ist älter als die `
+    + `installierte Version (${currentVersionWithStage()}). `
+    + 'Ein Kanalwechsel führt kein Downgrade durch.',
+};
+
 async function runUpdate(mode) {
   const channel = releaseChannel();
   const url = repoUrl();
@@ -474,6 +514,18 @@ async function runUpdate(mode) {
       }
     } catch (err) {
       ulog.log(`✗ GitHub nicht erreichbar: ${err.message}`);
+      updateInProgress = false;
+      return;
+    }
+
+    // Nothing is touched unless the target is genuinely newer. This runs before
+    // the backup so a pointless run costs nothing – and it is what stops a
+    // channel switch from downgrading the installation.
+    const blocked = updateBlockReason(latest, channel, null);
+    if (blocked) {
+      ulog.log('');
+      ulog.log(`✗ ${BLOCK_MESSAGES[blocked](latest, channel)}`);
+      ulog.log('  Es wurde nichts verändert.');
       updateInProgress = false;
       return;
     }
@@ -602,9 +654,7 @@ async function runDockerSocketUpdate(latest, channel) {
 // Host mode: a detached shell script checks out the target ref, reinstalls
 // dependencies, rebuilds the frontend and restarts the app.
 async function runHostUpdate(latest, channel) {
-  const targetRef = channel === 'main'
-    ? (appConfig.get('UPDATE_BRANCH') || 'main')
-    : latest.tagName;
+  const targetRef = channel === 'main' ? MAIN_BRANCH : latest.tagName;
   const previousRef = await capture('git', ['-C', APP_DIR, 'rev-parse', 'HEAD']).catch(() => null);
   if (!previousRef) {
     ulog.log('✗ Kein Git-Repository gefunden – Host-Update nicht möglich.');
@@ -784,6 +834,7 @@ router._setInProgress = (v) => { updateInProgress = v; };
 router._createPreUpdateBackup = createPreUpdateBackup;
 router._PRE_UPDATE_BACKUP_DIR = PRE_UPDATE_BACKUP_DIR;
 router._computeUpdateAvailable = computeUpdateAvailable;
+router._updateBlockReason = updateBlockReason;
 router._compareSemver = compareSemver;
 router._dockerImageRefFor = dockerImageRefFor;
 router._performBackgroundCheck = performBackgroundCheck;

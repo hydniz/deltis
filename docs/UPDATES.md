@@ -6,7 +6,24 @@ The backend checks GitHub for new releases in the background (default: every
 6 h, configurable via `UPDATE_CHECK_INTERVAL_HOURS`). Admins see a pulsing dot
 on **Admin → Updates (OTA)** in the sidebar when a newer version exists on the
 configured release channel (`stable` = `vX.Y.Z` tags, `beta`/`alpha` =
-suffixed tags, `main` = branch HEAD).
+suffixed tags, `main` = HEAD of the `main` branch). The tracked branch is fixed:
+a channel selects a release stream, so pointing an instance at an arbitrary
+branch is deliberately not offered.
+
+### A channel switch never downgrades
+
+An update is only ever offered when the channel's latest version is **newer**
+than the installed one (`updateBlockReason()` in `server/routes/update.js`).
+Switching to a channel that trails the installed build — e.g. stable `v1.2.3` →
+alpha `v1.2.0-alpha` — reports `downgrade` and starts nothing; the instance
+stays put until that channel overtakes it. The same check blocks re-installing
+the version already running (`up-to-date`), which is why **Update starten** is
+disabled unless `updateAvailable === true`.
+
+The guard runs inside the update pipeline as well, before the backup step, so
+the rule holds even for a caller that bypasses the UI. Going back to an older
+version is what the explicit **rollback** is for — never a side effect of
+changing channels.
 
 ## Update modes
 

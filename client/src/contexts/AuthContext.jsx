@@ -43,6 +43,14 @@ export function AuthProvider({ children }) {
     return res.data;
   };
 
+  // Public self-registration (only when enabled by the admin).
+  // Receives the session cookie like a regular login.
+  const register = async (username, password, name) => {
+    const res = await api.post('/auth/register', { username, password, name });
+    setUser(res.data);
+    return res.data;
+  };
+
   // Clears user state immediately; asks server to clear the cookie in the background.
   const logout = () => {
     api.post('/auth/logout').catch(() => {});
@@ -72,7 +80,7 @@ export function AuthProvider({ children }) {
   };
 
   return (
-    <AuthContext.Provider value={{ user, loading, login, logout, updateUser, setUsername, changePassword, forceChangePassword }}>
+    <AuthContext.Provider value={{ user, loading, login, register, logout, updateUser, setUsername, changePassword, forceChangePassword }}>
       {children}
     </AuthContext.Provider>
   );

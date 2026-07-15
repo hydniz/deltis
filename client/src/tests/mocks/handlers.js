@@ -35,6 +35,11 @@ export const handlers = [
     return HttpResponse.json({ configured: false, checkedAt: new Date().toISOString() });
   }),
 
+  // Self-registration is disabled by default (matches the server default).
+  http.get('/api/auth/registration-status', () => {
+    return HttpResponse.json({ enabled: false });
+  }),
+
   // Session restore — returns mockUser when a valid cookie is present (simulated by default).
   // Override to HttpResponse.json({ error: '...' }, { status: 401 }) in tests that need no session.
   http.get('/api/auth/me', () => {

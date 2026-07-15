@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { SESSION_EXPIRED_KEY } from '../utils/api';
+import { Link, useNavigate } from 'react-router-dom';
+import api, { SESSION_EXPIRED_KEY } from '../utils/api';
 import { useAuth } from '../contexts/AuthContext';
 import { APP_NAME, APP_SLOGAN } from '../config/branding';
 import { DeltaMark } from '../components/Logo';
@@ -13,8 +13,16 @@ export default function Login() {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const [sessionExpired, setSessionExpired] = useState(false);
+  const [registrationEnabled, setRegistrationEnabled] = useState(false);
   const { login } = useAuth();
   const navigate = useNavigate();
+
+  // Show the registration link only when the admin enabled self-signup.
+  useEffect(() => {
+    api.get('/auth/registration-status')
+      .then(res => setRegistrationEnabled(!!res.data.enabled))
+      .catch(() => { /* link stays hidden */ });
+  }, []);
 
   // Show a one-time notice when the user was logged out mid-session.
   useEffect(() => {
@@ -116,6 +124,15 @@ export default function Login() {
             </Button>
           </form>
         </div>
+
+        {registrationEnabled && (
+          <p className="text-center text-sm text-ink-500 mt-5">
+            Noch kein Konto?{' '}
+            <Link to="/register" className="font-semibold text-brand-600 hover:text-brand-700 transition-colors">
+              Jetzt registrieren
+            </Link>
+          </p>
+        )}
       </div>
     </div>
   );
