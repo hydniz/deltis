@@ -17,7 +17,7 @@ vi.mock('../pages/Landing', () => ({ default: () => <div data-testid="landing-pa
 vi.mock('../pages/Dashboard', () => ({ default: () => <div data-testid="dashboard-page">Dashboard</div> }));
 vi.mock('../pages/Login', () => ({ default: () => <div data-testid="login-page">Login</div> }));
 vi.mock('../pages/Admin', () => ({ default: () => <div data-testid="admin-page">Admin</div> }));
-vi.mock('../pages/AdminSetup', () => ({ default: () => <div data-testid="admin-setup-page">AdminSetup</div> }));
+vi.mock('../pages/Init', () => ({ default: () => <div data-testid="init-page">Init</div> }));
 vi.mock('../pages/Activities', () => ({ default: () => <div>Activities</div> }));
 vi.mock('../pages/Planner', () => ({ default: () => <div>Planner</div> }));
 vi.mock('../pages/Habits', () => ({ default: () => <div>Habits</div> }));
@@ -69,10 +69,49 @@ describe('App routing', () => {
     await waitFor(() => expect(screen.getByTestId('login-page')).toBeInTheDocument(), { timeout: 3000 });
   });
 
-  it('renders the admin setup page at /admin/setup without auth', async () => {
+  it('renders the init wizard at /init without auth', async () => {
+    window.history.pushState({}, '', '/init');
+    render(<App />);
+    await waitFor(() => expect(screen.getByTestId('init-page')).toBeInTheDocument());
+  });
+
+  it('redirects the legacy /admin/setup URL to /init', async () => {
     window.history.pushState({}, '', '/admin/setup');
     render(<App />);
-    await waitFor(() => expect(screen.getByTestId('admin-setup-page')).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByTestId('init-page')).toBeInTheDocument());
+  });
+
+  it('funnels guests from / into /init on a fresh installation', async () => {
+    window.history.pushState({}, '', '/');
+    server.use(
+      http.get('/api/auth/me', () => HttpResponse.json({ error: 'Nicht autorisiert' }, { status: 401 })),
+      http.get('/api/init/status', () => HttpResponse.json({ initNeeded: true, setupMode: false })),
+    );
+
+    render(<App />);
+    await waitFor(() => expect(screen.getByTestId('init-page')).toBeInTheDocument(), { timeout: 3000 });
+  });
+
+  it('funnels guests from /login into /init on a fresh installation', async () => {
+    window.history.pushState({}, '', '/login');
+    server.use(
+      http.get('/api/auth/me', () => HttpResponse.json({ error: 'Nicht autorisiert' }, { status: 401 })),
+      http.get('/api/init/status', () => HttpResponse.json({ initNeeded: true, setupMode: false })),
+    );
+
+    render(<App />);
+    await waitFor(() => expect(screen.getByTestId('init-page')).toBeInTheDocument(), { timeout: 3000 });
+  });
+
+  it('keeps showing the landing page when the init check fails (fail open)', async () => {
+    window.history.pushState({}, '', '/');
+    server.use(
+      http.get('/api/auth/me', () => HttpResponse.json({ error: 'Nicht autorisiert' }, { status: 401 })),
+      http.get('/api/init/status', () => HttpResponse.error()),
+    );
+
+    render(<App />);
+    await waitFor(() => expect(screen.getByTestId('landing-page')).toBeInTheDocument(), { timeout: 3000 });
   });
 });
 

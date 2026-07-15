@@ -44,6 +44,7 @@ app.use((req, res, next) => {
   const allowed = [
     /^\/api\/?$/,                        // version endpoint
     /^\/api\/branding/,
+    /^\/api\/init($|\/)/,                // first-installation wizard
     /^\/api\/admin\/setup-status/,
     /^\/api\/admin\/setup($|\/)/,        // POST /api/admin/setup + /setup/bootstrap
   ];
@@ -62,6 +63,7 @@ app.use(require('./middleware/emergencyGuard'));
 const { router: versionRouter, API_VERSION } = require('./routes/version');
 app.use('/api', versionRouter);
 app.use('/api/branding', require('./routes/branding'));
+app.use('/api/init', require('./routes/init'));
 app.use('/api/auth', require('./routes/auth'));
 app.use('/api/admin', require('./routes/admin'));
 app.use('/api/admin/update', require('./routes/update'));
@@ -110,7 +112,7 @@ async function seedAdminUser() {
   if (!admin) {
     console.log('\n' + '═'.repeat(58));
     console.log(`  ${branding.name} – FIRST START`);
-    console.log('  Create your admin account at /admin/setup in your browser.');
+    console.log('  Open /init in your browser to create the admin account and configure the app.');
     console.log('═'.repeat(58) + '\n');
   }
 

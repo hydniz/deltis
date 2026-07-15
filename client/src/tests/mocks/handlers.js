@@ -82,6 +82,23 @@ export const handlers = [
     return HttpResponse.json({ setupNeeded: false, adminUuid: null });
   }),
 
+  // First-installation wizard. Default: instance is already initialized.
+  // Tests for the wizard override this with initNeeded: true + settings.
+  http.get('/api/init/status', () => {
+    return HttpResponse.json({ initNeeded: false, setupMode: false });
+  }),
+
+  http.post('/api/init', async ({ request }) => {
+    const body = await request.json();
+    return HttpResponse.json({
+      ok: true,
+      user: { ...mockAdminUser, username: body.username },
+      applied: Object.keys(body.settings || {}),
+      skipped: [],
+      restartRequired: false,
+    }, { status: 201 });
+  }),
+
   http.get('/api/habits/definitions', () => {
     return HttpResponse.json([
       { _id: 'h1', name: 'Water', unitSymbol: 'ml', type: 'amount', selected: true },

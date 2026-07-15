@@ -41,11 +41,13 @@ mkdir -p backups
 docker compose up -d --no-build
 ```
 
-Open `http://<host>:3001` — the app redirects to a **setup wizard** that walks you through:
+Open `http://<host>:3001` — the app redirects to the **first-installation wizard** at `/init` that walks you through:
 
-1. **System configuration** – MongoDB connection, JWT secret and password pepper (all can also be provided via `.env.production`, see [SETUP.md](SETUP.md))
-2. **Admin account** – choose a username and password
-3. Done — sign in and create user accounts under *Administration → Nutzerverwaltung*
+1. **Database** *(only when MongoDB is not configured yet)* – connection URI
+2. **Security** – JWT secret and password pepper with one-click generation (both can also be provided via `.env.production`, see [SETUP.md](SETUP.md))
+3. **Admin account** – choose a username and password
+4. **Settings** – release channel, update source and other runtime defaults; values fixed via `.env` are shown as locked
+5. Done — you are signed in automatically and can create user accounts under *Administration → Nutzerverwaltung*
 
 For building from source, secret files, NAS specifics and every environment variable, see the full **[setup guide](SETUP.md)**.
 

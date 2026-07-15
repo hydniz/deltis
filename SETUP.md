@@ -190,17 +190,28 @@ Deployment setup (GitHub environments, SSH keys, rollback) is documented in
 
 ## 5. First-time setup wizard
 
-On the very first start the app redirects to `/admin/setup`:
+On the very first start the app redirects to the `/init` wizard (the legacy
+`/admin/setup` URL forwards there):
 
-1. **System configuration** *(only shown when no MongoDB connection exists yet)* —
-   enter the MongoDB URI and optionally a JWT secret and pepper. Values are stored
-   in `/etc/deltis/deltis.config.json`; env vars always take precedence.
-2. **Security configuration** *(shown when no pepper is configured)* — same as
-   above without the MongoDB field. The wizard warns you if you continue without
-   a pepper: configure it **before** creating accounts, never after.
-3. **Admin account** — choose a username and password.
-4. Sign in at `/login` and create user accounts under
-   *Administration → Nutzerverwaltung*.
+1. **Database** *(only shown when no MongoDB connection exists yet)* — enter the
+   MongoDB URI. Stored in `/etc/deltis/deltis.config.json`; env vars always take
+   precedence.
+2. **Security** *(shown while JWT secret or pepper are missing)* — set or
+   generate the JWT secret and the password pepper with one click. Values
+   already provided via `.env` are shown as locked. The pepper is configured in
+   this step deliberately: it must exist **before** the first account is created
+   and must never change afterwards.
+3. **Admin account** — choose a username and password (display name optional).
+4. **Settings** — all runtime settings (update source, release channel, port, …)
+   in one place. Settings fixed via `.env` appear locked and keep their value;
+   everything else can be changed later under *Administration → Konfiguration*.
+5. **Done** — you are signed in automatically and land in the app.
+
+The wizard is only available until the first admin account exists; after that
+`/init` redirects to the login page. Under the hood it uses `GET
+/api/init/status` (is initialisation needed + which settings are configurable)
+and `POST /api/init` (create the admin account and apply the settings in one
+call).
 
 > Users created by an admin receive a temporary password and must change it on
 > first login.

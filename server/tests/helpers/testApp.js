@@ -34,6 +34,7 @@ function buildApp() {
   app.use(cookieParser());
 
   app.use('/api', require('../../routes/version').router);
+  app.use('/api/init', require('../../routes/init'));
   app.use('/api/auth', require('../../routes/auth'));
   app.use('/api/admin', require('../../routes/admin'));
   app.use('/api/admin/update', require('../../routes/update'));
