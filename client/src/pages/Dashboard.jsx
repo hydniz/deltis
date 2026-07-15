@@ -4,40 +4,44 @@ import { useAuth } from '../contexts/AuthContext';
 import api from '../utils/api';
 import { format, startOfWeek, endOfWeek, isToday, parseISO } from 'date-fns';
 import { de } from 'date-fns/locale';
-import { Dumbbell, Scale, Target, Calendar, Sparkles, TrendingUp } from 'lucide-react';
+import { Dumbbell, Scale, Target, Calendar, Sparkles, TrendingUp, ArrowRight } from 'lucide-react';
+import { Stat, Chip, PageLoader, Button } from '../components/ui';
+import { getSessionGreeting, splitGreeting } from '../utils/greetings';
 
 const ACTIVITY_LABELS = {
   gym: 'Gym', jogging: 'Joggen', cycling: 'Radfahren', swimming: 'Schwimmen',
   yoga: 'Yoga', hiking: 'Wandern', sports: 'Sport', other: 'Sonstiges'
 };
 
-// Erdfarbige Akzente – kein Blau/Violett
-const ACCENT = {
-  terracotta: 'text-brand-300   bg-brand-500/20',
-  sage:       'text-green-300   bg-green-600/20',
-  ocher:      'text-amber-300   bg-amber-500/20',
-  rose:       'text-rose-300    bg-rose-500/20',
-};
-
-function StatCard({ icon: Icon, label, value, sub, accent = 'terracotta', to }) {
-  const cls = ACCENT[accent];
-  const inner = (
-    <div className="card p-5 hover:bg-white/[.1] transition-all">
-      <div className={`w-10 h-10 rounded-xl flex items-center justify-center mb-3 ${cls}`}>
-        <Icon size={18} />
+function SectionCard({ icon: Icon, title, linkTo, linkLabel = 'Alle', children }) {
+  return (
+    <div className="card p-5">
+      <div className="flex items-center justify-between mb-4">
+        <h2 className="display text-lg flex items-center gap-2">
+          <Icon size={15} className="text-brand-500" />
+          {title}
+        </h2>
+        {linkTo && (
+          <Link
+            to={linkTo}
+            className="flex items-center gap-1 text-xs font-semibold text-brand-600 hover:text-brand-700 transition-colors"
+          >
+            {linkLabel} <ArrowRight size={12} />
+          </Link>
+        )}
       </div>
-      <p className="text-xs text-white/40 uppercase tracking-wider font-medium">{label}</p>
-      <p className="text-2xl font-semibold text-white mt-1">{value}</p>
-      {sub && <p className="text-xs text-white/30 mt-1">{sub}</p>}
+      {children}
     </div>
   );
-  return to ? <Link to={to} className="block">{inner}</Link> : inner;
 }
 
 export default function Dashboard() {
   const { user } = useAuth();
   const [data, setData] = useState({ activities: [], weight: null, goals: [] });
   const [loading, setLoading] = useState(true);
+  // Stable for the whole browser-tab session; rotates in a new tab,
+  // after logout, or when the time of day moves into the next slot.
+  const [greeting] = useState(() => splitGreeting(getSessionGreeting(new Date())));
 
   const now = new Date();
   const weekStart = startOfWeek(now, { weekStartsOn: 1 });
@@ -68,159 +72,135 @@ export default function Dashboard() {
   }, []);
 
   const todayActivities = data.activities.filter(a => isToday(parseISO(a.date)));
-  const hour = now.getHours();
-  const greeting = hour < 12 ? 'Guten Morgen' : hour < 18 ? 'Guten Tag' : 'Guten Abend';
+  const { before, after } = greeting;
 
-  if (loading) return (
-    <div className="flex items-center justify-center py-24">
-      <div className="w-6 h-6 border-2 border-white/20 border-t-brand-400 rounded-full animate-spin" />
-    </div>
-  );
+  if (loading) return <PageLoader />;
 
   return (
     <div className="space-y-8">
-      {/* Header */}
-      <div>
-        <p className="text-xs text-white/40 uppercase tracking-wider font-medium">
+      {/* Time-aware greeting — phrases rotate daily per time slot */}
+      <header>
+        <p className="text-[11px] text-ink-400 uppercase tracking-[0.14em] font-semibold mb-1.5">
           {format(now, 'EEEE, d. MMMM yyyy', { locale: de })}
         </p>
-        <h1 className="text-3xl font-bold text-white mt-1">
-          {greeting},{' '}
-          <span className="bg-gradient-to-r from-brand-300 via-amber-200 to-orange-200 bg-clip-text text-transparent">
+        <h1 className="display text-3xl sm:text-[2.5rem] sm:leading-tight">
+          {before}
+          <span className="italic font-normal text-brand-600">
             {user?.name?.split(' ')[0]}
           </span>
+          {after}
         </h1>
-      </div>
+      </header>
 
       {/* Stats */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-        <StatCard
+        <Stat
           icon={Dumbbell}
           label="Diese Woche"
           value={data.activities.length}
           sub="Aktivitäten"
-          accent="terracotta"
+          tone="clay"
           to="/activities"
         />
-        <StatCard
+        <Stat
           icon={Scale}
           label="Gewicht"
           value={data.weight ? `${data.weight.weight} ${data.weight.unit}` : '–'}
           sub={data.weight ? format(parseISO(data.weight.date), 'd. MMM', { locale: de }) : 'Nicht eingetragen'}
-          accent="sage"
+          tone="sage"
           to="/weight"
         />
-        <StatCard
+        <Stat
           icon={Target}
           label="Ziele"
           value={data.goals.length}
           sub="Aktive Ziele"
-          accent="ocher"
+          tone="amber"
           to="/goals"
         />
-        <StatCard
+        <Stat
           icon={Calendar}
           label="Heute"
           value={todayActivities.length}
           sub="Aktivitäten heute"
-          accent="rose"
+          tone="rose"
         />
       </div>
 
       {/* Content grid */}
       <div className="grid lg:grid-cols-2 gap-4">
-        <div className="card p-5">
-          <div className="flex items-center justify-between mb-5">
-            <h2 className="text-sm font-semibold text-white/80 flex items-center gap-2">
-              <TrendingUp size={15} className="text-brand-300" />
-              Letzte Aktivitäten
-            </h2>
-            <Link to="/activities" className="text-xs text-brand-300/70 hover:text-brand-300 transition-colors">
-              Alle →
-            </Link>
-          </div>
+        <SectionCard icon={TrendingUp} title="Letzte Aktivitäten" linkTo="/activities">
           {data.activities.length === 0 ? (
-            <p className="text-white/30 text-sm py-6 text-center">Keine Aktivitäten diese Woche</p>
+            <p className="text-ink-400 text-sm py-6 text-center">Keine Aktivitäten diese Woche</p>
           ) : (
-            <div className="divide-y divide-white/[.06]">
+            <div className="divide-hairline">
               {data.activities.slice(0, 5).map(a => (
                 <div key={a._id} className="flex items-center justify-between py-3 first:pt-0 last:pb-0">
                   <div>
-                    <p className="text-sm text-white/85">
+                    <p className="text-sm font-medium text-ink-800">
                       {ACTIVITY_LABELS[a.activityType] || a.activityType}
                     </p>
-                    <p className="text-xs text-white/35 mt-0.5">
+                    <p className="text-xs text-ink-400 mt-0.5">
                       {format(parseISO(a.date), 'E, d. MMM', { locale: de })}
                     </p>
                   </div>
                   <div className="text-right">
-                    {a.duration && <p className="text-sm text-white/60">{a.duration} min</p>}
-                    {a.distance && <p className="text-xs text-white/35">{a.distance} km</p>}
+                    {a.duration && <p className="text-sm text-ink-600">{a.duration} min</p>}
+                    {a.distance && <p className="text-xs text-ink-400">{a.distance} km</p>}
                   </div>
                 </div>
               ))}
             </div>
           )}
-        </div>
+        </SectionCard>
 
-        <div className="card p-5">
-          <div className="flex items-center justify-between mb-5">
-            <h2 className="text-sm font-semibold text-white/80 flex items-center gap-2">
-              <Target size={15} className="text-amber-300" />
-              Ziele
-            </h2>
-            <Link to="/goals" className="text-xs text-brand-300/70 hover:text-brand-300 transition-colors">
-              Alle →
-            </Link>
-          </div>
+        <SectionCard icon={Target} title="Ziele" linkTo="/goals">
           {data.goals.length === 0 ? (
             <div className="text-center py-6">
-              <p className="text-white/30 text-sm mb-4">Noch keine Ziele definiert</p>
-              <Link to="/goals" className="btn-primary text-sm py-1.5 px-4 inline-block">
-                Ziel erstellen
+              <p className="text-ink-400 text-sm mb-4">Noch keine Ziele definiert</p>
+              <Link to="/goals">
+                <Button size="sm">Ziel erstellen</Button>
               </Link>
             </div>
           ) : (
-            <div className="divide-y divide-white/[.06]">
+            <div className="divide-hairline">
               {data.goals.slice(0, 4).map(g => (
                 <div key={g._id} className="py-3 first:pt-0 last:pb-0">
                   <div className="flex items-center justify-between gap-2">
-                    <p className="text-sm text-white/85 truncate">{g.name}</p>
-                    <span className={`badge flex-shrink-0 ${
-                      g.type.startsWith('weekly')
-                        ? 'bg-brand-500/20 text-brand-300'
-                        : 'bg-amber-500/20 text-amber-300'
-                    }`}>
-                      {g.type.startsWith('weekly') ? 'Wöchentlich' : 'Langfristig'}
-                    </span>
+                    <p className="text-sm font-medium text-ink-800 truncate">{g.name}</p>
+                    <Chip variant="soft" color={g.type.startsWith('long-term') ? 'amber' : 'olive'} className="flex-shrink-0">
+                      {g.type.startsWith('long-term') ? 'Langfristig' : 'Periodisch'}
+                    </Chip>
                   </div>
-                  <p className="text-xs text-white/30 mt-0.5">
+                  <p className="text-xs text-ink-400 mt-0.5">
                     {g.condition === 'min' ? 'Min.' : g.condition === 'max' ? 'Max.' : 'Genau'} {g.targetValue} {g.unitSymbol || ''}
                   </p>
                 </div>
               ))}
             </div>
           )}
-        </div>
+        </SectionCard>
       </div>
 
-      {/* Schnellzugriff */}
+      {/* Quick access */}
       <div className="card p-5">
-        <h2 className="text-sm font-semibold text-white/80 mb-4">Schnellzugriff</h2>
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+        <h2 className="display text-lg mb-4">Schnellzugriff</h2>
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
           {[
-            { to: '/activities', label: 'Aktivität loggen',   icon: Dumbbell, color: 'text-brand-300' },
-            { to: '/planner',    label: 'Plan erstellen',     icon: Calendar, color: 'text-amber-300' },
-            { to: '/habits',     label: 'Gewohnheit tracken', icon: Sparkles, color: 'text-green-300' },
-            { to: '/weight',     label: 'Gewicht eintragen',  icon: Scale,    color: 'text-rose-300' },
-          ].map(({ to, label, icon: Icon, color }) => (
+            { to: '/activities', label: 'Aktivität loggen',   icon: Dumbbell, tone: 'bg-brand-50 text-brand-600' },
+            { to: '/planner',    label: 'Woche planen',       icon: Calendar, tone: 'bg-ocher-100 text-ocher-600' },
+            { to: '/habits',     label: 'Gewohnheit tracken', icon: Sparkles, tone: 'bg-sage-100 text-sage-600' },
+            { to: '/weight',     label: 'Gewicht eintragen',  icon: Scale,    tone: 'bg-rose-50 text-rose-600' },
+          ].map(({ to, label, icon: Icon, tone }) => (
             <Link
               key={to}
               to={to}
-              className="flex flex-col items-center gap-2 p-4 bg-white/[.05] hover:bg-white/[.1] rounded-xl transition-all text-center border border-white/[.06]"
+              className="panel card-hover flex flex-col items-center gap-2.5 p-4 text-center"
             >
-              <Icon size={20} className={color} />
-              <span className="text-xs text-white/60 font-medium leading-tight">{label}</span>
+              <span className={`w-9 h-9 rounded-full flex items-center justify-center ${tone}`}>
+                <Icon size={16} />
+              </span>
+              <span className="text-xs text-ink-600 font-medium leading-tight">{label}</span>
             </Link>
           ))}
         </div>

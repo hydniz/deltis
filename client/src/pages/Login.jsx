@@ -2,12 +2,12 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { APP_NAME, APP_SLOGAN } from '../config/branding';
-import { Activity, AlertCircle, Eye, EyeOff } from 'lucide-react';
+import { DeltaMark } from '../components/Logo';
+import { Button, Field, Input, PasswordInput, Alert } from '../components/ui';
 
 export default function Login() {
   const [identifier, setIdentifier] = useState('');
   const [password, setPassword] = useState('');
-  const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const { login } = useAuth();
@@ -41,80 +41,57 @@ export default function Login() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center p-4">
-      <div className="w-full max-w-sm">
+    <div className="relative min-h-screen flex items-center justify-center p-4 overflow-hidden">
+      {/* Soft halo behind the card */}
+      <div aria-hidden="true" className="absolute inset-0 pointer-events-none">
+        <div className="orb w-[22rem] h-[22rem] sm:w-[30rem] sm:h-[30rem] left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 bg-white/80" />
+        <div className="orb w-56 h-56 left-[10%] top-[10%] bg-brand-200/50" />
+        <div className="orb w-56 h-56 right-[8%] bottom-[12%] bg-rose-200/45" />
+      </div>
+
+      <div className="relative w-full max-w-sm">
 
         {/* Branding */}
         <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-gradient-to-br from-brand-500 to-brand-700 mb-5 shadow-2xl shadow-brand-900/50">
-            <Activity size={28} className="text-white" />
+          <div className="flex justify-center mb-5">
+            <DeltaMark size="lg" />
           </div>
-          <h1 className="text-3xl font-bold text-white mb-1">
-            <span className="bg-gradient-to-r from-brand-300 via-amber-200 to-orange-300 bg-clip-text text-transparent">
-              {APP_NAME}
-            </span>
-          </h1>
-          <p className="text-white/45 text-sm">{APP_SLOGAN}</p>
+          <h1 className="display text-4xl mb-1.5">{APP_NAME}</h1>
+          <p className="text-ink-400 text-sm">{APP_SLOGAN}</p>
         </div>
 
-        {/* Glass form card */}
-        <div className="card p-6">
+        <div className="card rounded-3xl p-6 sm:p-7">
           <form onSubmit={handleSubmit} className="space-y-4">
-            <div>
-              <label className="label">Benutzername</label>
-              <input
+            <Field label="Benutzername">
+              <Input
                 type="text"
                 value={identifier}
                 onChange={e => setIdentifier(e.target.value)}
-                className="input"
                 placeholder="Dein Benutzername"
                 autoComplete="username"
                 autoFocus
               />
-            </div>
+            </Field>
 
-            <div>
-              <label className="label">Passwort</label>
-              <div className="relative">
-                <input
-                  type={showPassword ? 'text' : 'password'}
-                  value={password}
-                  onChange={e => setPassword(e.target.value)}
-                  className="input pr-10"
-                  placeholder="Passwort"
-                  autoComplete="current-password"
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowPassword(v => !v)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-white/30 hover:text-white/70 transition-colors"
-                  tabIndex={-1}
-                >
-                  {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
-                </button>
-              </div>
-              <p className="text-xs text-white/25 mt-1.5">
-                Noch kein Passwort? Lass das Feld leer.
-              </p>
-            </div>
+            <Field label="Passwort" hint="Noch kein Passwort? Lass das Feld leer.">
+              <PasswordInput
+                value={password}
+                onChange={e => setPassword(e.target.value)}
+                placeholder="Passwort"
+                autoComplete="current-password"
+              />
+            </Field>
 
-            {error && (
-              <div className="flex items-center gap-2 text-red-300 text-sm bg-red-500/10 border border-red-400/20 rounded-xl px-3 py-2.5">
-                <AlertCircle size={14} className="flex-shrink-0" />
-                {error}
-              </div>
-            )}
+            {error && <Alert tone="error">{error}</Alert>}
 
-            <button
+            <Button
               type="submit"
-              disabled={loading || !identifier.trim()}
-              className="btn-primary w-full py-2.5 flex items-center justify-center gap-2 mt-1"
+              loading={loading}
+              disabled={!identifier.trim()}
+              className="w-full !py-3 mt-1"
             >
-              {loading && (
-                <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-              )}
               Anmelden
-            </button>
+            </Button>
           </form>
         </div>
       </div>

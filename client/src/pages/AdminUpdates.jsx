@@ -2,20 +2,21 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import {
   RefreshCw, AlertTriangle, CheckCircle, Info, Package,
   GitBranch, ExternalLink, Loader2, Play, Undo2, Database,
-  Container, Terminal, Server, ShieldCheck, Settings2,
+  Container, Terminal, Server, Settings2,
 } from 'lucide-react';
 import api from '../utils/api';
 import AdminPageHeader from '../components/admin/AdminPageHeader';
 import SectionCard from '../components/admin/SectionCard';
 import ErrorBanner from '../components/admin/ErrorBanner';
 import ConfigRow from '../components/admin/ConfigRow';
+import { Button, Alert } from '../components/ui';
 
 // Update-mode descriptions
 
 const MODES = {
   'docker-socket': {
     icon: Container,
-    tone: 'green',
+    tone: 'success',
     title: 'Docker mit voller Kontrolle',
     text: 'Der Docker-Socket ist eingebunden. Updates laufen vollautomatisch: '
       + 'Backup → neues Image pullen → Container tauschen. Schlägt etwas fehl, '
@@ -24,7 +25,7 @@ const MODES = {
   },
   'docker-manual': {
     icon: Terminal,
-    tone: 'amber',
+    tone: 'warning',
     title: 'Docker ohne Kontrolle',
     text: 'Die App läuft in Docker, hat aber keinen Zugriff auf den Docker-Socket. '
       + 'Das Update muss manuell auf dem Host durchgeführt werden:',
@@ -32,7 +33,7 @@ const MODES = {
   },
   host: {
     icon: Server,
-    tone: 'slate',
+    tone: 'info',
     title: 'Host-Installation',
     text: 'Die App läuft direkt auf dem Host. Updates laufen über Git: '
       + 'Backup → Checkout der Zielversion → Neuinstallation → Neustart. '
@@ -41,32 +42,21 @@ const MODES = {
   },
 };
 
-const TONE_CLASSES = {
-  green: 'bg-green-500/10 border-green-500/30 text-green-300',
-  amber: 'bg-amber-500/10 border-amber-500/30 text-amber-300',
-  slate: 'bg-slate-500/10 border-slate-500/30 text-slate-300',
-};
-
 function ModePanel({ mode, dockerImage }) {
   const cfg = MODES[mode];
   if (!cfg) return null;
-  const Icon = cfg.icon;
   return (
-    <div className={`flex items-start gap-3 border rounded-xl px-4 py-4 ${TONE_CLASSES[cfg.tone]}`}>
-      <Icon size={18} className="shrink-0 mt-0.5" />
-      <div className="space-y-2 min-w-0">
-        <p className="text-sm font-semibold">{cfg.title}</p>
-        <p className="text-sm opacity-80">{cfg.text}</p>
-        {mode === 'docker-manual' && (
-          <pre className="bg-slate-950 border border-slate-800 rounded-lg px-3 py-2.5 text-xs font-mono text-slate-300 overflow-x-auto">
+    <Alert tone={cfg.tone} title={cfg.title}>
+      <p>{cfg.text}</p>
+      {mode === 'docker-manual' && (
+        <pre className="bg-ink-900 text-paper-100 rounded-lg px-3 py-2.5 mt-2 text-xs font-mono overflow-x-auto">
 {`docker pull ${dockerImage || 'hydniz/deltis:latest'}
 cd <deltis-verzeichnis>   # dort liegt docker-compose.yml
 ./backup.sh               # Datensicherung vor dem Update!
 docker compose up -d --no-build --force-recreate`}
-          </pre>
-        )}
-      </div>
-    </div>
+        </pre>
+      )}
+    </Alert>
   );
 }
 
@@ -75,15 +65,15 @@ docker compose up -d --no-build --force-recreate`}
 function RollbackPanel({ updateState, onRollback, rollbackRunning }) {
   if (!updateState || updateState.phase !== 'failed') return null;
   return (
-    <div className="bg-red-500/10 border border-red-500/30 rounded-xl px-4 py-4 space-y-3">
+    <div className="bg-red-50 border border-red-200 rounded-xl px-4 py-4 space-y-3">
       <div className="flex items-start gap-3">
-        <AlertTriangle size={18} className="text-red-400 shrink-0 mt-0.5" />
+        <AlertTriangle size={18} className="text-red-500 shrink-0 mt-0.5" />
         <div className="space-y-1 min-w-0">
-          <p className="text-sm font-semibold text-red-300">Letztes Update fehlgeschlagen</p>
+          <p className="text-sm font-semibold text-red-800">Letztes Update fehlgeschlagen</p>
           {updateState.error && (
-            <p className="text-sm text-red-300/80 break-words">{updateState.error}</p>
+            <p className="text-sm text-red-700/80 break-words">{updateState.error}</p>
           )}
-          <p className="text-sm text-red-300/70">
+          <p className="text-sm text-red-700/70">
             {updateState.recovered
               ? 'Die vorherige Version wurde automatisch wiederhergestellt und läuft.'
               : 'Automatische Wiederherstellung war nicht möglich – bitte Rollback starten.'}
@@ -92,27 +82,29 @@ function RollbackPanel({ updateState, onRollback, rollbackRunning }) {
       </div>
       <div className="flex flex-wrap gap-2">
         {updateState.rollbackAvailable && (
-          <button
+          <Button
+            variant="danger"
+            size="sm"
+            loading={rollbackRunning}
+            icon={Undo2}
             onClick={() => onRollback(false)}
-            disabled={rollbackRunning}
-            className="flex items-center gap-2 px-3 py-2 rounded-xl text-sm font-medium bg-red-500/20 border border-red-500/40 text-red-200 hover:bg-red-500/30 disabled:opacity-60 transition-colors"
           >
-            {rollbackRunning ? <Loader2 size={14} className="animate-spin" /> : <Undo2 size={14} />}
             Rollback (nur App)
-          </button>
+          </Button>
         )}
         {updateState.backupFile && (
-          <button
+          <Button
+            variant="danger"
+            size="sm"
+            loading={rollbackRunning}
+            icon={Database}
             onClick={() => onRollback(true)}
-            disabled={rollbackRunning}
-            className="flex items-center gap-2 px-3 py-2 rounded-xl text-sm font-medium bg-red-500/20 border border-red-500/40 text-red-200 hover:bg-red-500/30 disabled:opacity-60 transition-colors"
           >
-            {rollbackRunning ? <Loader2 size={14} className="animate-spin" /> : <Database size={14} />}
             Rollback + Datenbank wiederherstellen
-          </button>
+          </Button>
         )}
       </div>
-      <p className="text-xs text-red-300/60">
+      <p className="text-xs text-red-700/60">
         „+ Datenbank" spielt die Sicherung von vor dem Update zurück – Änderungen
         seit dem Update gehen dabei verloren.
       </p>
@@ -153,13 +145,13 @@ const CHANNELS = [
 function ChannelBadge({ channel }) {
   const cfg = CHANNELS.find(c => c.value === channel) || CHANNELS[0];
   const colors = {
-    green:  'bg-green-500/15 text-green-400 border-green-500/30',
-    blue:   'bg-blue-500/15 text-blue-400 border-blue-500/30',
-    orange: 'bg-orange-500/15 text-orange-400 border-orange-500/30',
-    red:    'bg-red-500/15 text-red-400 border-red-500/30',
+    green:  'bg-emerald-50 text-emerald-700 border-emerald-200',
+    blue:   'bg-sage-100 text-sage-700 border-sage-200',
+    orange: 'bg-ocher-100 text-ocher-700 border-ocher-200',
+    red:    'bg-red-50 text-red-700 border-red-200',
   };
   return (
-    <span className={`text-xs font-semibold px-2 py-0.5 rounded-full border ${colors[cfg.color]}`}>
+    <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full border ${colors[cfg.color]}`}>
       {cfg.label}
     </span>
   );
@@ -174,19 +166,19 @@ function UpdateLog({ lines }) {
   }, [lines]);
 
   return (
-    <div className="bg-slate-950 rounded-xl border border-slate-800 p-4 h-56 overflow-y-auto font-mono text-xs">
+    <div className="bg-ink-900 rounded-xl p-4 h-56 overflow-y-auto font-mono text-xs">
       {lines.length === 0 && (
-        <p className="text-slate-600 italic">Bereit.</p>
+        <p className="text-ink-400 italic">Bereit.</p>
       )}
       {lines.map((line, i) => (
         <div
           key={i}
           className={`leading-5 whitespace-pre-wrap ${
             line.startsWith('✗') ? 'text-red-400' :
-            line.startsWith('✓') ? 'text-green-400' :
+            line.startsWith('✓') ? 'text-emerald-400' :
             line.startsWith('⚠') ? 'text-amber-400' :
             line.startsWith('→') ? 'text-brand-300' :
-            'text-slate-400'
+            'text-paper-200/70'
           }`}
         >
           {line || ' '}
@@ -332,7 +324,7 @@ export default function AdminUpdates() {
   });
 
   return (
-    <div className="p-6 max-w-3xl mx-auto space-y-6">
+    <div className="space-y-6">
       <AdminPageHeader
         icon={RefreshCw}
         title="Updates (OTA)"
@@ -344,7 +336,7 @@ export default function AdminUpdates() {
                 href={status.repoUrl}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="text-brand-400 hover:underline inline-flex items-center gap-0.5"
+                className="text-brand-600 hover:underline inline-flex items-center gap-0.5"
               >
                 {status.repoUrl.replace(/^https?:\/\//, '')}
                 <ExternalLink size={11} />
@@ -366,59 +358,53 @@ export default function AdminUpdates() {
 
       {/* Last update succeeded */}
       {status?.updateState?.phase === 'success' && (
-        <div className="flex items-center gap-2.5 bg-green-500/10 border border-green-500/25 rounded-xl px-4 py-3">
-          <ShieldCheck size={16} className="text-green-400 shrink-0" />
-          <p className="text-sm text-green-300/90">
-            Letztes Update erfolgreich
-            {status.updateState.fromVersion && status.updateState.toVersion && (
-              <> ({status.updateState.fromVersion} → {status.updateState.toVersion})</>
-            )}
-            . Migrationen abgeschlossen.
-          </p>
-        </div>
+        <Alert tone="success">
+          Letztes Update erfolgreich
+          {status.updateState.fromVersion && status.updateState.toVersion && (
+            <> ({status.updateState.fromVersion} → {status.updateState.toVersion})</>
+          )}
+          . Migrationen abgeschlossen.
+        </Alert>
       )}
 
       {/* Repo not configured yet → point to the settings card below */}
       {notConfigured && (
-        <div className="flex items-start gap-2.5 bg-amber-500/10 border border-amber-500/25 rounded-xl px-4 py-3">
-          <Info size={16} className="text-amber-400 shrink-0 mt-0.5" />
-          <p className="text-sm text-amber-300/90">
-            Es ist noch kein GitHub-Repository konfiguriert. Trage unter{' '}
-            <strong>Einstellungen</strong> (unten) eine Repository-URL ein,
-            damit nach Updates gesucht werden kann.
-          </p>
-        </div>
+        <Alert tone="warning">
+          Es ist noch kein GitHub-Repository konfiguriert. Trage unter{' '}
+          <strong>Einstellungen</strong> (unten) eine Repository-URL ein,
+          damit nach Updates gesucht werden kann.
+        </Alert>
       )}
 
       {/* Version info */}
       {loadingStatus ? (
         <div className="card p-6 flex items-center justify-center">
-          <Loader2 size={20} className="animate-spin text-slate-500" />
+          <Loader2 size={20} className="animate-spin text-ink-300" />
         </div>
       ) : statusError ? (
         <ErrorBanner message={statusError} />
       ) : status && (
         <SectionCard icon={Package} title="Versionsinfo">
-          <div className="divide-y divide-slate-800">
-            <div className="px-4 py-3 flex items-center justify-between">
-              <span className="text-sm text-slate-400">Installiert</span>
+          <div>
+            <div className="px-4 py-3 flex items-center justify-between border-b hairline">
+              <span className="text-sm text-ink-500">Installiert</span>
               <div className="flex items-center gap-2">
-                <code className="text-sm font-mono text-white">v{status.currentVersion}</code>
+                <code className="text-sm font-mono text-ink-900">v{status.currentVersion}</code>
                 {status.currentCommit && (
-                  <code className="text-xs font-mono text-slate-500">({status.currentCommit})</code>
+                  <code className="text-xs font-mono text-ink-400">({status.currentCommit})</code>
                 )}
               </div>
             </div>
-            <div className="px-4 py-3 flex items-center justify-between">
-              <span className="text-sm text-slate-400">
+            <div className="px-4 py-3 flex items-center justify-between border-b hairline">
+              <span className="text-sm text-ink-500 flex items-center gap-2">
                 Verfügbar <ChannelBadge channel={status.channel} />
               </span>
               <div className="flex items-center gap-2">
                 {status.checkError ? (
-                  <span className="text-xs text-red-400">{status.checkError}</span>
+                  <span className="text-xs text-red-600">{status.checkError}</span>
                 ) : status.latest ? (
                   <>
-                    <code className="text-sm font-mono text-white">
+                    <code className="text-sm font-mono text-ink-900">
                       {status.channel === 'main'
                         ? status.latest.commitSha
                         : `v${status.latest.version}`}
@@ -428,34 +414,34 @@ export default function AdminUpdates() {
                         href={status.latest.releaseUrl}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="text-brand-400 hover:text-brand-300"
+                        className="text-brand-600 hover:text-brand-700"
                       >
                         <ExternalLink size={12} />
                       </a>
                     )}
                   </>
                 ) : (
-                  <span className="text-xs text-slate-600">—</span>
+                  <span className="text-xs text-ink-300">—</span>
                 )}
               </div>
             </div>
             <div className="px-4 py-3 flex items-center justify-between">
-              <span className="text-sm text-slate-400">Status</span>
+              <span className="text-sm text-ink-500">Status</span>
               <div>
                 {status.updateAvailable === true && (
-                  <span className="flex items-center gap-1.5 text-sm text-amber-400">
+                  <span className="flex items-center gap-1.5 text-sm font-medium text-ocher-600">
                     <AlertTriangle size={14} />
                     Update verfügbar
                   </span>
                 )}
                 {status.updateAvailable === false && (
-                  <span className="flex items-center gap-1.5 text-sm text-green-400">
+                  <span className="flex items-center gap-1.5 text-sm font-medium text-emerald-600">
                     <CheckCircle size={14} />
                     Aktuell
                   </span>
                 )}
                 {status.updateAvailable === null && (
-                  <span className="text-sm text-slate-500">Nicht bestimmbar</span>
+                  <span className="text-sm text-ink-400">Nicht bestimmbar</span>
                 )}
               </div>
             </div>
@@ -466,24 +452,24 @@ export default function AdminUpdates() {
       {/* Release channel selector – single source of truth for the channel */}
       <SectionCard icon={GitBranch} title="Release-Kanal">
         <div className="p-4 space-y-3">
-          <div className="grid grid-cols-2 gap-2">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
             {CHANNELS.map(ch => (
               <button
                 key={ch.value}
                 onClick={() => saveChannel(ch.value)}
                 disabled={savingChannel}
-                className={`text-left px-3 py-3 rounded-xl border transition-all ${
+                className={`text-left px-3.5 py-3 rounded-xl border transition-all ${
                   selectedChannel === ch.value
                     ? ch.warn
-                      ? 'bg-red-500/15 border-red-500/40 text-red-300'
-                      : 'bg-brand-500/15 border-brand-500/40 text-brand-300'
-                    : 'bg-slate-800/40 border-slate-700 text-slate-400 hover:border-slate-600'
+                      ? 'bg-red-50 border-red-300 text-red-800'
+                      : 'bg-brand-50 border-brand-300 text-ink-900'
+                    : 'bg-paper-50 border-paper-200 text-ink-500 hover:border-ink-200'
                 }`}
               >
                 <div className="flex items-center justify-between mb-1">
                   <span className="text-sm font-semibold">{ch.label}</span>
-                  {ch.warn && <AlertTriangle size={13} className="text-red-400" />}
-                  {selectedChannel === ch.value && <CheckCircle size={13} className="text-brand-400" />}
+                  {ch.warn && <AlertTriangle size={13} className="text-red-500" />}
+                  {selectedChannel === ch.value && !ch.warn && <CheckCircle size={13} className="text-brand-500" />}
                 </div>
                 <p className="text-xs opacity-70 leading-snug">{ch.description}</p>
               </button>
@@ -491,17 +477,14 @@ export default function AdminUpdates() {
           </div>
 
           {channelConfig.warn && (
-            <div className="flex items-start gap-2 bg-red-500/10 border border-red-500/25 rounded-xl px-3 py-3">
-              <AlertTriangle size={14} className="text-red-400 shrink-0 mt-0.5" />
-              <p className="text-xs text-red-300/80">
-                Der Main-Branch enthält unveröffentlichten Code und kann Fehler oder
-                Breaking Changes enthalten. Nicht für Produktivsysteme geeignet.
-              </p>
-            </div>
+            <Alert tone="error">
+              Der Main-Branch enthält unveröffentlichten Code und kann Fehler oder
+              Breaking Changes enthalten. Nicht für Produktivsysteme geeignet.
+            </Alert>
           )}
 
           {channelSaved && (
-            <div className="flex items-center gap-2 text-xs text-green-400">
+            <div className="flex items-center gap-2 text-xs font-medium text-emerald-600">
               <CheckCircle size={13} />
               Kanal gespeichert.
             </div>
@@ -512,17 +495,17 @@ export default function AdminUpdates() {
       {/* Update action */}
       <SectionCard icon={Play} title="Update starten">
         <div className="p-4 space-y-4">
-          <div className="flex items-start gap-2 text-sm text-slate-400">
+          <div className="flex items-start gap-2 text-sm text-ink-500">
             <Info size={15} className="shrink-0 mt-0.5" />
             <span>
               Vor jedem Update wird automatisch eine Datensicherung erstellt.
               Schlägt die Sicherung fehl, wird das Update <strong>nicht</strong> durchgeführt.
-              Jeder Schritt wird protokolliert (Log unten und in <code>backups/update-logs/</code>).
+              Jeder Schritt wird protokolliert (Log unten und in <code className="font-mono text-xs">backups/update-logs/</code>).
             </span>
           </div>
 
           {modeConfig?.canUpdate === false ? (
-            <div className="flex items-start gap-2 text-sm text-amber-400">
+            <div className="flex items-start gap-2 text-sm text-ocher-700">
               <AlertTriangle size={15} className="shrink-0 mt-0.5" />
               <span>
                 In dieser Umgebung ist kein automatisches Update möglich –
@@ -530,16 +513,14 @@ export default function AdminUpdates() {
               </span>
             </div>
           ) : (
-            <button
+            <Button
+              icon={Play}
+              loading={starting || updateRunning}
+              disabled={rollbackRunning || notConfigured}
               onClick={startUpdate}
-              disabled={starting || updateRunning || rollbackRunning || notConfigured}
-              className="btn-primary flex items-center gap-2 disabled:opacity-60"
             >
-              {(starting || updateRunning)
-                ? <Loader2 size={16} className="animate-spin" />
-                : <Play size={16} />}
               {updateRunning ? 'Update läuft …' : 'Update starten'}
-            </button>
+            </Button>
           )}
 
           <UpdateLog lines={logLines} />
@@ -547,7 +528,7 @@ export default function AdminUpdates() {
           <button
             onClick={fetchStatus}
             disabled={loadingStatus}
-            className="text-xs text-slate-500 hover:text-slate-300 flex items-center gap-1.5 transition-colors"
+            className="text-xs text-ink-400 hover:text-ink-700 flex items-center gap-1.5 transition-colors"
           >
             <RefreshCw size={12} className={loadingStatus ? 'animate-spin' : ''} />
             Status aktualisieren
@@ -559,7 +540,7 @@ export default function AdminUpdates() {
           everything update-related lives on one page */}
       {visibleOtaConfigs.length > 0 && (
         <SectionCard icon={Settings2} title="Einstellungen">
-          <div className="divide-y divide-slate-800">
+          <div>
             {visibleOtaConfigs.map(entry => (
               <ConfigRow
                 key={entry.key}

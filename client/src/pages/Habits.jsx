@@ -2,10 +2,15 @@ import { useState, useEffect, useCallback } from 'react';
 import api from '../utils/api';
 import { format, subDays, parseISO, startOfDay } from 'date-fns';
 import { de } from 'date-fns/locale';
-import { Plus, Trash2, TrendingUp, Sparkles, X, Settings2, Check, Pencil, ChevronUp } from 'lucide-react';
+import { Plus, Trash2, TrendingUp, Sparkles, Settings2, Check, Pencil, ChevronUp } from 'lucide-react';
 import {
   ResponsiveContainer, LineChart, Line, XAxis, YAxis, Tooltip, CartesianGrid
 } from 'recharts';
+import {
+  PageHeader, Button, Field, Input, Select, Checkbox, Modal, IconButton,
+  EmptyState, PageLoader, Spinner, CHART, chipColorFor,
+  TONE_BUBBLE, TONE_ACCENT_BORDER,
+} from '../components/ui';
 
 // Editable row for custom habits
 
@@ -33,65 +38,56 @@ function CustomHabitRow({ def, selected, onToggle, onDelete, onUpdate }) {
   };
 
   return (
-    <div className="rounded-xl hover:bg-white/[.06] transition-colors">
-      <div className="flex items-center gap-3 p-3">
-        <label className="flex items-center gap-3 flex-1 cursor-pointer">
-          <div className={`w-5 h-5 rounded-md border-2 flex items-center justify-center flex-shrink-0 transition-colors ${
-            selected ? 'bg-brand-600 border-brand-600' : 'border-slate-600'
-          }`}>
-            {selected && <Check size={12} className="text-white" strokeWidth={3} />}
-          </div>
-          <input type="checkbox" checked={selected} onChange={onToggle} className="sr-only" />
-          <div className="flex-1 min-w-0">
-            <p className="text-sm font-medium text-slate-200">{def.name}</p>
-            <p className="text-xs text-slate-500">{def.unitSymbol}</p>
-          </div>
-        </label>
-        <button
+    <div className="rounded-xl hover:bg-paper-50 transition-colors">
+      <div className="flex items-center gap-1 p-2.5">
+        <Checkbox
+          checked={selected}
+          onChange={onToggle}
+          label={def.name}
+          description={def.unitSymbol}
+          className="flex-1"
+        />
+        <IconButton
+          icon={editing ? ChevronUp : Pencil}
+          label="Bearbeiten"
+          tone="brand"
+          size={14}
+          active={editing}
           onClick={() => setEditing(v => !v)}
-          className="text-slate-500 hover:text-brand-400 transition-colors flex-shrink-0 p-1"
-        >
-          {editing ? <ChevronUp size={15} /> : <Pencil size={14} />}
-        </button>
-        <button onClick={onDelete} className="text-slate-600 hover:text-red-400 transition-colors flex-shrink-0">
-          <Trash2 size={15} />
-        </button>
+        />
+        <IconButton icon={Trash2} label="Löschen" tone="danger" size={14} onClick={onDelete} />
       </div>
 
       {editing && (
-        <form onSubmit={e => { e.preventDefault(); handleSave(); }} className="px-3 pb-3 space-y-2 border-t border-slate-700 pt-3 mx-1">
-          <div>
-            <label className="label text-xs">Name</label>
-            <input
-              className="input text-sm"
+        <form
+          onSubmit={e => { e.preventDefault(); handleSave(); }}
+          className="px-3 pb-3 pt-3 space-y-3 border-t hairline mx-1"
+        >
+          <Field label="Name">
+            <Input
               value={form.name}
               onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
               autoFocus
             />
-          </div>
+          </Field>
           <div className="grid grid-cols-2 gap-2">
-            <div>
-              <label className="label text-xs">Einheit</label>
-              <input
-                className="input text-sm"
+            <Field label="Einheit">
+              <Input
                 value={form.unitSymbol}
                 onChange={e => setForm(f => ({ ...f, unitSymbol: e.target.value }))}
                 placeholder="z.B. min, ml"
               />
-            </div>
-            <div>
-              <label className="label text-xs">Typ</label>
-              <select className="input text-sm" value={form.type} onChange={e => setForm(f => ({ ...f, type: e.target.value }))}>
+            </Field>
+            <Field label="Typ">
+              <Select value={form.type} onChange={e => setForm(f => ({ ...f, type: e.target.value }))}>
                 <option value="amount">Menge</option>
                 <option value="duration">Dauer</option>
-              </select>
-            </div>
+              </Select>
+            </Field>
           </div>
-          <div className="flex gap-2 pt-1">
-            <button type="button" onClick={handleCancel} className="btn-secondary flex-1 text-sm py-1.5">Abbrechen</button>
-            <button type="submit" disabled={saving} className="btn-primary flex-1 text-sm py-1.5">
-              {saving ? 'Speichern...' : 'Speichern'}
-            </button>
+          <div className="flex gap-2 pt-0.5">
+            <Button variant="secondary" size="sm" className="flex-1" onClick={handleCancel}>Abbrechen</Button>
+            <Button type="submit" size="sm" className="flex-1" loading={saving}>Speichern</Button>
           </div>
         </form>
       )}
@@ -168,128 +164,102 @@ function ManageHabitsModal({ definitions, onSave, onClose }) {
   const custom = localDefs.filter(d => !d.isPredefined);
 
   return (
-    <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-end sm:items-center justify-center z-50 p-4">
-      <div className="card w-full max-w-md flex flex-col max-h-[90vh]">
-        {/* Header */}
-        <div className="flex items-center justify-between p-5 border-b border-slate-800">
-          <h2 className="text-lg font-semibold text-white">Gewohnheiten verwalten</h2>
-          <button onClick={onClose} className="text-slate-400 hover:text-slate-200"><X size={20} /></button>
+    <Modal
+      onClose={onClose}
+      title="Gewohnheiten verwalten"
+      subtitle="Was möchtest du täglich tracken?"
+      icon={Sparkles}
+      footer={
+        <>
+          <Button variant="secondary" className="flex-1" onClick={onClose}>Abbrechen</Button>
+          <Button className="flex-1" loading={saving} icon={Check} onClick={handleSave}>
+            {selected.size} aktiv – Speichern
+          </Button>
+        </>
+      }
+    >
+      <div className="space-y-6">
+        {/* Predefined */}
+        <div>
+          <p className="label mb-2">Voreingestellt</p>
+          <div className="space-y-0.5">
+            {predefined.map(d => (
+              <div key={d._id} className="rounded-xl hover:bg-paper-50 transition-colors p-2.5">
+                <Checkbox
+                  checked={selected.has(d._id)}
+                  onChange={() => toggle(d._id)}
+                  label={d.name}
+                  description={d.unitSymbol}
+                />
+              </div>
+            ))}
+          </div>
         </div>
 
-        {/* Liste */}
-        <div className="flex-1 overflow-y-auto p-5 space-y-5">
-
-          {/* Vordefinierte */}
+        {/* Custom */}
+        {(custom.length > 0 || showAddForm) && (
           <div>
-            <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">Voreingestellt</p>
-            <div className="space-y-1.5">
-              {predefined.map(d => (
-                <label key={d._id} className="flex items-center gap-3 p-3 rounded-xl cursor-pointer hover:bg-white/[.06] focus-within:ring-1 focus-within:ring-brand-400/50 transition-colors">
-                  <div className={`w-5 h-5 rounded-md border-2 flex items-center justify-center flex-shrink-0 transition-colors ${
-                    selected.has(d._id)
-                      ? 'bg-brand-600 border-brand-600'
-                      : 'border-slate-600'
-                  }`}>
-                    {selected.has(d._id) && <Check size={12} className="text-white" strokeWidth={3} />}
-                  </div>
-                  <input
-                    type="checkbox"
-                    checked={selected.has(d._id)}
-                    onChange={() => toggle(d._id)}
-                    className="sr-only"
-                  />
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium text-slate-200">{d.name}</p>
-                    <p className="text-xs text-slate-500">{d.unitSymbol}</p>
-                  </div>
-                </label>
+            <p className="label mb-2">Eigene</p>
+            <div className="space-y-0.5">
+              {custom.map(d => (
+                <CustomHabitRow
+                  key={d._id}
+                  def={d}
+                  selected={selected.has(d._id)}
+                  onToggle={() => toggle(d._id)}
+                  onDelete={() => handleDelete(d._id)}
+                  onUpdate={handleUpdate}
+                />
               ))}
             </div>
           </div>
+        )}
 
-          {/* Eigene */}
-          {(custom.length > 0 || showAddForm) && (
-            <div>
-              <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">Eigene</p>
-              <div className="space-y-1.5">
-                {custom.map(d => (
-                  <CustomHabitRow
-                    key={d._id}
-                    def={d}
-                    selected={selected.has(d._id)}
-                    onToggle={() => toggle(d._id)}
-                    onDelete={() => handleDelete(d._id)}
-                    onUpdate={handleUpdate}
-                  />
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* Neue Gewohnheit hinzufügen */}
-          {showAddForm ? (
-            <form onSubmit={handleAddHabit} className="bg-white/[.06] border border-white/[.1] rounded-2xl p-4 space-y-3">
-              <p className="text-sm font-semibold text-white">Neue Gewohnheit</p>
-              <div>
-                <label className="label text-xs">Name</label>
-                <input
-                  className="input text-sm"
-                  value={newHabit.name}
-                  onChange={e => setNewHabit(h => ({ ...h, name: e.target.value }))}
-                  placeholder="z.B. Vitamine, Stretching …"
-                  autoFocus
+        {/* Add new habit */}
+        {showAddForm ? (
+          <form onSubmit={handleAddHabit} className="panel p-4 space-y-3">
+            <p className="display text-base">Neue Gewohnheit</p>
+            <Field label="Name">
+              <Input
+                value={newHabit.name}
+                onChange={e => setNewHabit(h => ({ ...h, name: e.target.value }))}
+                placeholder="z.B. Vitamine, Stretching …"
+                autoFocus
+                required
+              />
+            </Field>
+            <div className="grid grid-cols-2 gap-2">
+              <Field label="Einheit">
+                <Input
+                  value={newHabit.unitSymbol}
+                  onChange={e => setNewHabit(h => ({ ...h, unitSymbol: e.target.value }))}
+                  placeholder="z.B. min, ml, Stück"
                   required
                 />
-              </div>
-              <div className="grid grid-cols-2 gap-2">
-                <div>
-                  <label className="label text-xs">Einheit</label>
-                  <input
-                    className="input text-sm"
-                    value={newHabit.unitSymbol}
-                    onChange={e => setNewHabit(h => ({ ...h, unitSymbol: e.target.value }))}
-                    placeholder="z.B. min, ml, Stück"
-                    required
-                  />
-                </div>
-                <div>
-                  <label className="label text-xs">Typ</label>
-                  <select className="input text-sm" value={newHabit.type} onChange={e => setNewHabit(h => ({ ...h, type: e.target.value }))}>
-                    <option value="amount">Menge</option>
-                    <option value="duration">Dauer</option>
-                  </select>
-                </div>
-              </div>
-              <div className="flex gap-2">
-                <button type="button" onClick={() => setShowAddForm(false)} className="btn-secondary flex-1 text-sm py-1.5">Abbrechen</button>
-                <button type="submit" disabled={addingSaving} className="btn-primary flex-1 text-sm py-1.5">
-                  {addingSaving ? 'Hinzufügen...' : 'Hinzufügen'}
-                </button>
-              </div>
-            </form>
-          ) : (
-            <button
-              onClick={() => setShowAddForm(true)}
-              className="flex items-center gap-2 text-sm text-brand-400 hover:text-brand-300 transition-colors py-1"
-            >
-              <Plus size={16} />
-              Eigene Gewohnheit hinzufügen
-            </button>
-          )}
-        </div>
-
-        {/* Footer */}
-        <div className="p-5 border-t border-slate-800 flex gap-3">
-          <button onClick={onClose} className="btn-secondary flex-1">Abbrechen</button>
-          <button onClick={handleSave} disabled={saving} className="btn-primary flex-1 flex items-center justify-center gap-2">
-            {saving ? (
-              <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-            ) : <Check size={16} />}
-            {saving ? 'Speichern...' : `${selected.size} aktiv – Speichern`}
+              </Field>
+              <Field label="Typ">
+                <Select value={newHabit.type} onChange={e => setNewHabit(h => ({ ...h, type: e.target.value }))}>
+                  <option value="amount">Menge</option>
+                  <option value="duration">Dauer</option>
+                </Select>
+              </Field>
+            </div>
+            <div className="flex gap-2">
+              <Button variant="secondary" size="sm" className="flex-1" onClick={() => setShowAddForm(false)}>Abbrechen</Button>
+              <Button type="submit" size="sm" className="flex-1" loading={addingSaving}>Hinzufügen</Button>
+            </div>
+          </form>
+        ) : (
+          <button
+            onClick={() => setShowAddForm(true)}
+            className="flex items-center gap-2 text-sm font-semibold text-brand-600 hover:text-brand-700 transition-colors py-1"
+          >
+            <Plus size={16} />
+            Eigene Gewohnheit hinzufügen
           </button>
-        </div>
+        )}
       </div>
-    </div>
+    </Modal>
   );
 }
 
@@ -407,44 +377,51 @@ function HabitCard({ habit, todayLog, onLog }) {
     }
   };
 
+  // Every habit gets its own stable accent colour, matching the chip palette.
+  const tone = chipColorFor(habit._id);
+
   return (
-    <div className="card p-5">
+    <div className={`card p-5 border-l-4 ${TONE_ACCENT_BORDER[tone]}`}>
       <div className="flex items-start justify-between mb-4">
-        <div>
-          <h3 className="font-semibold text-white">{habit.name}</h3>
-          <p className="text-xs text-slate-500 mt-0.5">in {habit.unitSymbol}</p>
+        <div className="flex items-center gap-3 min-w-0">
+          <div className={`w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 ${TONE_BUBBLE[tone]}`}>
+            <Sparkles size={16} />
+          </div>
+          <div className="min-w-0">
+            <h3 className="display text-lg leading-snug truncate">{habit.name}</h3>
+            <p className="text-xs text-ink-400 mt-0.5">in {habit.unitSymbol}</p>
+          </div>
         </div>
-        <div className="flex items-center gap-1">
-          <button
+        <div className="flex items-center gap-0.5">
+          <IconButton
+            icon={Settings2}
+            label="Einstellungen"
+            tone="brand"
+            size={15}
+            active={showSettings}
             onClick={() => setShowSettings(v => !v)}
-            className={`transition-colors p-1 ${showSettings ? 'text-brand-400' : 'text-slate-500 hover:text-brand-400'}`}
-            title="Einstellungen"
-          >
-            <Settings2 size={16} />
-          </button>
-          <button onClick={loadChart} className="text-slate-500 hover:text-brand-400 transition-colors p-1 -mr-1" title="Verlauf anzeigen">
-            <TrendingUp size={18} />
-          </button>
+          />
+          <IconButton icon={TrendingUp} label="Verlauf anzeigen" tone="brand" size={16} active={showChart} onClick={loadChart} />
         </div>
       </div>
 
       {showSettings && (
-        <div className="mb-4 p-3 bg-white/[.06] rounded-2xl border border-white/[.1] space-y-2">
-          <p className="text-xs font-semibold text-slate-400">Fehlende Tage in Statistik</p>
-          <select
-            className="input text-sm w-full"
+        <div className="mb-4 panel p-3.5 space-y-2.5">
+          <p className="text-xs font-semibold text-ink-600">Fehlende Tage in Statistik</p>
+          <Select
+            className="!text-sm"
             value={settingsMode}
             onChange={e => setSettingsMode(e.target.value)}
           >
             <option value="none">Nicht eingetragen = kein Wert</option>
             <option value="default">Standardwert für fehlende Tage</option>
-          </select>
+          </Select>
           {settingsMode === 'default' && (
             <div className="flex items-center gap-2">
-              <span className="text-xs text-slate-400 whitespace-nowrap">Standardwert:</span>
-              <input
+              <span className="text-xs text-ink-500 whitespace-nowrap">Standardwert:</span>
+              <Input
                 type="number"
-                className="input text-sm flex-1"
+                className="flex-1 !text-sm"
                 value={settingsDefaultVal}
                 onChange={e => setSettingsDefaultVal(e.target.value)}
                 min="0"
@@ -453,34 +430,28 @@ function HabitCard({ habit, todayLog, onLog }) {
               />
             </div>
           )}
-          <button
-            onClick={handleSaveSettings}
-            disabled={savingSettings}
-            className="btn-primary w-full text-sm py-1.5"
-          >
-            {savingSettings ? 'Speichern...' : 'Übernehmen'}
-          </button>
+          <Button size="sm" className="w-full" loading={savingSettings} onClick={handleSaveSettings}>
+            Übernehmen
+          </Button>
         </div>
       )}
 
-      {/* Datumszeile */}
+      {/* Date row */}
       <div className="flex items-center gap-2 mb-3">
         <input
           type="date"
           value={selectedDate}
           max={todayStr}
           onChange={e => handleDateChange(e.target.value)}
-          className={`text-sm rounded-lg px-2 py-2 border transition-colors bg-white/[.07] ${
-            isToday
-              ? 'border-white/[.12] text-white/35 w-auto'
-              : 'border-brand-500/60 text-white/80 flex-1'
+          className={`input !w-auto !py-2 !text-sm ${
+            isToday ? 'text-ink-400' : 'flex-1 !border-brand-400 text-ink-800'
           }`}
         />
         {!isToday && (
           <button
             type="button"
             onClick={() => handleDateChange(todayStr)}
-            className="text-xs text-brand-400 hover:text-brand-300 whitespace-nowrap px-2 py-2"
+            className="text-xs font-semibold text-brand-600 hover:text-brand-700 whitespace-nowrap px-2 py-2"
           >
             Heute
           </button>
@@ -489,31 +460,27 @@ function HabitCard({ habit, todayLog, onLog }) {
 
       {loadingLog ? (
         <div className="flex items-center justify-center py-3">
-          <div className="w-4 h-4 border-2 border-zinc-700 border-t-brand-500 rounded-full animate-spin" />
+          <Spinner size="sm" />
         </div>
       ) : (
         <form onSubmit={e => { e.preventDefault(); handleLog(); }} className="flex gap-2">
-          <input
+          <Input
             type="number"
             value={value}
             onChange={e => setValue(e.target.value)}
-            className="input flex-1"
+            className="flex-1"
             placeholder={`${isToday ? 'Heute' : 'Wert'} in ${habit.unitSymbol}`}
             min="0"
             step="0.1"
           />
-          <button
-            type="submit"
-            disabled={saving || value === ''}
-            className="btn-primary px-4 whitespace-nowrap"
-          >
-            {saving ? '...' : currentLog ? 'Aktualisieren' : 'Eintragen'}
-          </button>
+          <Button type="submit" loading={saving} disabled={value === ''} className="whitespace-nowrap">
+            {currentLog ? 'Aktualisieren' : 'Eintragen'}
+          </Button>
         </form>
       )}
 
       {currentLog && (
-        <p className="text-xs text-emerald-400 mt-2 flex items-center gap-1">
+        <p className="text-xs text-emerald-600 font-medium mt-2 flex items-center gap-1">
           <Check size={12} strokeWidth={3} />
           {(() => {
             const unit = currentLog.historicalUnit || habit.unitSymbol;
@@ -528,11 +495,11 @@ function HabitCard({ habit, todayLog, onLog }) {
         <div className="mt-4">
           <ResponsiveContainer width="100%" height={120}>
             <LineChart data={chartData}>
-              <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.06)" />
-              <XAxis dataKey="date" tick={{ fill: 'rgba(255,255,255,0.30)', fontSize: 10 }} tickLine={false} />
-              <YAxis tick={{ fill: 'rgba(255,255,255,0.30)', fontSize: 10 }} tickLine={false} axisLine={false} width={30} />
+              <CartesianGrid strokeDasharray="3 3" stroke={CHART.grid} />
+              <XAxis dataKey="date" tick={CHART.tick} tickLine={false} />
+              <YAxis tick={CHART.tick} tickLine={false} axisLine={false} width={30} />
               <Tooltip
-                contentStyle={{ background: 'rgba(30,28,50,0.95)', border: '1px solid rgba(255,255,255,0.12)', borderRadius: 12, color: '#fff', backdropFilter: 'blur(8px)' }}
+                contentStyle={CHART.tooltip}
                 formatter={(v, _name, props) => [
                   `${v} ${habit.unitSymbol}${props.payload?.isDefault ? ' (Standard)' : ''}`,
                   habit.name
@@ -541,19 +508,19 @@ function HabitCard({ habit, todayLog, onLog }) {
               <Line
                 type="monotone"
                 dataKey="value"
-                stroke="#c4623a"
+                stroke={CHART.line}
                 strokeWidth={2}
                 dot={(props) => {
                   const { cx, cy, payload } = props;
-                  return <circle key={`dot-${cx}-${cy}`} cx={cx} cy={cy} r={3} fill={payload.isDefault ? '#7a6050' : '#c4623a'} />;
+                  return <circle key={`dot-${cx}-${cy}`} cx={cx} cy={cy} r={3} fill={payload.isDefault ? CHART.dotMuted : CHART.line} />;
                 }}
                 connectNulls
               />
             </LineChart>
           </ResponsiveContainer>
           {settingsMode === 'default' && chartData.some(d => d.isDefault) && (
-            <p className="text-xs text-slate-600 mt-1 flex items-center gap-1.5">
-              <span className="inline-block w-2 h-2 rounded-full bg-slate-600" />
+            <p className="text-xs text-ink-400 mt-1 flex items-center gap-1.5">
+              <span className="inline-block w-2 h-2 rounded-full bg-ink-300" />
               Grau = Standardwert (nicht eingetragen)
             </p>
           )}
@@ -597,45 +564,43 @@ export default function Habits() {
   const getTodayLog = (habitId) =>
     todayLogs.find(l => l.habitId?._id === habitId || l.habitId === habitId);
 
-  if (loading) return (
-    <div className="flex items-center justify-center py-20">
-      <div className="w-8 h-8 border-2 border-zinc-700 border-t-brand-500 rounded-full animate-spin" />
-    </div>
-  );
+  if (loading) return <PageLoader />;
 
   const loggedCount = activeHabits.filter(h => getTodayLog(h._id)).length;
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-white">Gewohnheiten</h1>
-          <p className="text-slate-400 text-sm mt-0.5">
+      <PageHeader
+        title="Gewohnheiten"
+        icon={Sparkles}
+        tone="sage"
+        subtitle={
+          <>
             {format(new Date(), 'EEEE, d. MMMM', { locale: de })}
             {activeHabits.length > 0 && (
-              <span className="ml-2 text-slate-500">· {loggedCount}/{activeHabits.length} eingetragen</span>
+              <span className="text-ink-400"> · {loggedCount}/{activeHabits.length} eingetragen</span>
             )}
-          </p>
-        </div>
-        <button
-          onClick={() => setShowManage(true)}
-          className="btn-secondary flex items-center gap-2 text-sm"
-        >
-          <Settings2 size={16} />
-          <span className="hidden sm:inline">Verwalten</span>
-        </button>
-      </div>
+          </>
+        }
+        action={
+          <Button variant="secondary" icon={Settings2} onClick={() => setShowManage(true)}>
+            <span className="hidden sm:inline">Verwalten</span>
+          </Button>
+        }
+      />
 
       {activeHabits.length === 0 ? (
-        <div className="card p-12 text-center">
-          <Sparkles size={36} className="text-slate-600 mx-auto mb-3" />
-          <p className="text-slate-300 font-medium">Keine Gewohnheiten ausgewählt</p>
-          <p className="text-slate-500 text-sm mt-1 mb-4">Wähle aus, welche Gewohnheiten du täglich tracken möchtest.</p>
-          <button onClick={() => setShowManage(true)} className="btn-primary inline-flex items-center gap-2">
-            <Settings2 size={16} />
-            Gewohnheiten auswählen
-          </button>
-        </div>
+        <EmptyState
+          icon={Sparkles}
+          tone="sage"
+          title="Keine Gewohnheiten ausgewählt"
+          text="Wähle aus, welche Gewohnheiten du täglich tracken möchtest."
+          action={
+            <Button icon={Settings2} onClick={() => setShowManage(true)}>
+              Gewohnheiten auswählen
+            </Button>
+          }
+        />
       ) : (
         <div className="grid sm:grid-cols-2 gap-4">
           {activeHabits.map(habit => (

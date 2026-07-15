@@ -1,11 +1,12 @@
 import { useState, useEffect, useCallback } from 'react';
-import { SlidersHorizontal, Info } from 'lucide-react';
+import { SlidersHorizontal } from 'lucide-react';
 import api from '../utils/api';
 import AdminPageHeader from '../components/admin/AdminPageHeader';
 import SectionCard from '../components/admin/SectionCard';
 import AdminSpinner from '../components/admin/AdminSpinner';
 import ErrorBanner from '../components/admin/ErrorBanner';
 import ConfigRow from '../components/admin/ConfigRow';
+import Alert from '../components/ui/Alert';
 
 // Update-related settings live on the AdminUpdates page – everything about
 // OTA updates is managed in one place there.
@@ -49,27 +50,19 @@ export default function AdminConfig() {
   }, {});
 
   return (
-    <div className="p-6 max-w-3xl mx-auto">
+    <div>
       <AdminPageHeader
         icon={SlidersHorizontal}
         title="Systemkonfiguration"
-        description="Laufzeitkonfiguration des Servers – Update-Einstellungen findest du unter Updates (OTA)."
+        description="Laufzeitkonfiguration des Servers – Update-Einstellungen findest du unter Updates."
       />
 
       {/* Env priority info */}
-      <div className="flex items-start gap-3 bg-amber-500/8 border border-amber-500/20 rounded-xl px-4 py-3 mb-6">
-        <Info size={16} className="text-amber-400 shrink-0 mt-0.5" />
-        <div className="text-sm text-amber-300/80 space-y-0.5">
-          <p className="font-medium text-amber-300">Priorität der Konfigurationsquellen</p>
-          <p>
-            <code className="font-mono text-xs bg-amber-900/30 px-1 rounded">.env</code> hat immer
-            Vorrang vor der Datenbankeinstellung. Werte die in{' '}
-            <code className="font-mono text-xs bg-amber-900/30 px-1 rounded">.env</code> /
-            <code className="font-mono text-xs bg-amber-900/30 px-1 rounded">docker-compose.yml</code>{' '}
-            gesetzt sind, können hier nicht überschrieben werden.
-          </p>
-        </div>
-      </div>
+      <Alert tone="warning" title="Priorität der Konfigurationsquellen" className="mb-6">
+        <code>.env</code> hat immer Vorrang vor der Datenbankeinstellung.
+        Werte die in <code>.env</code> / <code>docker-compose.yml</code> gesetzt
+        sind, können hier nicht überschrieben werden.
+      </Alert>
 
       <ErrorBanner message={error} />
 
@@ -79,7 +72,7 @@ export default function AdminConfig() {
         <div className="space-y-6">
           {Object.entries(groups).map(([groupName, entries]) => (
             <SectionCard key={groupName} title={groupName}>
-              <div className="divide-y divide-slate-800">
+              <div>
                 {entries.map(entry => (
                   <ConfigRow
                     key={entry.key}

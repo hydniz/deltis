@@ -3,25 +3,46 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import api from '../utils/api';
 import {
-  Check, LogOut, User, Save, Eye, EyeOff,
-  Download, Upload, AlertCircle, AtSign, Lock, Server, Monitor
+  Check, LogOut, User, Save, Download, Upload, AtSign, Lock, Server, Monitor,
+  Settings as SettingsIcon,
 } from 'lucide-react';
+import {
+  PageHeader, Button, Field, Input, Select, PasswordInput, Alert, TONE_BUBBLE,
+} from '../components/ui';
 
 // VersionBadge
 
 function VersionBadge({ icon, label, version }) {
   return (
-    <div className="bg-white/[.05] border border-white/[.08] rounded-xl px-3 py-2.5">
-      <p className="text-xs text-slate-500 flex items-center gap-1.5 mb-1">
+    <div className="panel px-3 py-2.5">
+      <p className="text-xs text-ink-400 flex items-center gap-1.5 mb-1">
         {icon}
         {label}
       </p>
       <p
-        className="text-xs font-mono text-slate-300 truncate"
+        className="text-xs font-mono text-ink-700 truncate"
         title={version ?? '…'}
       >
         {version ?? '…'}
       </p>
+    </div>
+  );
+}
+
+// Card with serif heading and tinted icon bubble — each section has its own
+// accent colour so the page doesn't feel monochrome.
+function SettingsCard({ icon: Icon, tone = 'clay', title, children }) {
+  return (
+    <div className="card p-5">
+      <h2 className="display text-lg mb-4 flex items-center gap-2.5">
+        {Icon && (
+          <span className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 ${TONE_BUBBLE[tone]}`}>
+            <Icon size={14} />
+          </span>
+        )}
+        {title}
+      </h2>
+      {children}
     </div>
   );
 }
@@ -72,47 +93,28 @@ function ExportImport() {
   };
 
   return (
-    <div className="card p-5">
-      <h2 className="font-semibold text-white mb-1 flex items-center gap-2">
-        <Download size={16} className="text-brand-400" />
-        Daten exportieren & importieren
-      </h2>
-      <p className="text-xs text-slate-500 mb-4">
+    <SettingsCard icon={Download} tone="sage" title="Daten exportieren & importieren">
+      <p className="text-xs text-ink-400 -mt-2 mb-4">
         Exportiert Gewicht, Gewohnheiten und Aktivitäten als ZIP mit CSV-Dateien.
       </p>
 
       <div className="flex flex-wrap gap-3">
-        <button
-          onClick={handleExport}
-          disabled={exporting}
-          className="btn-primary flex items-center gap-2"
-        >
-          {exporting
-            ? <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-            : <Download size={15} />}
+        <Button icon={Download} loading={exporting} onClick={handleExport}>
           Exportieren
-        </button>
+        </Button>
 
-        <label className={`btn-secondary flex items-center gap-2 cursor-pointer ${importing ? 'opacity-50 pointer-events-none' : ''}`}>
-          {importing
-            ? <div className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin" />
-            : <Upload size={15} />}
+        <label className={`btn-secondary cursor-pointer ${importing ? 'opacity-50 pointer-events-none' : ''}`}>
+          <Upload size={15} />
           Importieren
           <input type="file" accept=".zip" className="hidden" onChange={handleImport} />
         </label>
       </div>
 
-      {error && (
-        <div className="mt-3 flex items-center gap-2 text-red-400 text-sm bg-red-900/20 border border-red-900/50 rounded-xl px-3 py-2">
-          <AlertCircle size={14} />
-          {error}
-        </div>
-      )}
+      {error && <Alert tone="error" className="mt-3">{error}</Alert>}
 
       {result && (
-        <div className="mt-3 bg-green-900/20 border border-green-700/50 rounded-xl px-4 py-3 space-y-1">
-          <p className="text-green-400 text-sm font-medium">Import abgeschlossen!</p>
-          <ul className="text-slate-400 text-xs space-y-0.5">
+        <Alert tone="success" title="Import abgeschlossen!" className="mt-3">
+          <ul className="text-xs space-y-0.5 mt-1">
             <li>• {result.weight} Gewichtseinträge</li>
             <li>• {result.habits} Gewohnheitseinträge</li>
             <li>• {result.activities} Aktivitäten</li>
@@ -122,17 +124,17 @@ function ExportImport() {
           </ul>
           {result.errors?.length > 0 && (
             <details className="mt-2">
-              <summary className="text-yellow-500 text-xs cursor-pointer">
+              <summary className="text-ocher-600 text-xs cursor-pointer">
                 {result.errors.length} Fehler
               </summary>
-              <ul className="mt-1 text-xs text-slate-500 space-y-0.5">
+              <ul className="mt-1 text-xs space-y-0.5">
                 {result.errors.map((e, i) => <li key={i}>• {e}</li>)}
               </ul>
             </details>
           )}
-        </div>
+        </Alert>
       )}
-    </div>
+    </SettingsCard>
   );
 }
 
@@ -142,7 +144,6 @@ function UserPasswordForm({ changePassword }) {
   const [current, setCurrent] = useState('');
   const [next, setNext] = useState('');
   const [confirm, setConfirm] = useState('');
-  const [showPw, setShowPw] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState(false);
@@ -166,73 +167,48 @@ function UserPasswordForm({ changePassword }) {
   };
 
   return (
-    <div className="card p-5">
-      <h2 className="font-semibold text-white mb-4 flex items-center gap-2">
-        <Lock size={16} className="text-brand-400" />
-        Passwort ändern
-      </h2>
-      <form onSubmit={handleSubmit} className="space-y-3">
-        <div>
-          <label className="label">Aktuelles Passwort</label>
-          <div className="relative">
-            <input
-              type={showPw ? 'text' : 'password'}
-              value={current}
-              onChange={e => setCurrent(e.target.value)}
-              className="input pr-10"
-              autoComplete="current-password"
-            />
-            <button
-              type="button"
-              onClick={() => setShowPw(v => !v)}
-              className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-200 transition-colors"
-              tabIndex={-1}
-            >
-              {showPw ? <EyeOff size={16} /> : <Eye size={16} />}
-            </button>
-          </div>
-        </div>
-        <div>
-          <label className="label">Neues Passwort</label>
-          <input
-            type={showPw ? 'text' : 'password'}
+    <SettingsCard icon={Lock} tone="rose" title="Passwort ändern">
+      <form onSubmit={handleSubmit} className="space-y-3.5">
+        <Field label="Aktuelles Passwort">
+          <PasswordInput
+            value={current}
+            onChange={e => setCurrent(e.target.value)}
+            autoComplete="current-password"
+          />
+        </Field>
+        <Field label="Neues Passwort">
+          <PasswordInput
             value={next}
             onChange={e => setNext(e.target.value)}
-            className="input"
             placeholder="Mindestens 8 Zeichen"
             autoComplete="new-password"
           />
-        </div>
-        <div>
-          <label className="label">Neues Passwort bestätigen</label>
-          <input
-            type={showPw ? 'text' : 'password'}
+        </Field>
+        <Field label="Neues Passwort bestätigen">
+          <PasswordInput
             value={confirm}
             onChange={e => setConfirm(e.target.value)}
-            className="input"
             autoComplete="new-password"
           />
-        </div>
+        </Field>
 
-        {error && <p className="text-red-400 text-sm">{error}</p>}
+        {error && <p className="text-red-600 text-sm">{error}</p>}
         {success && (
-          <p className="text-green-400 text-sm flex items-center gap-1.5">
+          <p className="text-emerald-600 text-sm flex items-center gap-1.5">
             <Check size={14} /> Passwort erfolgreich geändert.
           </p>
         )}
 
-        <button
+        <Button
           type="submit"
-          disabled={loading || !current || !next || !confirm}
-          className="btn-primary flex items-center gap-2"
+          icon={Save}
+          loading={loading}
+          disabled={!current || !next || !confirm}
         >
-          {loading
-            ? <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-            : <Save size={15} />}
           Passwort ändern
-        </button>
+        </Button>
       </form>
-    </div>
+    </SettingsCard>
   );
 }
 
@@ -242,7 +218,7 @@ export default function Settings() {
   const { user, logout, updateUser, setUsername, changePassword } = useAuth();
   const navigate = useNavigate();
 
-  // Profil
+  // Profile
   const [name, setName] = useState(user?.name || '');
   const [weightUnit, setWeightUnit] = useState(user?.weightUnit || 'kg');
   const [saving, setSaving] = useState(false);
@@ -310,70 +286,47 @@ export default function Settings() {
   };
 
   return (
-    <div className="space-y-6 max-w-4xl">
-      <div>
-        <h1 className="text-2xl font-bold text-white">Einstellungen</h1>
-        <p className="text-slate-400 text-sm mt-0.5">Profil & Präferenzen</p>
-      </div>
+    <div className="space-y-6">
+      <PageHeader title="Einstellungen" subtitle="Profil & Präferenzen" icon={SettingsIcon} tone="stone" />
 
       {/* Desktop: 2-column grid; mobile: single column */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 items-start">
 
         {/* Left column */}
-        <div className="space-y-6">
+        <div className="space-y-5">
 
-          {/* Profil */}
-          <div className="card p-5">
-            <h2 className="font-semibold text-white mb-4 flex items-center gap-2">
-              <User size={16} className="text-brand-400" />
-              Profil
-            </h2>
+          {/* Profile */}
+          <SettingsCard icon={User} tone="clay" title="Profil">
             <form onSubmit={handleSaveProfile} className="space-y-4">
-              <div>
-                <label className="label">Name</label>
-                <input
-                  className="input"
+              <Field label="Name">
+                <Input
                   value={name}
                   onChange={e => setName(e.target.value)}
                   placeholder="Dein Name"
                 />
-              </div>
-              <div>
-                <label className="label">Gewichtseinheit</label>
-                <select
-                  className="input"
-                  value={weightUnit}
-                  onChange={e => setWeightUnit(e.target.value)}
-                >
+              </Field>
+              <Field label="Gewichtseinheit">
+                <Select value={weightUnit} onChange={e => setWeightUnit(e.target.value)}>
                   <option value="kg">Kilogramm (kg)</option>
                   <option value="lbs">Pfund (lbs)</option>
-                </select>
-              </div>
-              <button type="submit" disabled={saving} className="btn-primary flex items-center gap-2">
-                {saved ? <Check size={16} /> : <Save size={16} />}
-                {saved ? 'Gespeichert!' : saving ? 'Speichern...' : 'Speichern'}
-              </button>
+                </Select>
+              </Field>
+              <Button type="submit" icon={saved ? Check : Save} loading={saving}>
+                {saved ? 'Gespeichert!' : 'Speichern'}
+              </Button>
             </form>
-          </div>
+          </SettingsCard>
 
-          {/* Benutzername */}
-          <div className="card p-5">
-            <h2 className="font-semibold text-white mb-4 flex items-center gap-2">
-              <AtSign size={16} className="text-brand-400" />
-              Benutzername
-            </h2>
+          {/* Username */}
+          <SettingsCard icon={AtSign} tone="amber" title="Benutzername">
             {user?.username && (
-              <p className="text-sm text-slate-400 mb-4">
-                Aktuell: <span className="text-white font-mono">{user.username}</span>
+              <p className="text-sm text-ink-500 mb-4">
+                Aktuell: <span className="text-ink-900 font-mono">{user.username}</span>
               </p>
             )}
-            <form onSubmit={handleSaveUsername} className="space-y-3">
-              <div>
-                <label className="label">
-                  {user?.username ? 'Neuer Benutzername' : 'Benutzername wählen'}
-                </label>
-                <input
-                  className="input"
+            <form onSubmit={handleSaveUsername} className="space-y-3.5">
+              <Field label={user?.username ? 'Neuer Benutzername' : 'Benutzername wählen'}>
+                <Input
                   value={newUsername}
                   onChange={e => { setNewUsername(e.target.value); setUsernameError(''); }}
                   placeholder="Mindestens 3 Zeichen"
@@ -381,30 +334,25 @@ export default function Settings() {
                   maxLength={30}
                   autoComplete="username"
                 />
-              </div>
-              {usernameError && (
-                <div className="flex items-center gap-2 text-red-400 text-sm bg-red-900/20 border border-red-900/50 rounded-xl px-3 py-2">
-                  <AlertCircle size={14} />
-                  {usernameError}
-                </div>
-              )}
-              <button
+              </Field>
+              {usernameError && <Alert tone="error">{usernameError}</Alert>}
+              <Button
                 type="submit"
-                disabled={usernameSaving || newUsername.trim().length < 3}
-                className="btn-primary flex items-center gap-2"
+                icon={usernameSaved ? Check : Save}
+                loading={usernameSaving}
+                disabled={newUsername.trim().length < 3}
               >
-                {usernameSaved ? <Check size={16} /> : <Save size={16} />}
-                {usernameSaved ? 'Gespeichert!' : usernameSaving ? 'Speichern...' : 'Benutzernamen speichern'}
-              </button>
+                {usernameSaved ? 'Gespeichert!' : 'Benutzernamen speichern'}
+              </Button>
             </form>
-          </div>
+          </SettingsCard>
 
         </div>
 
         {/* Right column */}
-        <div className="space-y-6">
+        <div className="space-y-5">
 
-          {/* Passwort */}
+          {/* Password */}
           {user?.username && user?.hasPassword && (
             <UserPasswordForm changePassword={changePassword} />
           )}
@@ -415,25 +363,25 @@ export default function Settings() {
         </div>
       </div>
 
-      {/* Full-width footer row: Konto + Versionen */}
+      {/* Full-width footer row: account + versions */}
       <div className="card p-5">
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div>
-            <h2 className="font-semibold text-white mb-1">Konto</h2>
-            <p className="text-sm text-slate-400">
+            <h2 className="display text-lg mb-1">Konto</h2>
+            <p className="text-sm text-ink-500">
               Mitglied seit {user?.createdAt ? new Date(user.createdAt).toLocaleDateString('de-DE') : '–'}
             </p>
           </div>
           <button
             onClick={handleLogout}
-            className="flex items-center gap-2 text-red-400 hover:text-red-300 font-medium text-sm transition-colors"
+            className="flex items-center gap-2 text-red-600 hover:text-red-700 font-semibold text-sm transition-colors"
           >
             <LogOut size={16} />
             Abmelden
           </button>
         </div>
 
-        <div className="mt-4 pt-4 border-t border-slate-800 grid grid-cols-2 sm:grid-cols-4 gap-3">
+        <div className="mt-4 pt-4 border-t hairline grid grid-cols-2 sm:grid-cols-4 gap-3">
           <VersionBadge
             icon={<Monitor size={13} />}
             label="Frontend"

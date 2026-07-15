@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import Layout from './components/Layout';
+import AdminLayout from './components/admin/AdminLayout';
 import Landing from './pages/Landing';
 import Login from './pages/Login';
 import Dashboard from './pages/Dashboard';
@@ -16,8 +17,9 @@ import AdminConfig from './pages/AdminConfig';
 import AdminUpdates from './pages/AdminUpdates';
 import AdminSetup from './pages/AdminSetup';
 import api from './utils/api';
-import { User, AlertCircle, Lock, Eye, EyeOff, KeyRound, AlertTriangle } from 'lucide-react';
+import { AlertTriangle } from 'lucide-react';
 import { REQUIRED_API_VERSION } from './config/compatibility';
+import { Button, Field, Input, PasswordInput, Alert, Spinner } from './components/ui';
 
 
 // CompatibilityCheck
@@ -53,28 +55,28 @@ function CompatibilityCheck({ children }) {
   return (
     <>
       {emergency && (
-        <div className="fixed top-0 left-0 right-0 z-[210] flex items-center justify-center gap-2.5 px-4 py-2.5 bg-red-500/20 backdrop-blur-sm border-b border-red-500/40">
-          <AlertTriangle size={15} className="text-red-400 flex-shrink-0" />
-          <span className="text-red-200 text-sm">
+        <div className="fixed top-0 left-0 right-0 z-[210] flex items-center justify-center gap-2.5 px-4 py-2.5 bg-red-600 shadow-md">
+          <AlertTriangle size={15} className="text-white flex-shrink-0" />
+          <span className="text-white text-sm">
             Notfallbetrieb: Ein Update ist fehlgeschlagen. Als Admin anmelden und unter{' '}
-            <a href="/admin/updates" className="underline font-semibold">Admin&nbsp;→&nbsp;Updates</a>{' '}
+            <a href="/admin/updates" className="underline font-semibold">Administration&nbsp;→&nbsp;Updates</a>{' '}
             den Rollback starten.
           </span>
         </div>
       )}
       {!emergency && updateFailed && (
-        <div className="fixed top-0 left-0 right-0 z-[205] flex items-center justify-center gap-2.5 px-4 py-2.5 bg-red-500/15 backdrop-blur-sm border-b border-red-500/30">
-          <AlertTriangle size={15} className="text-red-400 flex-shrink-0" />
-          <span className="text-red-200 text-sm">
+        <div className="fixed top-0 left-0 right-0 z-[205] flex items-center justify-center gap-2.5 px-4 py-2.5 bg-red-50 border-b border-red-200">
+          <AlertTriangle size={15} className="text-red-500 flex-shrink-0" />
+          <span className="text-red-800 text-sm">
             Das letzte Update ist fehlgeschlagen – die vorherige Version läuft weiter. Details unter{' '}
-            <a href="/admin/updates" className="underline font-semibold">Admin&nbsp;→&nbsp;Updates</a>.
+            <a href="/admin/updates" className="underline font-semibold">Administration&nbsp;→&nbsp;Updates</a>.
           </span>
         </div>
       )}
       {mismatch && (
-        <div className="fixed top-0 left-0 right-0 z-[200] flex items-center justify-center gap-2.5 px-4 py-2.5 bg-amber-500/15 backdrop-blur-sm border-b border-amber-500/30">
-          <AlertTriangle size={15} className="text-amber-400 flex-shrink-0" />
-          <span className="text-amber-200 text-sm">
+        <div className="fixed top-0 left-0 right-0 z-[200] flex items-center justify-center gap-2.5 px-4 py-2.5 bg-amber-50 border-b border-amber-200">
+          <AlertTriangle size={15} className="text-amber-500 flex-shrink-0" />
+          <span className="text-amber-900 text-sm">
             Versions-Konflikt: Frontend erwartet API&nbsp;v{REQUIRED_API_VERSION}, Backend meldet API&nbsp;v{mismatch.backendV}. Bitte Frontend oder Backend aktualisieren.
           </span>
         </div>
@@ -84,10 +86,10 @@ function CompatibilityCheck({ children }) {
   );
 }
 
-function Spinner() {
+function CenteredSpinner() {
   return (
     <div className="min-h-screen flex items-center justify-center">
-      <div className="w-6 h-6 border-2 border-white/20 border-t-brand-400 rounded-full animate-spin" />
+      <Spinner size="md" />
     </div>
   );
 }
@@ -97,7 +99,6 @@ function UsernameSetupModal() {
   const [username, setUsernameValue] = useState('');
   const [password, setPassword] = useState('');
   const [passwordConfirm, setPasswordConfirm] = useState('');
-  const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
@@ -135,91 +136,67 @@ function UsernameSetupModal() {
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-md flex items-center justify-center p-4">
-      <div className="card p-6 w-full max-w-sm space-y-5">
+    <div className="fixed inset-0 z-50 bg-ink-900/40 backdrop-blur-[2px] flex items-center justify-center p-4">
+      <div className="card shadow-pop rounded-3xl p-6 sm:p-7 w-full max-w-sm space-y-5">
         <div>
-          <h2 className="text-white font-semibold text-lg">Zugangsdaten einrichten</h2>
-          <p className="text-white/45 text-sm mt-0.5">Einmalige Einrichtung erforderlich</p>
+          <h2 className="display text-xl">Zugangsdaten einrichten</h2>
+          <p className="text-ink-400 text-sm mt-1">Einmalige Einrichtung erforderlich</p>
         </div>
 
-        <p className="text-white/45 text-sm">
+        <p className="text-ink-500 text-sm leading-relaxed">
           Wähle einen Benutzernamen{needsPassword ? ' und ein Passwort' : ''}.
           {' '}Danach ist deine UUID dauerhaft gesperrt.
         </p>
 
-        <form onSubmit={handleSubmit} className="space-y-3">
-          <div>
-            <label className="label">Benutzername</label>
-            <input
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <Field label="Benutzername">
+            <Input
               type="text"
               value={username}
               onChange={e => { setUsernameValue(e.target.value); setError(''); }}
-              className="input"
               placeholder="Mindestens 3 Zeichen (a–z, 0–9, .-_)"
               autoFocus
               autoComplete="username"
               minLength={3}
               maxLength={30}
             />
-          </div>
+          </Field>
 
           {needsPassword && (
             <>
-              <div>
-                <label className="label">Passwort</label>
-                <div className="relative">
-                  <input
-                    type={showPassword ? 'text' : 'password'}
-                    value={password}
-                    onChange={e => { setPassword(e.target.value); setError(''); }}
-                    className="input pr-10"
-                    placeholder="Mindestens 8 Zeichen"
-                    autoComplete="new-password"
-                    minLength={8}
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setShowPassword(v => !v)}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-white/30 hover:text-white/70 transition-colors"
-                    tabIndex={-1}
-                  >
-                    {showPassword ? <EyeOff size={15} /> : <Eye size={15} />}
-                  </button>
-                </div>
-              </div>
-              <div>
-                <label className="label">Passwort bestätigen</label>
-                <input
-                  type={showPassword ? 'text' : 'password'}
+              <Field label="Passwort">
+                <PasswordInput
+                  value={password}
+                  onChange={e => { setPassword(e.target.value); setError(''); }}
+                  placeholder="Mindestens 8 Zeichen"
+                  autoComplete="new-password"
+                  minLength={8}
+                />
+              </Field>
+              <Field label="Passwort bestätigen">
+                <PasswordInput
                   value={passwordConfirm}
                   onChange={e => { setPasswordConfirm(e.target.value); setError(''); }}
-                  className="input"
                   placeholder="Passwort wiederholen"
                   autoComplete="new-password"
                 />
-              </div>
+              </Field>
             </>
           )}
 
-          {error && (
-            <div className="flex items-center gap-2 text-red-300 text-sm bg-red-500/10 border border-red-400/20 rounded-xl px-3 py-2.5">
-              <AlertCircle size={14} className="flex-shrink-0" />
-              {error}
-            </div>
-          )}
+          {error && <Alert tone="error">{error}</Alert>}
 
-          <button
+          <Button
             type="submit"
+            loading={loading}
             disabled={
-              loading ||
               username.trim().length < 3 ||
               (needsPassword && (password.length < 8 || password !== passwordConfirm))
             }
-            className="btn-primary w-full py-2.5 flex items-center justify-center gap-2"
+            className="w-full"
           >
-            {loading && <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />}
             Zugangsdaten speichern
-          </button>
+          </Button>
         </form>
       </div>
     </div>
@@ -230,7 +207,6 @@ function MustChangePasswordModal() {
   const { user, forceChangePassword } = useAuth();
   const [password, setPassword] = useState('');
   const [confirm, setConfirm] = useState('');
-  const [showPw, setShowPw] = useState(false);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
@@ -252,67 +228,46 @@ function MustChangePasswordModal() {
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-md flex items-center justify-center p-4">
-      <div className="card p-6 w-full max-w-sm space-y-5">
+    <div className="fixed inset-0 z-50 bg-ink-900/40 backdrop-blur-[2px] flex items-center justify-center p-4">
+      <div className="card shadow-pop rounded-3xl p-6 sm:p-7 w-full max-w-sm space-y-5">
         <div>
-          <h2 className="text-white font-semibold text-lg">Passwort ändern</h2>
-          <p className="text-white/45 text-sm mt-0.5">Bitte wähle jetzt ein neues Passwort.</p>
+          <h2 className="display text-xl">Passwort ändern</h2>
+          <p className="text-ink-400 text-sm mt-1">Bitte wähle jetzt ein neues Passwort.</p>
         </div>
 
-        <p className="text-white/45 text-sm">
+        <p className="text-ink-500 text-sm leading-relaxed">
           Wähle ein neues persönliches Passwort (mindestens 8 Zeichen).
         </p>
 
-        <form onSubmit={handleSubmit} className="space-y-3">
-          <div>
-            <label className="label">Neues Passwort</label>
-            <div className="relative">
-              <input
-                type={showPw ? 'text' : 'password'}
-                value={password}
-                onChange={e => { setPassword(e.target.value); setError(''); }}
-                className="input pr-10"
-                placeholder="Mindestens 8 Zeichen"
-                autoFocus
-                autoComplete="new-password"
-              />
-              <button
-                type="button"
-                onClick={() => setShowPw(v => !v)}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-white/30 hover:text-white/70 transition-colors"
-                tabIndex={-1}
-              >
-                {showPw ? <EyeOff size={15} /> : <Eye size={15} />}
-              </button>
-            </div>
-          </div>
-          <div>
-            <label className="label">Passwort bestätigen</label>
-            <input
-              type={showPw ? 'text' : 'password'}
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <Field label="Neues Passwort">
+            <PasswordInput
+              value={password}
+              onChange={e => { setPassword(e.target.value); setError(''); }}
+              placeholder="Mindestens 8 Zeichen"
+              autoFocus
+              autoComplete="new-password"
+            />
+          </Field>
+          <Field label="Passwort bestätigen">
+            <PasswordInput
               value={confirm}
               onChange={e => { setConfirm(e.target.value); setError(''); }}
-              className="input"
               placeholder="Passwort wiederholen"
               autoComplete="new-password"
             />
-          </div>
+          </Field>
 
-          {error && (
-            <div className="flex items-center gap-2 text-red-300 text-sm bg-red-500/10 border border-red-400/20 rounded-xl px-3 py-2.5">
-              <AlertCircle size={14} className="flex-shrink-0" />
-              {error}
-            </div>
-          )}
+          {error && <Alert tone="error">{error}</Alert>}
 
-          <button
+          <Button
             type="submit"
-            disabled={loading || password.length < 8 || password !== confirm}
-            className="btn-primary w-full py-2.5 flex items-center justify-center gap-2"
+            loading={loading}
+            disabled={password.length < 8 || password !== confirm}
+            className="w-full"
           >
-            {loading && <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />}
             Passwort speichern
-          </button>
+          </Button>
         </form>
       </div>
     </div>
@@ -322,18 +277,19 @@ function MustChangePasswordModal() {
 // Root route: Landing page for guests, redirect to /dashboard for logged-in users
 function RootRoute() {
   const { user, loading } = useAuth();
-  if (loading) return <Spinner />;
+  if (loading) return <CenteredSpinner />;
   if (user) return <Navigate to="/dashboard" replace />;
   return <Landing />;
 }
 
 function ProtectedRoute({ children }) {
   const { user, loading } = useAuth();
-  if (loading) return <Spinner />;
+  if (loading) return <CenteredSpinner />;
   return user ? children : <Navigate to="/login" replace />;
 }
 
 // Admin area: handles auth check, setup redirect, and nested sub-routes.
+// Rendered in its own AdminLayout — deliberately separate from the app shell.
 function AdminArea() {
   const { user, loading } = useAuth();
   const [setupNeeded, setSetupNeeded] = useState(null);
@@ -346,21 +302,21 @@ function AdminArea() {
     }
   }, [loading, user]);
 
-  if (loading || (!user?.isAdmin && setupNeeded === null)) return <Spinner />;
+  if (loading || (!user?.isAdmin && setupNeeded === null)) return <CenteredSpinner />;
   if (!user?.isAdmin) {
     if (setupNeeded) return <Navigate to="/admin/setup" replace />;
     return <Navigate to="/login" replace />;
   }
 
   return (
-    <Layout>
+    <AdminLayout>
       <Routes>
         <Route path="users"   element={<AdminUsers />} />
         <Route path="config"  element={<AdminConfig />} />
         <Route path="updates" element={<AdminUpdates />} />
         <Route path="*"       element={<Navigate to="users" replace />} />
       </Routes>
-    </Layout>
+    </AdminLayout>
   );
 }
 

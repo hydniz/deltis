@@ -1,16 +1,16 @@
 import { useState } from 'react';
 import {
-  AlertTriangle, Lock, Eye, EyeOff, RotateCcw, Save,
-  CheckCircle, Info, AlertCircle,
+  AlertTriangle, Lock, Eye, EyeOff, RotateCcw, Save, CheckCircle, Info,
 } from 'lucide-react';
 import api from '../../utils/api';
+import { Button, Input, Select, Alert, IconButton, Spinner } from '../ui';
 
 // Source badge
 
 export function SourceBadge({ source }) {
   if (source === 'env') {
     return (
-      <span className="flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-400 border border-amber-500/30 uppercase tracking-wide">
+      <span className="flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-full bg-ocher-100 text-ocher-700 border border-ocher-200 uppercase tracking-wide">
         <Lock size={8} />
         .env – gesperrt
       </span>
@@ -18,20 +18,20 @@ export function SourceBadge({ source }) {
   }
   if (source === 'db') {
     return (
-      <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-brand-500/15 text-brand-400 border border-brand-500/30 uppercase tracking-wide">
+      <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-brand-50 text-brand-600 border border-brand-200 uppercase tracking-wide">
         Datenbank
       </span>
     );
   }
   if (source === 'file') {
     return (
-      <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-blue-500/15 text-blue-400 border border-blue-500/30 uppercase tracking-wide">
+      <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-sage-100 text-sage-700 border border-sage-200 uppercase tracking-wide">
         Konfigurationsdatei
       </span>
     );
   }
   return (
-    <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-slate-700 text-slate-400 border border-slate-600 uppercase tracking-wide">
+    <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-paper-100 text-ink-500 border border-paper-200 uppercase tracking-wide">
       Standard
     </span>
   );
@@ -107,66 +107,58 @@ export default function ConfigRow({ entry, onSave, onReset }) {
   };
 
   return (
-    <div className="border-b border-slate-800 last:border-0">
+    <div className="border-b hairline last:border-0">
       <div className="px-4 py-4">
         <div className="flex items-start justify-between gap-3 mb-1.5">
           <div className="flex items-center gap-2 flex-wrap">
-            <span className="text-sm font-medium text-white">{entry.label}</span>
+            <span className="text-sm font-semibold text-ink-800">{entry.label}</span>
             <SourceBadge source={entry.source} />
             {entry.restartRequired && (
-              <span className="text-[10px] px-1.5 py-0.5 rounded bg-orange-900/40 text-orange-400 border border-orange-700/40">
+              <span className="text-[10px] px-1.5 py-0.5 rounded bg-ocher-100 text-ocher-700 border border-ocher-200">
                 Neustart erforderlich
               </span>
             )}
           </div>
           <div className="flex items-center gap-1.5 shrink-0">
             {entry.type === 'password' && entry.hasValue && !isStatus && (
-              <button
+              <IconButton
+                icon={showValue ? EyeOff : Eye}
+                label={showValue ? 'Verbergen' : 'Anzeigen'}
+                size={14}
                 onClick={() => setShowValue(v => !v)}
-                className="p-1.5 rounded-lg text-slate-600 hover:text-slate-300 transition-colors"
-                title={showValue ? 'Verbergen' : 'Anzeigen'}
-              >
-                {showValue ? <EyeOff size={14} /> : <Eye size={14} />}
-              </button>
+              />
             )}
             {isEditable && !editing && (
-              <button
-                onClick={startEdit}
-                className="text-xs px-2.5 py-1 rounded-lg bg-slate-700 hover:bg-slate-600 text-slate-300 hover:text-white transition-colors"
-              >
+              <Button variant="secondary" size="sm" onClick={startEdit}>
                 Bearbeiten
-              </button>
+              </Button>
             )}
             {isEditable && (entry.source === 'db' || entry.source === 'file') && !editing && (
-              <button
-                onClick={handleReset}
-                disabled={resetting}
-                className="p-1.5 rounded-lg text-slate-600 hover:text-amber-400 hover:bg-amber-900/20 transition-colors"
-                title="Auf Standard / .env zurücksetzen"
-              >
-                {resetting
-                  ? <div className="w-3.5 h-3.5 border-2 border-current border-t-transparent rounded-full animate-spin" />
-                  : <RotateCcw size={14} />}
-              </button>
+              resetting
+                ? <Spinner size="xs" />
+                : <IconButton
+                    icon={RotateCcw}
+                    label="Auf Standard / .env zurücksetzen"
+                    tone="brand"
+                    size={14}
+                    onClick={handleReset}
+                  />
             )}
-            {saveOk && <CheckCircle size={15} className="text-green-400" />}
+            {saveOk && <CheckCircle size={15} className="text-emerald-500" />}
           </div>
         </div>
 
-        <p className="text-xs text-slate-500 mb-2">{entry.description}</p>
+        <p className="text-xs text-ink-400 mb-2">{entry.description}</p>
 
         {isEnvLocked && (
-          <div className="flex items-start gap-2 text-xs text-amber-400/80 bg-amber-500/5 border border-amber-500/15 rounded-lg px-3 py-2 mb-2">
-            <AlertTriangle size={13} className="shrink-0 mt-0.5" />
-            <span>
-              Dieser Wert ist in der <code className="font-mono">.env</code> Datei festgelegt und hat Vorrang.
-              Er kann nicht über die UI geändert werden.
-            </span>
-          </div>
+          <Alert tone="warning" className="mb-2 !py-2 !text-xs">
+            Dieser Wert ist in der <code>.env</code> Datei festgelegt und hat Vorrang.
+            Er kann nicht über die UI geändert werden.
+          </Alert>
         )}
 
         {isBootstrap && !isEnvLocked && (
-          <div className="flex items-start gap-2 text-xs text-blue-400/80 bg-blue-500/5 border border-blue-500/15 rounded-lg px-3 py-2 mb-2">
+          <div className="flex items-start gap-2 text-xs text-sage-700 bg-sage-100/50 border border-sage-200 rounded-lg px-3 py-2 mb-2">
             <Info size={13} className="shrink-0 mt-0.5" />
             <span>
               Wird in <code className="font-mono">/etc/deltis/deltis.config.json</code> gespeichert.
@@ -177,8 +169,8 @@ export default function ConfigRow({ entry, onSave, onReset }) {
 
         {!editing ? (
           <div className="flex items-center gap-2">
-            <code className={`text-xs font-mono px-2 py-1 rounded bg-slate-900 ${
-              !entry.hasValue ? 'text-slate-600 italic' : 'text-slate-300'
+            <code className={`text-xs font-mono px-2 py-1 rounded-md bg-paper-100 border border-paper-200 ${
+              !entry.hasValue ? 'text-ink-300 italic' : 'text-ink-700'
             }`}>
               {displayValue()}
             </code>
@@ -186,51 +178,35 @@ export default function ConfigRow({ entry, onSave, onReset }) {
         ) : (
           <div className="space-y-2">
             {entry.type === 'select' ? (
-              <select
+              <Select
                 value={draft}
                 onChange={e => setDraft(e.target.value)}
-                className="input text-sm"
                 autoFocus
               >
                 {(entry.options || []).map(opt => (
                   <option key={opt} value={opt}>{opt}</option>
                 ))}
-              </select>
+              </Select>
             ) : (
-              <input
+              <Input
                 type={entry.type === 'password' ? 'text' : entry.type === 'number' ? 'number' : 'text'}
                 value={draft}
                 onChange={e => setDraft(e.target.value)}
-                className="input text-sm font-mono"
+                className="font-mono"
                 autoFocus
                 placeholder={entry.default || ''}
               />
             )}
 
-            {error && (
-              <div className="flex items-center gap-2 text-red-400 text-xs bg-red-900/20 border border-red-900/50 rounded-lg px-3 py-2">
-                <AlertCircle size={12} />
-                {error}
-              </div>
-            )}
+            {error && <Alert tone="error" className="!py-2 !text-xs">{error}</Alert>}
 
             <div className="flex gap-2">
-              <button
-                onClick={() => setEditing(false)}
-                className="btn-secondary text-xs py-1.5 px-3"
-              >
+              <Button variant="secondary" size="sm" onClick={() => setEditing(false)}>
                 Abbrechen
-              </button>
-              <button
-                onClick={handleSave}
-                disabled={saving || !draft.trim()}
-                className="btn-primary text-xs py-1.5 px-3 flex items-center gap-1.5"
-              >
-                {saving
-                  ? <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                  : <Save size={12} />}
+              </Button>
+              <Button size="sm" icon={Save} loading={saving} disabled={!draft.trim()} onClick={handleSave}>
                 Speichern
-              </button>
+              </Button>
             </div>
           </div>
         )}

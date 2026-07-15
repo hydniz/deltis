@@ -1,12 +1,20 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import api from '../utils/api';
 import { format, parseISO } from 'date-fns';
 import { de } from 'date-fns/locale';
-import { Plus, Target, Trash2, X, Dumbbell, Sparkles, AlertTriangle, Check, Clock, Pencil } from 'lucide-react';
+import {
+  Plus, Target, Trash2, X, Dumbbell, Sparkles, AlertTriangle, Check, Clock, Pencil,
+} from 'lucide-react';
 import {
   ResponsiveContainer, LineChart, Line, XAxis, YAxis,
   Tooltip, CartesianGrid, ReferenceLine
 } from 'recharts';
+import {
+  PageHeader, Button, Field, Input, Select, Chip, Segmented, Modal,
+  IconButton, EmptyState, PageLoader, ProgressBar, CHART,
+} from '../components/ui';
+import ActivityTypeWizard from '../components/ActivityTypeWizard';
+import NewHabitModal from '../components/NewHabitModal';
 
 // Interval helpers
 
@@ -58,9 +66,17 @@ function metricLabel(metric, customFields = []) {
   return metric;
 }
 
-// Single goal progress display
+const CONDITION_OPTIONS = [
+  { value: 'min', label: 'Mindestens' },
+  { value: 'max', label: 'Maximal' },
+  { value: 'exact', label: 'Genau' },
+];
 
-function GoalProgress({ goal }) {
+// Single goal progress display
+// `actions` (edit/delete buttons) render inside the header row so they never
+// overlap the chips on narrow screens.
+
+function GoalProgress({ goal, actions }) {
   const [progress, setProgress] = useState(null);
   const [showChart, setShowChart] = useState(false);
 
@@ -90,19 +106,19 @@ function GoalProgress({ goal }) {
 
   const renderConditionBar = (cond, idx) => {
     const { condition, currentValue, targetValue, unitSymbol, met: condMet } = cond;
-    let pct = 0, barColor = 'bg-slate-700', statusText = '';
+    let pct = 0, tone = 'danger', statusText = '';
     if (currentValue !== undefined) {
       if (condition === 'min') {
         pct = Math.min(100, (currentValue / targetValue) * 100);
-        barColor = pct >= 100 ? 'bg-emerald-500' : pct >= 60 ? 'bg-amber-500' : 'bg-red-500';
+        tone = 'auto';
         statusText = pct >= 100 ? 'Erreicht' : `${currentValue} / ${targetValue}`;
       } else if (condition === 'max') {
         pct = currentValue <= targetValue ? 100 : Math.max(0, 100 - ((currentValue - targetValue) / targetValue) * 100);
-        barColor = currentValue <= targetValue ? 'bg-emerald-500' : 'bg-red-500';
+        tone = currentValue <= targetValue ? 'success' : 'danger';
         statusText = currentValue <= targetValue ? 'Im Zielbereich' : `${currentValue} (max. ${targetValue})`;
       } else {
         pct = currentValue === targetValue ? 100 : (currentValue / targetValue) * 100;
-        barColor = currentValue === targetValue ? 'bg-emerald-500' : 'bg-amber-500';
+        tone = currentValue === targetValue ? 'success' : 'warning';
         statusText = `${currentValue} / ${targetValue}`;
       }
     }
@@ -113,79 +129,86 @@ function GoalProgress({ goal }) {
       : cond.valueScope === 'perActivity' ? ' · Ø pro Aktivität' : '';
 
     return (
-      <div key={idx} className="space-y-1">
-        <div className="flex items-center justify-between text-xs">
-          <span className="text-slate-400">
+      <div key={idx} className="space-y-1.5">
+        <div className="flex items-center justify-between text-xs gap-2">
+          <span className="text-ink-500">
             {metricLabel(cond.metric, customFields)} ({condLabel} {targetValue}{unitSymbol ? ` ${unitSymbol}` : ''}{scopeSuffix}):
-            {' '}<span className="text-slate-200 font-medium">{currentValue} {unitSymbol}</span>
+            {' '}<span className="text-ink-800 font-semibold">{currentValue} {unitSymbol}</span>
           </span>
-          <span className={`font-medium ${condMet ? 'text-emerald-400' : pct >= 60 ? 'text-amber-400' : 'text-red-400'}`}>
+          <span className={`font-semibold whitespace-nowrap ${condMet ? 'text-emerald-600' : pct >= 60 ? 'text-ocher-600' : 'text-red-600'}`}>
             {statusText}
           </span>
         </div>
-        <div className="h-2 bg-slate-800 rounded-full overflow-hidden">
-          <div className={`h-full rounded-full transition-all duration-500 ${barColor}`} style={{ width: `${pct}%` }} />
-        </div>
+        <ProgressBar pct={pct} tone={tone} />
       </div>
     );
   };
 
 
+  // Category accent: habits lean sage, activities lean terracotta.
+  const accentBorder = isHabit ? 'border-l-sage-400' : 'border-l-brand-400';
+  const accentText = isHabit ? 'text-sage-600' : 'text-brand-600';
+
   return (
-    <div className="card p-5">
-      <div className="flex items-start justify-between mb-3 gap-3">
+    <div className={`card p-5 border-l-4 ${accentBorder}`}>
+      <div className="flex items-start justify-between gap-2 mb-3">
         <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2 flex-wrap">
-            <h3 className="font-semibold text-white">{goal.name}</h3>
-            <span className={`badge text-xs ${isLongTerm ? 'bg-amber-950/60 text-amber-500' : 'bg-brand-600/20 text-brand-300'}`}>
+          <h3 className="display text-lg leading-snug">{goal.name}</h3>
+          <div className="flex items-center gap-1.5 flex-wrap mt-1.5">
+            <Chip variant="soft" color={isLongTerm ? 'amber' : 'olive'}>
               {isLongTerm ? 'Langfristig' : intervalBadgeLabel(iv, iu)}
-            </span>
-            <span className={`badge text-xs ${isHabit ? 'bg-green-600/20 text-green-300' : 'bg-white/[.08] text-white/45'}`}>
-              {isHabit ? <><Sparkles size={10} className="inline mr-1" />Gewohnheit</> : <><Dumbbell size={10} className="inline mr-1" />Aktivität</>}
-            </span>
+            </Chip>
+            <Chip variant="soft" color={isHabit ? 'sage' : 'clay'} icon={isHabit ? Sparkles : Dumbbell}>
+              {isHabit ? 'Gewohnheit' : 'Aktivität'}
+            </Chip>
           </div>
-          {goal.description && <p className="text-xs text-slate-500 mt-0.5">{goal.description}</p>}
+          {goal.description && <p className="text-xs text-ink-400 mt-1.5">{goal.description}</p>}
           {goal.metricWarnings?.length > 0 && (
             <div className="mt-1.5 flex flex-col gap-0.5">
               {goal.metricWarnings.map((w, i) => (
-                <p key={i} className="text-xs text-amber-400 flex items-center gap-1">
+                <p key={i} className="text-xs text-ocher-600 flex items-center gap-1">
                   <AlertTriangle size={11} className="flex-shrink-0" />
                   {w}
                 </p>
               ))}
             </div>
           )}
-          <p className="text-xs text-slate-500 mt-1">
-            {goal.targetName && <span className="text-slate-400 font-medium">{goal.targetName}</span>}
+          <p className="text-xs text-ink-400 mt-1">
+            {goal.targetName && <span className="text-ink-600 font-medium">{goal.targetName}</span>}
             {!isLongTerm && <> {intervalTargetLabel(iv, iu)}</>}
           </p>
           {goal.endDate && (
-            <p className="text-xs text-slate-600 mt-0.5">Bis {format(parseISO(goal.endDate), 'd. MMMM yyyy', { locale: de })}</p>
+            <p className="text-xs text-ink-300 mt-0.5">Bis {format(parseISO(goal.endDate), 'd. MMMM yyyy', { locale: de })}</p>
           )}
         </div>
+        {actions && (
+          <div className="flex items-center gap-0.5 flex-shrink-0 -mt-1 -mr-1.5">
+            {actions}
+          </div>
+        )}
       </div>
 
       {progress && condResults && condResults.length > 0 && (
         <div className="space-y-3 mb-3">
-          <div className="text-xs text-slate-500">
+          <div className={`text-[11px] uppercase tracking-[0.09em] font-semibold ${accentText}`}>
             {isLongTerm ? 'Gesamt' : intervalPeriodLabel(iv, iu)}
           </div>
           {condResults.map((cond, idx) => (
             <div key={idx}>
               {idx > 0 && (
-                <div className="flex items-center gap-2 my-1">
-                  <div className="flex-1 h-px bg-slate-700" />
-                  <span className="text-xs font-semibold text-slate-500 px-1">
+                <div className="flex items-center gap-2 my-1.5">
+                  <div className="flex-1 h-px bg-paper-200" />
+                  <span className="text-xs font-semibold text-ink-400 px-1">
                     {condOp === 'OR' ? 'ODER' : 'UND'}
                   </span>
-                  <div className="flex-1 h-px bg-slate-700" />
+                  <div className="flex-1 h-px bg-paper-200" />
                 </div>
               )}
               {renderConditionBar(cond, idx)}
             </div>
           ))}
           {condResults.length > 1 && (
-            <div className={`text-xs font-medium mt-1 ${goalMet ? 'text-emerald-400' : 'text-red-400'}`}>
+            <div className={`text-xs font-semibold mt-1 ${goalMet ? 'text-emerald-600' : 'text-red-600'}`}>
               Gesamtziel: {goalMet ? 'Erfüllt' : 'Nicht erfüllt'}
             </div>
           )}
@@ -194,62 +217,59 @@ function GoalProgress({ goal }) {
 
       {isLongTerm && stepResults.length > 0 && (
         <div className="mb-3 space-y-2">
-          <div className="text-xs text-slate-500">Zwischenziele</div>
+          <div className="text-[11px] text-ocher-600 uppercase tracking-[0.09em] font-semibold">Zwischenziele</div>
 
-          {/* Fortschrittsbar zum nächsten Zwischenziel */}
+          {/* Progress towards the next milestone */}
           {nextStep && condResults?.length > 0 && (() => {
             const firstResult = condResults[0];
             const current = firstResult?.currentValue ?? 0;
             const isMaxAgg = firstResult?.aggregation === 'max';
             const pct = Math.min(100, (current / nextStep.targetValue) * 100);
-            const barColor = pct >= 100 ? 'bg-emerald-500' : pct >= 60 ? 'bg-amber-500' : 'bg-red-500';
             return (
-              <div className="bg-amber-500/10 border border-amber-400/20 rounded-xl px-3 py-2">
-                <div className="flex items-center justify-between text-xs mb-1">
-                  <span className="text-amber-400 font-medium">
+              <div className="bg-ocher-100/60 border border-ocher-200 rounded-xl px-3.5 py-3">
+                <div className="flex items-center justify-between text-xs mb-1 gap-2">
+                  <span className="text-ocher-700 font-semibold">
                     Nächstes Zwischenziel: {nextStep.targetValue} {goal.unitSymbol}
-                    {isMaxAgg && <span className="text-amber-600 font-normal"> (Bestleistung)</span>}
+                    {isMaxAgg && <span className="font-normal opacity-70"> (Bestleistung)</span>}
                   </span>
-                  <span className="text-slate-500">
+                  <span className="text-ink-400 whitespace-nowrap">
                     bis {format(parseISO(nextStep.date), 'd. MMM yyyy', { locale: de })}
                   </span>
                 </div>
-                {nextStep.description && <div className="text-xs text-slate-500 mb-1">{nextStep.description}</div>}
-                <div className="flex justify-between text-xs text-slate-400 mb-1">
+                {nextStep.description && <div className="text-xs text-ink-500 mb-1">{nextStep.description}</div>}
+                <div className="flex justify-between text-xs text-ink-500 mb-1.5">
                   <span>{isMaxAgg ? 'Beste Einzelleistung' : 'Aktuell'}: {current} / {nextStep.targetValue} {goal.unitSymbol}</span>
                   <span>{Math.round(pct)}%</span>
                 </div>
-                <div className="h-1.5 bg-slate-800 rounded-full overflow-hidden">
-                  <div className={`h-full rounded-full transition-all duration-500 ${barColor}`} style={{ width: `${pct}%` }} />
-                </div>
+                <ProgressBar pct={pct} className="!h-1.5" />
               </div>
             );
           })()}
 
-          {/* Timeline aller Zwischenziele */}
-          <div className="space-y-1">
+          {/* Milestone timeline */}
+          <div className="space-y-1.5">
             {stepResults.map((step, idx) => {
               const isPast = step.isPast;
               const met = step.met;
               const iconClass = !isPast
-                ? 'border border-slate-600 text-slate-500'
+                ? 'border border-ink-200 text-ink-400 bg-white'
                 : met
-                  ? 'bg-emerald-900/30 border border-emerald-600 text-emerald-400'
-                  : 'bg-red-900/30 border border-red-600 text-red-400';
+                  ? 'bg-emerald-50 border border-emerald-400 text-emerald-600'
+                  : 'bg-red-50 border border-red-300 text-red-500';
               return (
                 <div key={idx} className="flex items-start gap-2 text-xs">
                   <div className={`mt-0.5 flex-shrink-0 w-4 h-4 rounded-full flex items-center justify-center ${iconClass}`}>
                     {!isPast ? <Clock size={8} /> : met ? <Check size={8} /> : <X size={8} />}
                   </div>
                   <div className="flex-1 min-w-0">
-                    <span className={isPast ? (met ? 'text-emerald-300' : 'text-red-300') : 'text-slate-300'}>
+                    <span className={`font-medium ${isPast ? (met ? 'text-emerald-700' : 'text-red-600') : 'text-ink-700'}`}>
                       {step.targetValue} {goal.unitSymbol}
                     </span>
-                    <span className="text-slate-500"> bis {format(parseISO(step.date), 'd. MMM yyyy', { locale: de })}</span>
+                    <span className="text-ink-400"> bis {format(parseISO(step.date), 'd. MMM yyyy', { locale: de })}</span>
                     {isPast && step.actualValue !== null && (
-                      <span className="text-slate-600"> · Erreicht: {step.actualValue} {goal.unitSymbol}</span>
+                      <span className="text-ink-300"> · Erreicht: {step.actualValue} {goal.unitSymbol}</span>
                     )}
-                    {step.description && <div className="text-slate-600 mt-0.5">{step.description}</div>}
+                    {step.description && <div className="text-ink-400 mt-0.5">{step.description}</div>}
                   </div>
                 </div>
               );
@@ -260,23 +280,26 @@ function GoalProgress({ goal }) {
 
       {isLongTerm && chartData.length > 0 && (
         <>
-          <button onClick={() => setShowChart(v => !v)} className="text-xs text-brand-400 hover:text-brand-300 transition-colors mb-2">
+          <button
+            onClick={() => setShowChart(v => !v)}
+            className="text-xs font-semibold text-brand-600 hover:text-brand-700 transition-colors mb-2"
+          >
             {showChart ? 'Verlauf ausblenden' : 'Verlauf anzeigen'}
           </button>
           {showChart && (
             <ResponsiveContainer width="100%" height={150}>
               <LineChart data={chartData}>
-                <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.06)" />
-                <XAxis dataKey="date" tick={{ fill: 'rgba(255,255,255,0.30)', fontSize: 10 }} tickLine={false} />
-                <YAxis tick={{ fill: 'rgba(255,255,255,0.30)', fontSize: 10 }} tickLine={false} axisLine={false} width={30} />
-                <Tooltip contentStyle={{ background: 'rgba(30,28,50,0.95)', border: '1px solid rgba(255,255,255,0.12)', borderRadius: 12, color: '#fff', backdropFilter: 'blur(8px)' }} />
-                <Line type="monotone" dataKey="Wert" stroke="#c4623a" strokeWidth={2} dot={{ r: 3 }} />
-                <Line type="monotone" dataKey="Ziel" stroke="rgba(255,255,255,0.15)" strokeWidth={1.5} strokeDasharray="4 2" dot={false} />
+                <CartesianGrid strokeDasharray="3 3" stroke={CHART.grid} />
+                <XAxis dataKey="date" tick={CHART.tick} tickLine={false} />
+                <YAxis tick={CHART.tick} tickLine={false} axisLine={false} width={30} />
+                <Tooltip contentStyle={CHART.tooltip} />
+                <Line type="monotone" dataKey="Wert" stroke={CHART.line} strokeWidth={2} dot={{ r: 3 }} />
+                <Line type="monotone" dataKey="Ziel" stroke={CHART.lineMuted} strokeWidth={1.5} strokeDasharray="4 2" dot={false} />
                 {stepResults.map((step, idx) => (
                   <ReferenceLine
                     key={idx}
                     y={step.targetValue}
-                    stroke={!step.isPast ? '#f59e0b' : step.met ? '#10b981' : '#ef4444'}
+                    stroke={!step.isPast ? '#d4a44e' : step.met ? '#10b981' : '#ef4444'}
                     strokeDasharray="3 2"
                     strokeWidth={1}
                   />
@@ -290,9 +313,135 @@ function GoalProgress({ goal }) {
   );
 }
 
-// Goal creation form
+// Shared "what is measured" scope selector
 
-function CreateGoalModal({ activityTypes, habits, onSave, onClose }) {
+function ScopeSelector({ cond, isActivityGoal, isLongTerm, onChange }) {
+  if (isActivityGoal) {
+    const value = cond.aggregation === 'max' ? 'best' : cond.valueScope === 'perActivity' ? 'avg' : 'total';
+    return (
+      <>
+        <Segmented
+          value={value}
+          onChange={v => onChange(
+            v === 'best' ? { valueScope: 'total', aggregation: 'max' }
+            : v === 'avg' ? { valueScope: 'perActivity', aggregation: 'sum' }
+            : { valueScope: 'total', aggregation: 'sum' }
+          )}
+          options={[
+            { value: 'total', label: isLongTerm ? 'Gesamt' : 'pro Intervall' },
+            { value: 'avg', label: 'Ø / Aktivität' },
+            { value: 'best', label: 'Bestleistung', tone: 'warn' },
+          ]}
+        />
+        <p className="text-xs text-ink-400 mt-1.5">
+          {cond.aggregation === 'max' ? 'Höchster Wert in einer einzelnen Aktivität.'
+            : cond.valueScope === 'perActivity' ? 'Durchschnitt aller Aktivitäten.'
+            : isLongTerm ? 'Alle Aktivitäten werden summiert.' : 'Summe im Intervall.'}
+        </p>
+      </>
+    );
+  }
+  return (
+    <Segmented
+      value={cond.valueScope === 'perActivity' ? 'avg' : 'total'}
+      onChange={v => onChange(
+        v === 'avg' ? { valueScope: 'perActivity', aggregation: 'sum' } : { valueScope: 'total', aggregation: 'sum' }
+      )}
+      options={[
+        { value: 'total', label: 'Gesamt' },
+        { value: 'avg', label: 'Ø pro Tag' },
+      ]}
+    />
+  );
+}
+
+// Shared activity filter editor (used by create & edit for "Bestleistung")
+
+function ActivityFilterEditor({ filters, filterFields, onAdd, onUpdate, onRemove, onToggleValue }) {
+  if (!filterFields.length) return null;
+  return (
+    <div className="panel p-3.5 space-y-2.5">
+      <div className="flex items-center justify-between">
+        <div>
+          <span className="text-xs font-semibold text-ink-700">In derselben Aktivität</span>
+          <p className="text-xs text-ink-400 mt-0.5">Felder, die in der Bestleistungs-Aktivität erfüllt sein müssen</p>
+        </div>
+        <button
+          type="button"
+          onClick={onAdd}
+          className="text-xs font-semibold text-brand-600 hover:text-brand-700 flex items-center gap-1 flex-shrink-0"
+        >
+          <Plus size={11} /> Filter
+        </button>
+      </div>
+      {filters.length === 0 && (
+        <p className="text-xs text-ink-300">Kein Filter – gilt für alle Aktivitäten.</p>
+      )}
+      {filters.map((filter, fi) => {
+        const field = filterFields.find(f => f.key === filter.fieldKey) || filterFields[0];
+        const isNum = (filter.fieldType || 'select') === 'number';
+        return (
+          <div key={fi} className="bg-white border hairline rounded-xl p-2.5 space-y-2">
+            <div className="flex items-center gap-2">
+              <Select
+                className="!text-xs !py-1.5 flex-1"
+                value={filter.fieldKey}
+                onChange={e => {
+                  const nf = filterFields.find(f => f.key === e.target.value) || filterFields[0];
+                  onUpdate(fi, { fieldKey: nf.key, fieldType: nf.type, values: [], numValue: '', numOperator: 'min' });
+                }}
+              >
+                {filterFields.map(f => <option key={f.key} value={f.key}>{f.label}{f.unit ? ` (${f.unit})` : ''}</option>)}
+              </Select>
+              <IconButton icon={X} label="Filter entfernen" tone="danger" size={13} onClick={() => onRemove(fi)} />
+            </div>
+            {isNum ? (
+              <div className="space-y-1.5">
+                <Segmented
+                  value={filter.numOperator || 'min'}
+                  onChange={v => onUpdate(fi, { numOperator: v })}
+                  options={CONDITION_OPTIONS}
+                />
+                <div className="flex gap-2 items-center">
+                  <Input
+                    type="number"
+                    className="flex-1 !text-sm !py-1.5"
+                    value={filter.numValue ?? ''}
+                    onChange={e => onUpdate(fi, { numValue: e.target.value === '' ? '' : +e.target.value })}
+                    placeholder="Wert"
+                    min="0"
+                    step="0.1"
+                  />
+                  {field?.unit && <span className="text-xs text-ink-500 flex-shrink-0">{field.unit}</span>}
+                </div>
+              </div>
+            ) : (
+              <div>
+                <p className="text-xs text-ink-400 mb-1.5">Muss einen dieser Werte haben:</p>
+                <div className="flex flex-wrap gap-1.5">
+                  {(field?.options || []).map(opt => (
+                    <Chip
+                      key={opt}
+                      color="clay"
+                      active={(filter.values || []).includes(opt)}
+                      onClick={() => onToggleValue(fi, opt)}
+                    >
+                      {opt}
+                    </Chip>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+// Goal creation wizard
+
+function CreateGoalModal({ activityTypes, habits, onSave, onClose, onTargetsChanged }) {
   const [form, setForm] = useState({
     name: '',
     description: '',
@@ -311,7 +460,32 @@ function CreateGoalModal({ activityTypes, habits, onSave, onClose }) {
   const [saving, setSaving] = useState(false);
   const [currentStep, setCurrentStep] = useState(1);
 
+  // Inline creation of missing targets — the goal wizard stays mounted with
+  // all its state, and the freshly created item is selected on return.
+  const [showCreateType, setShowCreateType] = useState(false);
+  const [showCreateHabit, setShowCreateHabit] = useState(false);
+
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
+
+  const handleTypeCreated = async (typeForm) => {
+    const res = await api.post('/activity-types', typeForm);
+    const created = res.data;
+    await onTargetsChanged?.();
+    setForm(f => ({ ...f, targetRef: created._id }));
+    setShowCreateType(false);
+  };
+
+  const handleHabitCreated = async (created) => {
+    await onTargetsChanged?.();
+    setForm(f => ({
+      ...f,
+      targetRef: created._id,
+      conditions: f.conditions.map(c =>
+        c.metric === 'value' ? { ...c, unitSymbol: created.unitSymbol || '' } : c
+      ),
+    }));
+    setShowCreateHabit(false);
+  };
 
   const isActivityGoal = form.targetCategory === 'activity';
   const selectedActivityType = activityTypes.find(t => t._id === form.targetRef);
@@ -520,387 +694,399 @@ function CreateGoalModal({ activityTypes, habits, onSave, onClose }) {
   const stepTitles = ['Grundlagen', 'Was & Bedingungen', 'Meilensteine'];
 
   return (
-    <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-end sm:items-center justify-center z-50">
-      <div className="bg-[#1e1a14]/95 backdrop-blur-2xl border border-white/[.1] w-full max-w-lg rounded-t-2xl sm:rounded-2xl flex flex-col" style={{ maxHeight: '92dvh' }}>
-
-        {/* Drag handle – mobile only */}
-        <div className="w-10 h-1 bg-white/15 rounded-full mx-auto mt-3 sm:hidden flex-shrink-0" />
-
-        {/* Header */}
-        <div className="flex items-center justify-between px-5 pt-4 pb-3 border-b border-white/[.08] flex-shrink-0">
-          <div>
-            <h2 className="text-base font-semibold text-white">Neues Ziel</h2>
-            <p className="text-xs text-white/35 mt-0.5">{stepTitles[currentStep - 1]}</p>
-          </div>
-          <div className="flex items-center gap-3">
-            <div className="flex items-center gap-1.5">
-              {Array.from({ length: totalSteps }).map((_, i) => (
-                <div key={i} className={`rounded-full transition-all duration-200 ${i + 1 === currentStep ? 'w-5 h-1.5 bg-brand-500' : i + 1 < currentStep ? 'w-1.5 h-1.5 bg-brand-600' : 'w-1.5 h-1.5 bg-white/15'}`} />
-              ))}
-            </div>
-            <button type="button" onClick={onClose} className="text-white/40 hover:text-white/80 p-1 -mr-1">
-              <X size={20} />
-            </button>
-          </div>
-        </div>
-
-        {/* Scrollable content */}
-        <div className="flex-1 overflow-y-auto px-5 py-5 space-y-4">
-
-          {/* Step 1: Grundlagen */}
-          {currentStep === 1 && (<>
-            <div>
-              <label className="label">Name</label>
-              <input className="input text-base" value={form.name} onChange={e => set('name', e.target.value)} placeholder="z.B. Öfter laufen gehen" autoFocus />
-            </div>
-
-            <div>
-              <label className="label">Zielart</label>
-              <div className="grid grid-cols-2 gap-2">
-                <button type="button" onClick={() => set('isLongTerm', false)}
-                  className={`p-3 rounded-lg border text-left transition-colors ${!form.isLongTerm ? 'border-brand-500 bg-brand-950/60 text-white' : 'border-white/[.12] bg-white/[.07] text-white/45'}`}
-                >
-                  <div className="font-semibold text-sm">Periodisch</div>
-                  <div className="text-xs opacity-60 mt-0.5">Täglich, wöchentlich…</div>
-                </button>
-                <button type="button" onClick={() => set('isLongTerm', true)}
-                  className={`p-3 rounded-lg border text-left transition-colors ${form.isLongTerm ? 'border-amber-500 bg-amber-950/60 text-white' : 'border-white/[.12] bg-white/[.07] text-white/45'}`}
-                >
-                  <div className="font-semibold text-sm">Langfristig</div>
-                  <div className="text-xs opacity-60 mt-0.5">Enddatum & Meilensteine</div>
-                </button>
-              </div>
-              <p className="text-xs text-slate-500 mt-2">
-                {!form.isLongTerm
-                  ? 'Läuft dauerhaft. Fortschritt wird pro Intervall gemessen.'
-                  : 'Hat ein Enddatum. Ideal für Projekte & persönliche Rekorde.'}
-              </p>
-            </div>
-
-            {!form.isLongTerm && (
-              <div className="bg-white/[.05] border border-white/[.09] rounded-2xl p-4">
-                <label className="label text-xs mb-2">Intervall</label>
-                <div className="flex gap-2">
-                  <input type="number" className="input w-20" min="1" max="365" value={form.intervalValue} onChange={e => set('intervalValue', Math.max(1, parseInt(e.target.value) || 1))} />
-                  <select className="input flex-1" value={form.intervalUnit} onChange={e => set('intervalUnit', e.target.value)}>
-                    <option value="day">Tag(e)</option>
-                    <option value="week">Woche(n)</option>
-                    <option value="month">Monat(e)</option>
-                  </select>
-                </div>
-                <p className="text-xs text-slate-500 mt-2">Fortschritt wird {targetLabel} gemessen</p>
-              </div>
-            )}
-
-            {form.isLongTerm && (
-              <div className="bg-white/[.05] border border-white/[.09] rounded-2xl p-4">
-                <label className="label text-xs mb-2">Zeitraum</label>
-                <div className="grid grid-cols-2 gap-2">
-                  <div>
-                    <label className="label text-xs mb-1">Start</label>
-                    <input type="date" className="input" value={form.startDate} onChange={e => set('startDate', e.target.value)} />
-                  </div>
-                  <div>
-                    <label className="label text-xs mb-1">Ende</label>
-                    <input type="date" className="input" value={form.endDate} onChange={e => set('endDate', e.target.value)} />
-                  </div>
-                </div>
-              </div>
-            )}
-
-            <div>
-              <label className="label">Beschreibung <span className="text-slate-600 font-normal">(optional)</span></label>
-              <input className="input" value={form.description} onChange={e => set('description', e.target.value)} placeholder="Kurze Notiz" />
-            </div>
-          </>)}
-
-          {/* Step 2: Was & Bedingungen */}
-          {currentStep === 2 && (<>
-            <div>
-              <label className="label">Kategorie</label>
-              <div className="grid grid-cols-2 gap-2">
-                <button type="button" onClick={() => handleCategoryChange('activity')}
-                  className={`p-3 rounded-lg border text-left transition-colors ${form.targetCategory === 'activity' ? 'border-brand-500 bg-brand-950/60 text-white' : 'border-white/[.12] bg-white/[.07] text-white/45'}`}
-                >
-                  <div className="flex items-center gap-1.5 font-semibold text-sm"><Dumbbell size={13} /> Aktivität</div>
-                  <div className="text-xs opacity-60 mt-0.5">Sport, Training…</div>
-                </button>
-                <button type="button" onClick={() => handleCategoryChange('habit')}
-                  className={`p-3 rounded-lg border text-left transition-colors ${form.targetCategory === 'habit' ? 'border-emerald-500 bg-emerald-950/60 text-white' : 'border-white/[.12] bg-white/[.07] text-white/45'}`}
-                >
-                  <div className="flex items-center gap-1.5 font-semibold text-sm"><Sparkles size={13} /> Gewohnheit</div>
-                  <div className="text-xs opacity-60 mt-0.5">Tägliche Routinen…</div>
-                </button>
-              </div>
-            </div>
-
-            <div>
-              <label className="label">{isActivityGoal ? 'Welche Aktivität?' : 'Welche Gewohnheit?'}</label>
-              <select className="input" value={form.targetRef} onChange={e => handleRefChange(e.target.value)}>
-                {isActivityGoal
-                  ? activityTypes.map(t => <option key={t._id} value={t._id}>{t.label}</option>)
-                  : habits.map(h => <option key={h._id} value={h._id}>{h.name} ({h.unitSymbol})</option>)
-                }
-              </select>
-              {isActivityGoal && activityTypes.length === 0 && <p className="text-xs text-amber-400 mt-1">Keine Aktivitätstypen gefunden.</p>}
-              {!isActivityGoal && habits.length === 0 && <p className="text-xs text-amber-400 mt-1">Keine Gewohnheiten gefunden.</p>}
-            </div>
-
-            <div>
-              <div className="flex items-center justify-between mb-2">
-                <label className="label mb-0">Bedingungen</label>
-                <button type="button" onClick={addCondition} className="text-xs text-brand-400 hover:text-brand-300 flex items-center gap-1"><Plus size={12} /> Hinzufügen</button>
-              </div>
-              <div className="space-y-3">
-                {form.conditions.map((cond, i) => (
-                  <div key={i} className="bg-white/[.05] border border-white/[.09] rounded-2xl p-3 space-y-3">
-                    {form.conditions.length > 1 && (
-                      <div className="flex items-center justify-between">
-                        <span className="text-xs font-semibold text-slate-300">Bedingung {i + 1}</span>
-                        <button type="button" onClick={() => removeCondition(i)} className="text-slate-600 hover:text-red-400"><X size={14} /></button>
-                      </div>
-                    )}
-                    <div>
-                      <label className="label text-xs mb-1">Messgröße</label>
-                      <select className="input" value={cond.metric} onChange={e => handleMetricChangeForCondition(i, e.target.value)}>
-                        {isActivityGoal ? (<>
-                          <option value="count">Anzahl Aktivitäten</option>
-                          {selectedActivityType?.showDuration !== false && <option value="duration">Dauer (min)</option>}
-                          {selectedActivityType?.showDistance && <option value="distance">Distanz (km)</option>}
-                          {(selectedActivityType?.customFields || []).filter(f => f.type === 'number').map(f => (
-                            <option key={f.key} value={`custom_${f.key}`}>{f.label}{f.unit ? ` (${f.unit})` : ''}</option>
-                          ))}
-                          {(selectedActivityType?.customFields || []).filter(f => f.type === 'select' || f.type === 'multiselect').map(f =>
-                            (f.options || []).map(opt => (
-                              <option key={`${f.key}:${opt}`} value={`select_${f.key}:${opt}`}>{f.label} = {opt}</option>
-                            ))
-                          )}
-                        </>) : (<>
-                          <option value="value">Summe der Werte{selectedHabit ? ` (${selectedHabit.unitSymbol})` : ''}</option>
-                          <option value="count">Anzahl Tage</option>
-                        </>)}
-                      </select>
-                    </div>
-                    <div>
-                      <label className="label text-xs mb-1">Bedingung</label>
-                      <div className="flex gap-1.5">
-                        {[{ v: 'min', l: 'Mindestens' }, { v: 'max', l: 'Maximal' }, { v: 'exact', l: 'Genau' }].map(({ v, l }) => (
-                          <button key={v} type="button" onClick={() => updateCondition(i, 'condition', v)}
-                            className={`flex-1 py-2 rounded-md text-xs font-semibold transition-colors ${cond.condition === v ? 'bg-brand-600 text-white' : 'bg-white/[.08] text-white/45'}`}
-                          >{l}</button>
-                        ))}
-                      </div>
-                    </div>
-                    <div>
-                      <label className="label text-xs mb-1">Zielwert</label>
-                      <div className="flex gap-2">
-                        <input type="number" className="input flex-1" value={cond.targetValue} onChange={e => updateCondition(i, 'targetValue', e.target.value)} min="0" step="0.1" placeholder="z.B. 3" />
-                        <input className="input w-20 text-center" value={cond.unitSymbol} onChange={e => updateCondition(i, 'unitSymbol', e.target.value)} placeholder="Einheit" />
-                      </div>
-                    </div>
-                    {scopeApplies(cond.metric) && (
-                      <div>
-                        <label className="label text-xs mb-1">Was wird gemessen?</label>
-                        {isActivityGoal ? (<>
-                          <div className="flex gap-1.5">
-                            <button type="button" onClick={() => updateConditionFields(i, { valueScope: 'total', aggregation: 'sum' })}
-                              className={`flex-1 py-2 rounded-md text-xs font-semibold transition-colors ${cond.aggregation !== 'max' && cond.valueScope !== 'perActivity' ? 'bg-brand-600 text-white' : 'bg-white/[.08] text-white/45'}`}
-                            >{form.isLongTerm ? 'Gesamt' : 'pro Intervall'}</button>
-                            <button type="button" onClick={() => updateConditionFields(i, { valueScope: 'perActivity', aggregation: 'sum' })}
-                              className={`flex-1 py-2 rounded-md text-xs font-semibold transition-colors ${cond.aggregation !== 'max' && cond.valueScope === 'perActivity' ? 'bg-brand-600 text-white' : 'bg-white/[.08] text-white/45'}`}
-                            >Ø / Aktivität</button>
-                            <button type="button" onClick={() => updateConditionFields(i, { valueScope: 'total', aggregation: 'max' })}
-                              className={`flex-1 py-2 rounded-md text-xs font-semibold transition-colors ${cond.aggregation === 'max' ? 'bg-amber-600 text-white' : 'bg-white/[.08] text-white/45'}`}
-                            >Bestleistung</button>
-                          </div>
-                          <p className="text-xs text-slate-600 mt-1.5">
-                            {cond.aggregation === 'max' ? 'Höchster Wert in einer einzelnen Aktivität.'
-                              : cond.valueScope === 'perActivity' ? 'Durchschnitt aller Aktivitäten.'
-                              : form.isLongTerm ? 'Alle Aktivitäten werden summiert.' : 'Summe im Intervall.'}
-                          </p>
-                        </>) : (
-                          <div className="flex gap-1.5">
-                            <button type="button" onClick={() => updateConditionFields(i, { valueScope: 'total', aggregation: 'sum' })}
-                              className={`flex-1 py-2 rounded-md text-xs font-semibold transition-colors ${cond.valueScope !== 'perActivity' ? 'bg-brand-600 text-white' : 'bg-white/[.08] text-white/45'}`}
-                            >Gesamt</button>
-                            <button type="button" onClick={() => updateConditionFields(i, { valueScope: 'perActivity', aggregation: 'sum' })}
-                              className={`flex-1 py-2 rounded-md text-xs font-semibold transition-colors ${cond.valueScope === 'perActivity' ? 'bg-brand-600 text-white' : 'bg-white/[.08] text-white/45'}`}
-                            >Ø pro Tag</button>
-                          </div>
-                        )}
-                      </div>
-                    )}
-
-                    {/* Aktivitätsfilter – bei Bestleistung + Aktivitätsziel */}
-                    {cond.aggregation === 'max' && isActivityGoal && (() => {
-                      const filterFields = getFilterableFields();
-                      if (!filterFields.length) return null;
-                      const filters = cond.activityFilters || [];
-                      return (
-                        <div className="border border-white/[.1] rounded-2xl p-3 space-y-2">
-                          <div className="flex items-center justify-between">
-                            <div>
-                              <span className="text-xs font-semibold text-slate-200">In derselben Aktivität</span>
-                              <p className="text-xs text-slate-500 mt-0.5">Felder, die in der Bestleistungs-Aktivität erfüllt sein müssen</p>
-                            </div>
-                            <button type="button" onClick={() => addActivityFilter(i)} className="text-xs text-brand-400 hover:text-brand-300 flex items-center gap-1 flex-shrink-0">
-                              <Plus size={11} /> Filter
-                            </button>
-                          </div>
-                          {filters.length === 0 && (
-                            <p className="text-xs text-slate-600">Kein Filter – gilt für alle Aktivitäten.</p>
-                          )}
-                          {filters.map((filter, fi) => {
-                            const field = filterFields.find(f => f.key === filter.fieldKey) || filterFields[0];
-                            const isNum = (filter.fieldType || 'select') === 'number';
-                            return (
-                              <div key={fi} className="bg-white/[.06] rounded-xl p-2.5 space-y-2">
-                                <div className="flex items-center gap-2">
-                                  <select className="input text-xs py-1.5 flex-1" value={filter.fieldKey}
-                                    onChange={e => {
-                                      const nf = filterFields.find(f => f.key === e.target.value) || filterFields[0];
-                                      updateActivityFilter(i, fi, { fieldKey: nf.key, fieldType: nf.type, values: [], numValue: '', numOperator: 'min' });
-                                    }}
-                                  >
-                                    {filterFields.map(f => <option key={f.key} value={f.key}>{f.label}{f.unit ? ` (${f.unit})` : ''}</option>)}
-                                  </select>
-                                  <button type="button" onClick={() => removeActivityFilter(i, fi)} className="text-slate-600 hover:text-red-400 flex-shrink-0">
-                                    <X size={13} />
-                                  </button>
-                                </div>
-                                {isNum ? (
-                                  <div className="space-y-1.5">
-                                    <div className="flex gap-1.5">
-                                      {[{ v: 'min', l: 'Mindestens' }, { v: 'max', l: 'Maximal' }, { v: 'exact', l: 'Genau' }].map(({ v, l }) => (
-                                        <button key={v} type="button"
-                                          onClick={() => updateActivityFilter(i, fi, { numOperator: v })}
-                                          className={`flex-1 py-1.5 rounded-lg text-xs font-semibold transition-colors ${(filter.numOperator || 'min') === v ? 'bg-brand-600 text-white' : 'bg-white/[.08] text-white/45'}`}
-                                        >{l}</button>
-                                      ))}
-                                    </div>
-                                    <div className="flex gap-2 items-center">
-                                      <input type="number" className="input flex-1 text-sm py-1.5"
-                                        value={filter.numValue ?? ''}
-                                        onChange={e => updateActivityFilter(i, fi, { numValue: e.target.value === '' ? '' : +e.target.value })}
-                                        placeholder="Wert" min="0" step="0.1"
-                                      />
-                                      {field?.unit && <span className="text-xs text-slate-400 flex-shrink-0">{field.unit}</span>}
-                                    </div>
-                                  </div>
-                                ) : (
-                                  <div>
-                                    <p className="text-xs text-slate-500 mb-1.5">Muss einen dieser Werte haben:</p>
-                                    <div className="flex flex-wrap gap-1.5">
-                                      {(field?.options || []).map(opt => (
-                                        <button key={opt} type="button"
-                                          onClick={() => toggleFilterValue(i, fi, opt)}
-                                          className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-colors ${(filter.values || []).includes(opt) ? 'bg-brand-600 text-white' : 'bg-white/[.08] text-white/45'}`}
-                                        >{opt}</button>
-                                      ))}
-                                    </div>
-                                  </div>
-                                )}
-                              </div>
-                            );
-                          })}
-                        </div>
-                      );
-                    })()}
-                  </div>
-                ))}
-              </div>
-              {form.conditions.length >= 2 && (
-                <div className="flex items-center gap-2 mt-3">
-                  <span className="text-xs text-slate-500">Verknüpfung:</span>
-                  {['AND', 'OR'].map(op => (
-                    <button key={op} type="button" onClick={() => set('conditionOperator', op)}
-                      className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors ${form.conditionOperator === op ? 'bg-brand-600 text-white' : 'bg-white/[.08] text-white/45'}`}
-                    >{op === 'AND' ? 'UND' : 'ODER'}</button>
-                  ))}
-                </div>
-              )}
-            </div>
-          </>)}
-
-          {/* Step 3: Meilensteine (nur langfristig) */}
-          {currentStep === 3 && (
-            <div>
-              <div className="flex items-center justify-between mb-1">
-                <div>
-                  <p className="text-sm font-semibold text-white">Meilensteine</p>
-                  <p className="text-xs text-slate-500 mt-0.5">Optional – hilft den Fortschritt einzuschätzen</p>
-                </div>
-                <button type="button" onClick={addStep} className="flex items-center gap-1 text-xs text-brand-400 hover:text-brand-300"><Plus size={12} /> Hinzufügen</button>
-              </div>
-              {steps.length === 0 && (
-                <button type="button" onClick={addStep}
-                  className="w-full mt-3 border-2 border-dashed border-white/20 hover:border-brand-400/60 rounded-2xl py-8 text-slate-500 hover:text-brand-400 transition-colors flex flex-col items-center gap-2"
-                >
-                  <Plus size={22} />
-                  <span className="text-sm">Ersten Meilenstein hinzufügen</span>
-                </button>
-              )}
-              <div className="space-y-2 mt-2">
-                {steps.map((milestone, i) => {
-                  const firstCond = form.conditions[0];
-                  const cLabel = firstCond?.condition === 'max' ? 'maximal' : firstCond?.condition === 'exact' ? 'genau' : 'mindestens';
-                  const unit = firstCond?.unitSymbol || '';
-                  const mLabel = metricLabel(firstCond?.metric, selectedActivityType?.customFields);
-                  return (
-                    <div key={i} className="bg-white/[.05] border border-white/[.09] rounded-2xl p-3 space-y-2">
-                      <div className="flex items-center justify-between">
-                        <span className="text-xs font-semibold text-slate-300">Meilenstein {i + 1}</span>
-                        <button type="button" onClick={() => removeStep(i)} className="text-slate-600 hover:text-red-400"><X size={14} /></button>
-                      </div>
-                      <div className="grid grid-cols-2 gap-2">
-                        <div>
-                          <label className="label text-xs mb-1">Bis Datum</label>
-                          <input type="date" className="input text-sm py-1.5" value={milestone.date} onChange={e => updateStep(i, 'date', e.target.value)} />
-                        </div>
-                        <div>
-                          <label className="label text-xs mb-1">{mLabel}{unit ? ` (${unit})` : ''}</label>
-                          <input type="number" className="input text-sm py-1.5" value={milestone.targetValue} onChange={e => updateStep(i, 'targetValue', e.target.value)} placeholder={`${cLabel}…`} min="0" step="0.1" />
-                        </div>
-                      </div>
-                      <div>
-                        <label className="label text-xs mb-1">Beschreibung <span className="text-slate-600 font-normal">(optional)</span></label>
-                        <input className="input text-sm py-1.5" value={milestone.description} onChange={e => updateStep(i, 'description', e.target.value)} placeholder="z.B. Halbzeitmarke" />
-                      </div>
-                      {milestone.date && milestone.targetValue !== '' && (
-                        <p className="text-xs text-brand-300/80 bg-brand-500/10 rounded-xl px-2 py-1">
-                          → Bis {format(parseISO(milestone.date), 'd. MMMM yyyy', { locale: de })}: {cLabel} {milestone.targetValue}{unit ? ` ${unit}` : ''}
-                        </p>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          )}
-        </div>
-
-        {/* Footer */}
-        <div className="flex gap-3 px-5 py-4 border-t border-white/[.08] flex-shrink-0">
+    <>
+    <Modal
+      onClose={() => {
+        // Keep the wizard (and its state) open while a nested creation
+        // modal is on top — Escape/backdrop should only close the top one.
+        if (!showCreateType && !showCreateHabit) onClose();
+      }}
+      title="Neues Ziel"
+      subtitle={stepTitles[currentStep - 1]}
+      size="lg"
+      steps={totalSteps}
+      step={currentStep}
+      footer={
+        <>
           {currentStep > 1
-            ? <button type="button" onClick={() => setCurrentStep(s => s - 1)} className="btn-secondary flex-1">Zurück</button>
-            : <button type="button" onClick={onClose} className="btn-secondary flex-1">Abbrechen</button>
+            ? <Button variant="secondary" className="flex-1" onClick={() => setCurrentStep(s => s - 1)}>Zurück</Button>
+            : <Button variant="secondary" className="flex-1" onClick={onClose}>Abbrechen</Button>
           }
           {currentStep < totalSteps ? (
-            <button type="button"
-              onClick={() => setCurrentStep(s => s + 1)}
+            <Button
+              className="flex-1"
               disabled={currentStep === 1 && !form.name.trim()}
-              className="btn-primary flex-1 disabled:opacity-40 disabled:cursor-not-allowed"
-            >Weiter</button>
+              onClick={() => setCurrentStep(s => s + 1)}
+            >
+              Weiter
+            </Button>
           ) : (
-            <button type="button"
+            <Button
+              className="flex-1"
+              loading={saving}
+              disabled={!form.name.trim() || !form.targetRef || !form.conditions.some(c => c.targetValue !== '')}
               onClick={handleSubmit}
-              disabled={saving || !form.name.trim() || !form.targetRef || !form.conditions.some(c => c.targetValue !== '')}
-              className="btn-primary flex-1 disabled:opacity-40 disabled:cursor-not-allowed"
-            >{saving ? 'Speichern…' : 'Ziel erstellen'}</button>
+            >
+              Ziel erstellen
+            </Button>
           )}
-        </div>
+        </>
+      }
+    >
+      <div className="space-y-4">
+        {/* Step 1: basics */}
+        {currentStep === 1 && (<>
+          <Field label="Name">
+            <Input
+              className="!text-base"
+              value={form.name}
+              onChange={e => set('name', e.target.value)}
+              placeholder="z.B. Öfter laufen gehen"
+              autoFocus
+            />
+          </Field>
+
+          <div>
+            <label className="label">Zielart</label>
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                type="button"
+                onClick={() => set('isLongTerm', false)}
+                className={`p-3.5 rounded-xl border text-left transition-colors ${
+                  !form.isLongTerm
+                    ? 'border-brand-400 bg-brand-50 text-ink-900'
+                    : 'border-paper-200 bg-paper-50 text-ink-400 hover:text-ink-600'
+                }`}
+              >
+                <div className="font-semibold text-sm">Periodisch</div>
+                <div className="text-xs opacity-70 mt-0.5">Täglich, wöchentlich…</div>
+              </button>
+              <button
+                type="button"
+                onClick={() => set('isLongTerm', true)}
+                className={`p-3.5 rounded-xl border text-left transition-colors ${
+                  form.isLongTerm
+                    ? 'border-ocher-400 bg-ocher-100/60 text-ink-900'
+                    : 'border-paper-200 bg-paper-50 text-ink-400 hover:text-ink-600'
+                }`}
+              >
+                <div className="font-semibold text-sm">Langfristig</div>
+                <div className="text-xs opacity-70 mt-0.5">Enddatum & Meilensteine</div>
+              </button>
+            </div>
+            <p className="text-xs text-ink-400 mt-2">
+              {!form.isLongTerm
+                ? 'Läuft dauerhaft. Fortschritt wird pro Intervall gemessen.'
+                : 'Hat ein Enddatum. Ideal für Projekte & persönliche Rekorde.'}
+            </p>
+          </div>
+
+          {!form.isLongTerm && (
+            <div className="panel p-4">
+              <label className="label">Intervall</label>
+              <div className="flex gap-2">
+                <Input
+                  type="number"
+                  className="!w-20"
+                  min="1"
+                  max="365"
+                  value={form.intervalValue}
+                  onChange={e => set('intervalValue', Math.max(1, parseInt(e.target.value) || 1))}
+                />
+                <Select className="flex-1" value={form.intervalUnit} onChange={e => set('intervalUnit', e.target.value)}>
+                  <option value="day">Tag(e)</option>
+                  <option value="week">Woche(n)</option>
+                  <option value="month">Monat(e)</option>
+                </Select>
+              </div>
+              <p className="text-xs text-ink-400 mt-2">Fortschritt wird {targetLabel} gemessen</p>
+            </div>
+          )}
+
+          {form.isLongTerm && (
+            <div className="panel p-4">
+              <label className="label">Zeitraum</label>
+              <div className="grid grid-cols-2 gap-2">
+                <Field label="Start">
+                  <Input type="date" value={form.startDate} onChange={e => set('startDate', e.target.value)} />
+                </Field>
+                <Field label="Ende">
+                  <Input type="date" value={form.endDate} onChange={e => set('endDate', e.target.value)} />
+                </Field>
+              </div>
+            </div>
+          )}
+
+          <Field label="Beschreibung" optional>
+            <Input value={form.description} onChange={e => set('description', e.target.value)} placeholder="Kurze Notiz" />
+          </Field>
+        </>)}
+
+        {/* Step 2: target & conditions */}
+        {currentStep === 2 && (<>
+          <div>
+            <label className="label">Kategorie</label>
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                type="button"
+                onClick={() => handleCategoryChange('activity')}
+                className={`p-3.5 rounded-xl border text-left transition-colors ${
+                  form.targetCategory === 'activity'
+                    ? 'border-brand-400 bg-brand-50 text-ink-900'
+                    : 'border-paper-200 bg-paper-50 text-ink-400 hover:text-ink-600'
+                }`}
+              >
+                <div className="flex items-center gap-1.5 font-semibold text-sm"><Dumbbell size={13} /> Aktivität</div>
+                <div className="text-xs opacity-70 mt-0.5">Sport, Training…</div>
+              </button>
+              <button
+                type="button"
+                onClick={() => handleCategoryChange('habit')}
+                className={`p-3.5 rounded-xl border text-left transition-colors ${
+                  form.targetCategory === 'habit'
+                    ? 'border-sage-400 bg-sage-100/70 text-ink-900'
+                    : 'border-paper-200 bg-paper-50 text-ink-400 hover:text-ink-600'
+                }`}
+              >
+                <div className="flex items-center gap-1.5 font-semibold text-sm"><Sparkles size={13} /> Gewohnheit</div>
+                <div className="text-xs opacity-70 mt-0.5">Tägliche Routinen…</div>
+              </button>
+            </div>
+          </div>
+
+          <Field label={isActivityGoal ? 'Welche Aktivität?' : 'Welche Gewohnheit?'}>
+            {(isActivityGoal ? activityTypes.length > 0 : habits.length > 0) ? (
+              <>
+                <Select value={form.targetRef} onChange={e => handleRefChange(e.target.value)}>
+                  {isActivityGoal
+                    ? activityTypes.map(t => <option key={t._id} value={t._id}>{t.label}</option>)
+                    : habits.map(h => <option key={h._id} value={h._id}>{h.name} ({h.unitSymbol})</option>)
+                  }
+                </Select>
+                <button
+                  type="button"
+                  onClick={() => isActivityGoal ? setShowCreateType(true) : setShowCreateHabit(true)}
+                  className="mt-2 flex items-center gap-1 text-xs font-semibold text-brand-600 hover:text-brand-700 transition-colors"
+                >
+                  <Plus size={12} />
+                  {isActivityGoal ? 'Neuen Aktivitätstyp erstellen' : 'Neue Gewohnheit erstellen'}
+                </button>
+              </>
+            ) : (
+              <button
+                type="button"
+                onClick={() => isActivityGoal ? setShowCreateType(true) : setShowCreateHabit(true)}
+                className="w-full border-2 border-dashed border-ink-200 hover:border-brand-400 rounded-2xl py-6 px-4 text-ink-400 hover:text-brand-600 transition-colors flex flex-col items-center gap-1.5"
+              >
+                <Plus size={20} />
+                <span className="text-sm font-medium">
+                  {isActivityGoal
+                    ? 'Noch keine Aktivitätstypen – jetzt erstellen'
+                    : 'Noch keine Gewohnheiten – jetzt erstellen'}
+                </span>
+                <span className="text-xs">Danach geht es hier direkt weiter.</span>
+              </button>
+            )}
+          </Field>
+
+          <div>
+            <div className="flex items-center justify-between mb-2">
+              <label className="label !mb-0">Bedingungen</label>
+              <button
+                type="button"
+                onClick={addCondition}
+                className="text-xs font-semibold text-brand-600 hover:text-brand-700 flex items-center gap-1"
+              >
+                <Plus size={12} /> Hinzufügen
+              </button>
+            </div>
+            <div className="space-y-3">
+              {form.conditions.map((cond, i) => (
+                <div key={i} className="panel p-3.5 space-y-3">
+                  {form.conditions.length > 1 && (
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-semibold text-ink-700">Bedingung {i + 1}</span>
+                      <IconButton icon={X} label="Bedingung entfernen" tone="danger" size={14} onClick={() => removeCondition(i)} />
+                    </div>
+                  )}
+                  <Field label="Messgröße">
+                    <Select value={cond.metric} onChange={e => handleMetricChangeForCondition(i, e.target.value)}>
+                      {isActivityGoal ? (<>
+                        <option value="count">Anzahl Aktivitäten</option>
+                        {selectedActivityType?.showDuration !== false && <option value="duration">Dauer (min)</option>}
+                        {selectedActivityType?.showDistance && <option value="distance">Distanz (km)</option>}
+                        {(selectedActivityType?.customFields || []).filter(f => f.type === 'number').map(f => (
+                          <option key={f.key} value={`custom_${f.key}`}>{f.label}{f.unit ? ` (${f.unit})` : ''}</option>
+                        ))}
+                        {(selectedActivityType?.customFields || []).filter(f => f.type === 'select' || f.type === 'multiselect').map(f =>
+                          (f.options || []).map(opt => (
+                            <option key={`${f.key}:${opt}`} value={`select_${f.key}:${opt}`}>{f.label} = {opt}</option>
+                          ))
+                        )}
+                      </>) : (<>
+                        <option value="value">Summe der Werte{selectedHabit ? ` (${selectedHabit.unitSymbol})` : ''}</option>
+                        <option value="count">Anzahl Tage</option>
+                      </>)}
+                    </Select>
+                  </Field>
+                  <Field label="Bedingung">
+                    <Segmented
+                      value={cond.condition}
+                      onChange={v => updateCondition(i, 'condition', v)}
+                      options={CONDITION_OPTIONS}
+                    />
+                  </Field>
+                  <Field label="Zielwert">
+                    <div className="flex gap-2">
+                      <Input
+                        type="number"
+                        className="flex-1"
+                        value={cond.targetValue}
+                        onChange={e => updateCondition(i, 'targetValue', e.target.value)}
+                        min="0"
+                        step="0.1"
+                        placeholder="z.B. 3"
+                      />
+                      <Input
+                        className="!w-20 text-center"
+                        value={cond.unitSymbol}
+                        onChange={e => updateCondition(i, 'unitSymbol', e.target.value)}
+                        placeholder="Einheit"
+                      />
+                    </div>
+                  </Field>
+                  {scopeApplies(cond.metric) && (
+                    <Field label="Was wird gemessen?">
+                      <ScopeSelector
+                        cond={cond}
+                        isActivityGoal={isActivityGoal}
+                        isLongTerm={form.isLongTerm}
+                        onChange={changes => updateConditionFields(i, changes)}
+                      />
+                    </Field>
+                  )}
+
+                  {/* Activity filters – for best-performance activity goals */}
+                  {cond.aggregation === 'max' && isActivityGoal && (
+                    <ActivityFilterEditor
+                      filters={cond.activityFilters || []}
+                      filterFields={getFilterableFields()}
+                      onAdd={() => addActivityFilter(i)}
+                      onUpdate={(fi, changes) => updateActivityFilter(i, fi, changes)}
+                      onRemove={fi => removeActivityFilter(i, fi)}
+                      onToggleValue={(fi, v) => toggleFilterValue(i, fi, v)}
+                    />
+                  )}
+                </div>
+              ))}
+            </div>
+            {form.conditions.length >= 2 && (
+              <div className="flex items-center gap-2 mt-3">
+                <span className="text-xs text-ink-400">Verknüpfung:</span>
+                <Segmented
+                  className="w-40"
+                  value={form.conditionOperator}
+                  onChange={v => set('conditionOperator', v)}
+                  options={[{ value: 'AND', label: 'UND' }, { value: 'OR', label: 'ODER' }]}
+                />
+              </div>
+            )}
+          </div>
+        </>)}
+
+        {/* Step 3: milestones (long-term only) */}
+        {currentStep === 3 && (
+          <div>
+            <div className="flex items-center justify-between mb-1">
+              <div>
+                <p className="display text-base">Meilensteine</p>
+                <p className="text-xs text-ink-400 mt-0.5">Optional – hilft den Fortschritt einzuschätzen</p>
+              </div>
+              <button
+                type="button"
+                onClick={addStep}
+                className="flex items-center gap-1 text-xs font-semibold text-brand-600 hover:text-brand-700"
+              >
+                <Plus size={12} /> Hinzufügen
+              </button>
+            </div>
+            {steps.length === 0 && (
+              <button
+                type="button"
+                onClick={addStep}
+                className="w-full mt-3 border-2 border-dashed border-ink-200 hover:border-brand-400 rounded-2xl py-8 text-ink-400 hover:text-brand-600 transition-colors flex flex-col items-center gap-2"
+              >
+                <Plus size={22} />
+                <span className="text-sm font-medium">Ersten Meilenstein hinzufügen</span>
+              </button>
+            )}
+            <div className="space-y-2.5 mt-2">
+              {steps.map((milestone, i) => {
+                const firstCond = form.conditions[0];
+                const cLabel = firstCond?.condition === 'max' ? 'maximal' : firstCond?.condition === 'exact' ? 'genau' : 'mindestens';
+                const unit = firstCond?.unitSymbol || '';
+                const mLabel = metricLabel(firstCond?.metric, selectedActivityType?.customFields);
+                return (
+                  <div key={i} className="panel p-3.5 space-y-2.5">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-semibold text-ink-700">Meilenstein {i + 1}</span>
+                      <IconButton icon={X} label="Meilenstein entfernen" tone="danger" size={14} onClick={() => removeStep(i)} />
+                    </div>
+                    <div className="grid grid-cols-2 gap-2">
+                      <Field label="Bis Datum">
+                        <Input type="date" className="!text-sm !py-1.5" value={milestone.date} onChange={e => updateStep(i, 'date', e.target.value)} />
+                      </Field>
+                      <Field label={<>{mLabel}{unit ? <span className="normal-case"> ({unit})</span> : ''}</>}>
+                        <Input
+                          type="number"
+                          className="!text-sm !py-1.5"
+                          value={milestone.targetValue}
+                          onChange={e => updateStep(i, 'targetValue', e.target.value)}
+                          placeholder={`${cLabel}…`}
+                          min="0"
+                          step="0.1"
+                        />
+                      </Field>
+                    </div>
+                    <Field label="Beschreibung" optional>
+                      <Input
+                        className="!text-sm !py-1.5"
+                        value={milestone.description}
+                        onChange={e => updateStep(i, 'description', e.target.value)}
+                        placeholder="z.B. Halbzeitmarke"
+                      />
+                    </Field>
+                    {milestone.date && milestone.targetValue !== '' && (
+                      <p className="text-xs text-brand-700 bg-brand-50 border border-brand-100 rounded-xl px-2.5 py-1.5">
+                        → Bis {format(parseISO(milestone.date), 'd. MMMM yyyy', { locale: de })}: {cLabel} {milestone.targetValue}{unit ? ` ${unit}` : ''}
+                      </p>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
       </div>
-    </div>
+    </Modal>
+
+    {/* Inline creation — layered above the goal wizard, which keeps its state */}
+    {showCreateType && (
+      <ActivityTypeWizard
+        title="Neuer Aktivitätstyp"
+        submitLabel="Erstellen"
+        initialForm={{ label: '', showDuration: true, showDistance: false, customFields: [] }}
+        onSubmit={handleTypeCreated}
+        onClose={() => setShowCreateType(false)}
+      />
+    )}
+    {showCreateHabit && (
+      <NewHabitModal
+        onCreated={handleHabitCreated}
+        onClose={() => setShowCreateHabit(false)}
+      />
+    )}
+    </>
   );
 }
 
@@ -1055,109 +1241,115 @@ function EditGoalModal({ goal, onSave, onClose }) {
   ];
 
   return (
-    <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-end sm:items-center justify-center z-50">
-      <form onSubmit={handleSubmit} className="bg-[#1e1a14]/95 backdrop-blur-2xl border border-white/[.1] w-full max-w-lg rounded-t-2xl sm:rounded-2xl flex flex-col" style={{ maxHeight: '92dvh' }}>
-        <div className="w-10 h-1 bg-white/15 rounded-full mx-auto mt-3 sm:hidden flex-shrink-0" />
-
-        {/* Header */}
-        <div className="flex items-center justify-between px-5 pt-4 pb-3 border-b border-white/[.08] flex-shrink-0">
-          <h2 className="text-base font-semibold text-white">Ziel bearbeiten</h2>
-          <button type="button" onClick={onClose} className="text-white/40 hover:text-white/80 p-1 -mr-1"><X size={20} /></button>
-        </div>
-
+    <Modal
+      onClose={onClose}
+      title="Ziel bearbeiten"
+      subtitle={goal.name}
+      icon={Pencil}
+      size="lg"
+      footer={
+        <>
+          <Button variant="secondary" className="flex-1" onClick={onClose}>Abbrechen</Button>
+          <Button type="submit" form="edit-goal-form" className="flex-1" loading={saving} disabled={!form.name}>
+            Speichern
+          </Button>
+        </>
+      }
+    >
+      <form id="edit-goal-form" onSubmit={handleSubmit}>
         {/* Tabs */}
-        <div className="flex border-b border-white/[.08] flex-shrink-0">
-          {tabs.map(t => (
-            <button key={t.id} type="button" onClick={() => setEditTab(t.id)}
-              className={`flex-1 py-2.5 text-xs font-semibold transition-colors ${editTab === t.id ? 'text-brand-400 border-b-2 border-brand-500 -mb-px' : 'text-white/30 hover:text-white/70'}`}
-            >{t.label}</button>
-          ))}
-        </div>
+        <Segmented
+          className="mb-5"
+          value={editTab}
+          onChange={setEditTab}
+          options={tabs.map(t => ({ value: t.id, label: t.label }))}
+        />
 
-        {/* Scrollable content */}
-        <div className="flex-1 overflow-y-auto px-5 py-4 space-y-4">
-
-          {/* Grundlagen */}
+        <div className="space-y-4">
+          {/* Basics */}
           {editTab === 'basics' && (<>
-            <div>
-              <label className="label">Name</label>
-              <input className="input" value={form.name} onChange={e => set('name', e.target.value)} required />
-            </div>
-            <div>
-              <label className="label">Beschreibung <span className="text-slate-600 font-normal">(optional)</span></label>
-              <input className="input" value={form.description} onChange={e => set('description', e.target.value)} />
-            </div>
+            <Field label="Name">
+              <Input value={form.name} onChange={e => set('name', e.target.value)} required />
+            </Field>
+            <Field label="Beschreibung" optional>
+              <Input value={form.description} onChange={e => set('description', e.target.value)} />
+            </Field>
 
-            {/* Intervall nur für periodische Ziele */}
+            {/* Interval only for periodic goals */}
             {!isLongTerm && (
-              <div className="bg-white/[.05] border border-white/[.09] rounded-2xl p-4">
-                <label className="label text-xs mb-2">Intervall</label>
+              <div className="panel p-4">
+                <label className="label">Intervall</label>
                 <div className="flex gap-2">
-                  <input
-                    type="number" className="input w-20" min="1" max="365"
+                  <Input
+                    type="number"
+                    className="!w-20"
+                    min="1"
+                    max="365"
                     value={form.intervalValue}
                     onChange={e => set('intervalValue', Math.max(1, parseInt(e.target.value) || 1))}
                   />
-                  <select className="input flex-1" value={form.intervalUnit} onChange={e => set('intervalUnit', e.target.value)}>
+                  <Select className="flex-1" value={form.intervalUnit} onChange={e => set('intervalUnit', e.target.value)}>
                     <option value="day">Tag(e)</option>
                     <option value="week">Woche(n)</option>
                     <option value="month">Monat(e)</option>
-                  </select>
+                  </Select>
                 </div>
-                <p className="text-xs text-slate-500 mt-2">
+                <p className="text-xs text-ink-400 mt-2">
                   Fortschritt wird {intervalTargetLabel(form.intervalValue, form.intervalUnit)} gemessen
                 </p>
               </div>
             )}
 
-            {/* Zeitraum nur für langfristige Ziele */}
+            {/* Time range only for long-term goals */}
             {isLongTerm && (
               <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="label">Startdatum</label>
-                  <input type="date" className="input" value={form.startDate} onChange={e => set('startDate', e.target.value)} />
-                </div>
-                <div>
-                  <label className="label">Enddatum</label>
-                  <input type="date" className="input" value={form.endDate} onChange={e => set('endDate', e.target.value)} />
-                </div>
+                <Field label="Startdatum">
+                  <Input type="date" value={form.startDate} onChange={e => set('startDate', e.target.value)} />
+                </Field>
+                <Field label="Enddatum">
+                  <Input type="date" value={form.endDate} onChange={e => set('endDate', e.target.value)} />
+                </Field>
               </div>
             )}
           </>)}
 
-          {/* Bedingungen */}
+          {/* Conditions */}
           {editTab === 'conditions' && (
             <div className="space-y-3">
               <div className="flex items-center justify-between">
-                <p className="text-xs text-slate-500">Was muss erfüllt sein, damit das Ziel gilt?</p>
-                <button type="button" onClick={addCondEdit} className="text-xs text-brand-400 hover:text-brand-300 flex items-center gap-1">
+                <p className="text-xs text-ink-400">Was muss erfüllt sein, damit das Ziel gilt?</p>
+                <button
+                  type="button"
+                  onClick={addCondEdit}
+                  className="text-xs font-semibold text-brand-600 hover:text-brand-700 flex items-center gap-1"
+                >
                   <Plus size={12} /> Hinzufügen
                 </button>
               </div>
               {conditions.map((cond, i) => (
-                <div key={i} className="bg-white/[.05] border border-white/[.09] rounded-2xl p-3 space-y-3">
+                <div key={i} className="panel p-3.5 space-y-3">
                   <div className="flex items-center justify-between">
-                    <span className="text-xs font-semibold text-slate-300">
+                    <span className="text-xs font-semibold text-ink-700">
                       {conditions.length > 1 ? `Bedingung ${i + 1}` : 'Bedingung'}
                     </span>
                     {conditions.length > 1 && (
-                      <button type="button" onClick={() => removeCondEdit(i)} className="text-slate-600 hover:text-red-400">
-                        <X size={14} />
-                      </button>
+                      <IconButton icon={X} label="Bedingung entfernen" tone="danger" size={14} onClick={() => removeCondEdit(i)} />
                     )}
                   </div>
 
-                  <div>
-                    <label className="label text-xs mb-1">Messgröße</label>
-                    <select className="input" value={cond.metric} onChange={e => {
-                      const m = e.target.value;
-                      updateCondFields(i, {
-                        metric: m,
-                        valueScope: scopeAppliesEdit(m) ? cond.valueScope : 'total',
-                        aggregation: scopeAppliesEdit(m) ? cond.aggregation : 'sum',
-                        activityFilters: scopeAppliesEdit(m) ? (cond.activityFilters || []) : [],
-                      });
-                    }}>
+                  <Field label="Messgröße">
+                    <Select
+                      value={cond.metric}
+                      onChange={e => {
+                        const m = e.target.value;
+                        updateCondFields(i, {
+                          metric: m,
+                          valueScope: scopeAppliesEdit(m) ? cond.valueScope : 'total',
+                          aggregation: scopeAppliesEdit(m) ? cond.aggregation : 'sum',
+                          activityFilters: scopeAppliesEdit(m) ? (cond.activityFilters || []) : [],
+                        });
+                      }}
+                    >
                       {isActivityGoal ? (<>
                         <option value="count">Anzahl Aktivitäten</option>
                         <option value="duration">Dauer (min)</option>
@@ -1174,189 +1366,131 @@ function EditGoalModal({ goal, onSave, onClose }) {
                         <option value="value">Summe der Werte</option>
                         <option value="count">Anzahl Tage</option>
                       </>)}
-                    </select>
-                  </div>
+                    </Select>
+                  </Field>
 
-                  <div>
-                    <label className="label text-xs mb-1">Bedingung</label>
-                    <div className="flex gap-1.5">
-                      {[{ v: 'min', l: 'Mindestens' }, { v: 'max', l: 'Maximal' }, { v: 'exact', l: 'Genau' }].map(({ v, l }) => (
-                        <button key={v} type="button" onClick={() => updateCond(i, 'condition', v)}
-                          className={`flex-1 py-2 rounded-md text-xs font-semibold transition-colors ${cond.condition === v ? 'bg-brand-600 text-white' : 'bg-white/[.08] text-white/45'}`}
-                        >{l}</button>
-                      ))}
-                    </div>
-                  </div>
+                  <Field label="Bedingung">
+                    <Segmented
+                      value={cond.condition}
+                      onChange={v => updateCond(i, 'condition', v)}
+                      options={CONDITION_OPTIONS}
+                    />
+                  </Field>
 
-                  <div>
-                    <label className="label text-xs mb-1">Zielwert</label>
+                  <Field label="Zielwert">
                     <div className="flex gap-2">
-                      <input type="number" className="input flex-1" value={cond.targetValue} onChange={e => updateCond(i, 'targetValue', e.target.value)} min="0" step="0.1" placeholder="z.B. 3" />
-                      <input className="input w-20 text-center" value={cond.unitSymbol} onChange={e => updateCond(i, 'unitSymbol', e.target.value)} placeholder="Einheit" />
+                      <Input
+                        type="number"
+                        className="flex-1"
+                        value={cond.targetValue}
+                        onChange={e => updateCond(i, 'targetValue', e.target.value)}
+                        min="0"
+                        step="0.1"
+                        placeholder="z.B. 3"
+                      />
+                      <Input
+                        className="!w-20 text-center"
+                        value={cond.unitSymbol}
+                        onChange={e => updateCond(i, 'unitSymbol', e.target.value)}
+                        placeholder="Einheit"
+                      />
                     </div>
-                  </div>
+                  </Field>
 
                   {scopeAppliesEdit(cond.metric) && (
-                    <div>
-                      <label className="label text-xs mb-1">Was wird gemessen?</label>
-                      {isActivityGoal ? (
-                        <div className="flex gap-1.5">
-                          <button type="button" onClick={() => updateCondFields(i, { valueScope: 'total', aggregation: 'sum' })}
-                            className={`flex-1 py-2 rounded-md text-xs font-semibold transition-colors ${cond.aggregation !== 'max' && cond.valueScope !== 'perActivity' ? 'bg-brand-600 text-white' : 'bg-white/[.08] text-white/45'}`}
-                          >Gesamt</button>
-                          <button type="button" onClick={() => updateCondFields(i, { valueScope: 'perActivity', aggregation: 'sum' })}
-                            className={`flex-1 py-2 rounded-md text-xs font-semibold transition-colors ${cond.aggregation !== 'max' && cond.valueScope === 'perActivity' ? 'bg-brand-600 text-white' : 'bg-white/[.08] text-white/45'}`}
-                          >Ø / Aktivität</button>
-                          <button type="button" onClick={() => updateCondFields(i, { valueScope: 'total', aggregation: 'max' })}
-                            className={`flex-1 py-2 rounded-md text-xs font-semibold transition-colors ${cond.aggregation === 'max' ? 'bg-amber-600 text-white' : 'bg-white/[.08] text-white/45'}`}
-                          >Bestleistung</button>
-                        </div>
-                      ) : (
-                        <div className="flex gap-1.5">
-                          <button type="button" onClick={() => updateCondFields(i, { valueScope: 'total', aggregation: 'sum' })}
-                            className={`flex-1 py-2 rounded-md text-xs font-semibold transition-colors ${cond.valueScope !== 'perActivity' ? 'bg-brand-600 text-white' : 'bg-white/[.08] text-white/45'}`}
-                          >Gesamt</button>
-                          <button type="button" onClick={() => updateCondFields(i, { valueScope: 'perActivity', aggregation: 'sum' })}
-                            className={`flex-1 py-2 rounded-md text-xs font-semibold transition-colors ${cond.valueScope === 'perActivity' ? 'bg-brand-600 text-white' : 'bg-white/[.08] text-white/45'}`}
-                          >Ø pro Tag</button>
-                        </div>
-                      )}
-                    </div>
+                    <Field label="Was wird gemessen?">
+                      <ScopeSelector
+                        cond={cond}
+                        isActivityGoal={isActivityGoal}
+                        isLongTerm={isLongTerm}
+                        onChange={changes => updateCondFields(i, changes)}
+                      />
+                    </Field>
                   )}
 
-                  {/* Aktivitätsfilter bei Bestleistung */}
-                  {cond.aggregation === 'max' && isActivityGoal && filterableFieldsEdit.length > 0 && (
-                    <div className="border border-white/[.1] rounded-2xl p-3 space-y-2">
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <span className="text-xs font-semibold text-slate-200">In derselben Aktivität</span>
-                          <p className="text-xs text-slate-500 mt-0.5">Felder, die in der Bestleistungs-Aktivität erfüllt sein müssen</p>
-                        </div>
-                        <button type="button" onClick={() => addFilterEdit(i)} className="text-xs text-brand-400 hover:text-brand-300 flex items-center gap-1 flex-shrink-0">
-                          <Plus size={11} /> Filter
-                        </button>
-                      </div>
-                      {(cond.activityFilters || []).length === 0 && (
-                        <p className="text-xs text-slate-600">Kein Filter – gilt für alle Aktivitäten.</p>
-                      )}
-                      {(cond.activityFilters || []).map((filter, fi) => {
-                        const field = filterableFieldsEdit.find(f => f.key === filter.fieldKey) || filterableFieldsEdit[0];
-                        const isNum = (filter.fieldType || 'select') === 'number';
-                        return (
-                          <div key={fi} className="bg-white/[.06] rounded-xl p-2.5 space-y-2">
-                            <div className="flex items-center gap-2">
-                              <select className="input text-xs py-1.5 flex-1" value={filter.fieldKey}
-                                onChange={e => {
-                                  const nf = filterableFieldsEdit.find(f => f.key === e.target.value) || filterableFieldsEdit[0];
-                                  updateFilterEdit(i, fi, { fieldKey: nf.key, fieldType: nf.type, values: [], numValue: '', numOperator: 'min' });
-                                }}
-                              >
-                                {filterableFieldsEdit.map(f => <option key={f.key} value={f.key}>{f.label}{f.unit ? ` (${f.unit})` : ''}</option>)}
-                              </select>
-                              <button type="button" onClick={() => removeFilterEdit(i, fi)} className="text-slate-600 hover:text-red-400 flex-shrink-0">
-                                <X size={13} />
-                              </button>
-                            </div>
-                            {isNum ? (
-                              <div className="space-y-1.5">
-                                <div className="flex gap-1.5">
-                                  {[{ v: 'min', l: 'Mindestens' }, { v: 'max', l: 'Maximal' }, { v: 'exact', l: 'Genau' }].map(({ v, l }) => (
-                                    <button key={v} type="button"
-                                      onClick={() => updateFilterEdit(i, fi, { numOperator: v })}
-                                      className={`flex-1 py-1.5 rounded-lg text-xs font-semibold transition-colors ${(filter.numOperator || 'min') === v ? 'bg-brand-600 text-white' : 'bg-white/[.08] text-white/45'}`}
-                                    >{l}</button>
-                                  ))}
-                                </div>
-                                <div className="flex gap-2 items-center">
-                                  <input type="number" className="input flex-1 text-sm py-1.5"
-                                    value={filter.numValue ?? ''}
-                                    onChange={e => updateFilterEdit(i, fi, { numValue: e.target.value === '' ? '' : +e.target.value })}
-                                    placeholder="Wert" min="0" step="0.1"
-                                  />
-                                  {field?.unit && <span className="text-xs text-slate-400 flex-shrink-0">{field.unit}</span>}
-                                </div>
-                              </div>
-                            ) : (
-                              <div>
-                                <p className="text-xs text-slate-500 mb-1.5">Muss einen dieser Werte haben:</p>
-                                <div className="flex flex-wrap gap-1.5">
-                                  {(field?.options || []).map(opt => (
-                                    <button key={opt} type="button"
-                                      onClick={() => toggleFilterValueEdit(i, fi, opt)}
-                                      className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-colors ${(filter.values || []).includes(opt) ? 'bg-brand-600 text-white' : 'bg-white/[.08] text-white/45'}`}
-                                    >{opt}</button>
-                                  ))}
-                                </div>
-                              </div>
-                            )}
-                          </div>
-                        );
-                      })}
-                    </div>
+                  {/* Activity filters for best-performance */}
+                  {cond.aggregation === 'max' && isActivityGoal && (
+                    <ActivityFilterEditor
+                      filters={cond.activityFilters || []}
+                      filterFields={filterableFieldsEdit}
+                      onAdd={() => addFilterEdit(i)}
+                      onUpdate={(fi, changes) => updateFilterEdit(i, fi, changes)}
+                      onRemove={fi => removeFilterEdit(i, fi)}
+                      onToggleValue={(fi, v) => toggleFilterValueEdit(i, fi, v)}
+                    />
                   )}
                 </div>
               ))}
               {conditions.length >= 2 && (
                 <div className="flex items-center gap-2 pt-1">
-                  <span className="text-xs text-slate-500">Verknüpfung:</span>
-                  {['AND', 'OR'].map(op => (
-                    <button key={op} type="button" onClick={() => setCondOpEdit(op)}
-                      className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors ${condOpEdit === op ? 'bg-brand-600 text-white' : 'bg-white/[.08] text-white/45'}`}
-                    >{op === 'AND' ? 'UND' : 'ODER'}</button>
-                  ))}
+                  <span className="text-xs text-ink-400">Verknüpfung:</span>
+                  <Segmented
+                    className="w-40"
+                    value={condOpEdit}
+                    onChange={setCondOpEdit}
+                    options={[{ value: 'AND', label: 'UND' }, { value: 'OR', label: 'ODER' }]}
+                  />
                 </div>
               )}
             </div>
           )}
 
-          {/* Meilensteine */}
+          {/* Milestones */}
           {editTab === 'milestones' && (
             <div>
               <div className="flex items-center justify-between mb-2">
-                <p className="text-xs text-slate-500">Etappenziele auf dem Weg zum Gesamtziel</p>
-                <button type="button" onClick={addStep} className="text-xs text-brand-400 hover:text-brand-300 flex items-center gap-1">
+                <p className="text-xs text-ink-400">Etappenziele auf dem Weg zum Gesamtziel</p>
+                <button
+                  type="button"
+                  onClick={addStep}
+                  className="text-xs font-semibold text-brand-600 hover:text-brand-700 flex items-center gap-1"
+                >
                   <Plus size={12} /> Hinzufügen
                 </button>
               </div>
               {steps.length === 0 && (
-                <button type="button" onClick={addStep}
-                  className="w-full mt-2 border-2 border-dashed border-white/20 hover:border-brand-400/60 rounded-2xl py-6 text-slate-500 hover:text-brand-400 transition-colors flex flex-col items-center gap-2"
+                <button
+                  type="button"
+                  onClick={addStep}
+                  className="w-full mt-2 border-2 border-dashed border-ink-200 hover:border-brand-400 rounded-2xl py-6 text-ink-400 hover:text-brand-600 transition-colors flex flex-col items-center gap-2"
                 >
                   <Plus size={20} />
-                  <span className="text-sm">Ersten Meilenstein hinzufügen</span>
+                  <span className="text-sm font-medium">Ersten Meilenstein hinzufügen</span>
                 </button>
               )}
-              <div className="space-y-2">
+              <div className="space-y-2.5">
                 {steps.map((step, i) => (
-                  <div key={i} className="bg-white/[.05] border border-white/[.09] rounded-2xl p-3 space-y-2">
+                  <div key={i} className="panel p-3.5 space-y-2.5">
                     <div className="flex items-center justify-between">
-                      <span className="text-xs font-semibold text-slate-300">Meilenstein {i + 1}</span>
-                      <button type="button" onClick={() => removeStep(i)} className="text-slate-600 hover:text-red-400"><X size={14} /></button>
+                      <span className="text-xs font-semibold text-ink-700">Meilenstein {i + 1}</span>
+                      <IconButton icon={X} label="Meilenstein entfernen" tone="danger" size={14} onClick={() => removeStep(i)} />
                     </div>
                     <div className="grid grid-cols-2 gap-2">
-                      <div>
-                        <label className="label text-xs mb-0.5">Bis Datum</label>
-                        <input type="date" className="input text-sm py-1.5" value={step.date} onChange={e => updateStep(i, 'date', e.target.value)} />
-                      </div>
-                      <div>
-                        <label className="label text-xs mb-0.5">
-                          {mLabelEdit}{unitEdit ? <span className="text-slate-500 font-normal"> ({unitEdit})</span> : ''}
-                        </label>
-                        <input type="number" className="input text-sm py-1.5" value={step.targetValue}
+                      <Field label="Bis Datum">
+                        <Input type="date" className="!text-sm !py-1.5" value={step.date} onChange={e => updateStep(i, 'date', e.target.value)} />
+                      </Field>
+                      <Field label={<>{mLabelEdit}{unitEdit ? <span className="normal-case"> ({unitEdit})</span> : ''}</>}>
+                        <Input
+                          type="number"
+                          className="!text-sm !py-1.5"
+                          value={step.targetValue}
                           onChange={e => updateStep(i, 'targetValue', e.target.value)}
-                          placeholder={`${condLabelEdit}…`} min="0" step="0.1"
+                          placeholder={`${condLabelEdit}…`}
+                          min="0"
+                          step="0.1"
                         />
-                      </div>
+                      </Field>
                     </div>
-                    <div>
-                      <label className="label text-xs mb-0.5">Beschreibung <span className="text-slate-600 font-normal">(optional)</span></label>
-                      <input className="input text-sm py-1.5" value={step.description}
+                    <Field label="Beschreibung" optional>
+                      <Input
+                        className="!text-sm !py-1.5"
+                        value={step.description}
                         onChange={e => updateStep(i, 'description', e.target.value)}
                         placeholder="z.B. Halbzeitmarke"
                       />
-                    </div>
+                    </Field>
                     {step.date && step.targetValue !== '' && (
-                      <p className="text-xs text-brand-300/80 bg-brand-500/10 rounded-xl px-2 py-1">
+                      <p className="text-xs text-brand-700 bg-brand-50 border border-brand-100 rounded-xl px-2.5 py-1.5">
                         → Bis {format(parseISO(step.date), 'd. MMMM yyyy', { locale: de })}: {condLabelEdit} {step.targetValue}{unitEdit ? ` ${unitEdit}` : ''}{aggregationNoteEdit}
                       </p>
                     )}
@@ -1366,16 +1500,8 @@ function EditGoalModal({ goal, onSave, onClose }) {
             </div>
           )}
         </div>
-
-        {/* Footer */}
-        <div className="flex gap-3 px-5 py-4 border-t border-white/[.08] flex-shrink-0">
-          <button type="button" onClick={onClose} className="btn-secondary flex-1">Abbrechen</button>
-          <button type="submit" disabled={saving || !form.name} className="btn-primary flex-1">
-            {saving ? 'Speichern…' : 'Speichern'}
-          </button>
-        </div>
       </form>
-    </div>
+    </Modal>
   );
 }
 
@@ -1409,6 +1535,17 @@ export default function Goals() {
 
   useEffect(() => { load(); }, []);
 
+  // Refresh only the selectable targets (types + habits) so an open goal
+  // wizard keeps its state while its option lists update.
+  const reloadTargets = useCallback(async () => {
+    const [typesRes, habitsRes] = await Promise.all([
+      api.get('/activity-types'),
+      api.get('/habits/definitions'),
+    ]);
+    setActivityTypes(typesRes.data);
+    setHabits(habitsRes.data.filter(h => h.selected));
+  }, []);
+
   const handleDelete = async (id) => {
     if (!confirm('Ziel löschen?')) return;
     await api.delete(`/goals/${id}`);
@@ -1418,75 +1555,66 @@ export default function Goals() {
   const periodic = goals.filter(g => !g.type.startsWith('long-term'));
   const longTerm = goals.filter(g => g.type.startsWith('long-term'));
 
+  const GROUP_STYLES = {
+    olive: { text: 'text-lime-700', dot: 'bg-lime-600' },
+    amber: { text: 'text-ocher-600', dot: 'bg-ocher-400' },
+  };
+
+  const renderGoalGroup = (title, groupGoals, tone) => (
+    <div>
+      <h2 className={`flex items-center gap-2 text-[11px] uppercase tracking-[0.14em] font-semibold mb-3 ${GROUP_STYLES[tone].text}`}>
+        <span className={`w-2 h-2 rounded-full ${GROUP_STYLES[tone].dot}`} />
+        {title}
+      </h2>
+      <div className="space-y-3">
+        {groupGoals.map(g => (
+          <GoalProgress
+            key={g._id}
+            goal={g}
+            actions={
+              <>
+                <IconButton icon={Pencil} label="Bearbeiten" tone="brand" size={15} onClick={() => setEditGoal(g)} />
+                <IconButton icon={Trash2} label="Löschen" tone="danger" size={15} onClick={() => handleDelete(g._id)} />
+              </>
+            }
+          />
+        ))}
+      </div>
+    </div>
+  );
+
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-white">Ziele</h1>
-          <p className="text-slate-400 text-sm mt-0.5">{goals.length} aktive Ziele</p>
-        </div>
-        <button onClick={() => setShowCreate(true)} className="btn-primary flex items-center gap-2">
-          <Plus size={18} />
-          <span className="hidden sm:inline">Neues Ziel</span>
-        </button>
-      </div>
+      <PageHeader
+        title="Ziele"
+        subtitle={`${goals.length} aktive Ziele`}
+        icon={Target}
+        tone="amber"
+        action={
+          <Button icon={Plus} onClick={() => setShowCreate(true)}>
+            <span className="hidden sm:inline">Neues Ziel</span>
+          </Button>
+        }
+      />
 
       {loading ? (
-        <div className="flex items-center justify-center py-16">
-          <div className="w-8 h-8 border-2 border-zinc-700 border-t-brand-500 rounded-full animate-spin" />
-        </div>
+        <PageLoader />
       ) : goals.length === 0 ? (
-        <div className="card p-12 text-center">
-          <Target size={32} className="text-zinc-700 mx-auto mb-3" />
-          <p className="text-slate-400">Noch keine Ziele definiert</p>
-          <p className="text-slate-600 text-sm mt-1">Für Aktivitäten und Gewohnheiten</p>
-          <button onClick={() => setShowCreate(true)} className="btn-primary mt-4 inline-flex items-center gap-2">
-            <Plus size={16} /> Ziel erstellen
-          </button>
-        </div>
+        <EmptyState
+          icon={Target}
+          tone="amber"
+          title="Noch keine Ziele definiert"
+          text="Setze dir Ziele für Aktivitäten und Gewohnheiten – periodisch oder langfristig mit Meilensteinen."
+          action={
+            <Button icon={Plus} onClick={() => setShowCreate(true)}>
+              Ziel erstellen
+            </Button>
+          }
+        />
       ) : (
-        <div className="space-y-6">
-          {periodic.length > 0 && (
-            <div>
-              <h2 className="text-sm font-semibold text-slate-500 uppercase tracking-wide mb-3">Periodische Ziele</h2>
-              <div className="space-y-3">
-                {periodic.map(g => (
-                  <div key={g._id} className="relative">
-                    <GoalProgress goal={g} />
-                    <div className="absolute top-4 right-4 flex items-center gap-2">
-                      <button onClick={() => setEditGoal(g)} className="text-slate-600 hover:text-brand-400 transition-colors">
-                        <Pencil size={15} />
-                      </button>
-                      <button onClick={() => handleDelete(g._id)} className="text-slate-600 hover:text-red-400 transition-colors">
-                        <Trash2 size={15} />
-                      </button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {longTerm.length > 0 && (
-            <div>
-              <h2 className="text-sm font-semibold text-slate-500 uppercase tracking-wide mb-3">Langfristige Ziele</h2>
-              <div className="space-y-3">
-                {longTerm.map(g => (
-                  <div key={g._id} className="relative">
-                    <GoalProgress goal={g} />
-                    <div className="absolute top-4 right-4 flex items-center gap-2">
-                      <button onClick={() => setEditGoal(g)} className="text-slate-600 hover:text-brand-400 transition-colors">
-                        <Pencil size={15} />
-                      </button>
-                      <button onClick={() => handleDelete(g._id)} className="text-slate-600 hover:text-red-400 transition-colors">
-                        <Trash2 size={15} />
-                      </button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
+        <div className="space-y-8">
+          {periodic.length > 0 && renderGoalGroup('Periodische Ziele', periodic, 'olive')}
+          {longTerm.length > 0 && renderGoalGroup('Langfristige Ziele', longTerm, 'amber')}
         </div>
       )}
 
@@ -1496,6 +1624,7 @@ export default function Goals() {
           habits={habits}
           onSave={() => { setShowCreate(false); load(); }}
           onClose={() => setShowCreate(false)}
+          onTargetsChanged={reloadTargets}
         />
       )}
 

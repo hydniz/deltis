@@ -2,6 +2,7 @@
 // helpers backed by the /api/auth endpoints.
 import { createContext, useContext, useState, useEffect } from 'react';
 import api from '../utils/api';
+import { clearSessionGreeting } from '../utils/greetings';
 
 const AuthContext = createContext(null);
 
@@ -28,6 +29,7 @@ export function AuthProvider({ children }) {
   // Clears user state immediately; asks server to clear the cookie in the background.
   const logout = () => {
     api.post('/auth/logout').catch(() => {});
+    clearSessionGreeting(); // next login gets a fresh dashboard greeting
     setUser(null);
   };
 

@@ -1,62 +1,44 @@
 /* ══════════════════════════════════════════════════════════════════════════
-   DESIGN TOKENS — edit this block to retheme the entire app
+   DESIGN TOKENS — "Warm Paper" theme
+   Editorial, warm and light: paper background, ink typography, terracotta
+   accents. Edit this block to retheme the entire app.
    ══════════════════════════════════════════════════════════════════════════ */
 :root {
-  /* Brand palette — Terracotta earth tones */
+  /* Brand palette — terracotta */
+  --brand-100: #fae4d5;
   --brand-200: #f4c5a0;
   --brand-300: #e89e70;
   --brand-400: #d87c4e;
   --brand-500: #c4623a;
   --brand-600: #a84e2a;
   --brand-700: #8a3c1e;
-  --brand-800: #6e2e14;
-  --brand-900: #3c160a;
 
-  /* App background */
-  --bg-base:       #1d1912;
-  --bg-orb-a:      rgba(196, 98,  58,  0.20);
-  --bg-orb-b:      rgba(160, 78,  42,  0.16);
-  --bg-orb-c:      rgba(95,  133, 86,  0.07);
+  /* Ink (text) */
+  --ink-900: #211b14;
+  --ink-600: #665c50;
+  --ink-400: #a3988a;
+  --ink-200: #dbd2c4;
 
-  /* Glass surface */
-  --surface-bg:          rgba(255, 255, 255, 0.055);
-  --surface-border:      rgba(255, 255, 255, 0.08);
-  --surface-border-hover: rgba(255, 255, 255, 0.18);
+  /* App background — soft blurred colour orbs on warm paper */
+  --bg-base:  #faf7f2;
+  --bg-orb-a: rgba(232, 158, 112, 0.30);   /* peach */
+  --bg-orb-b: rgba(244, 114, 182, 0.14);   /* rose */
+  --bg-orb-c: rgba(212, 164,  78, 0.20);   /* amber */
+  --bg-orb-d: rgba(125, 159, 116, 0.13);   /* sage */
 
-  /* Logo / avatar */
-  --logo-shadow:    rgba(60, 22, 10, 0.45);
-  --avatar-bg-from: rgba(196, 98, 58, 0.60);
-  --avatar-bg-to:   rgba(138, 60, 30, 0.60);
+  /* Surfaces */
+  --surface-bg:     #ffffff;
+  --surface-border: #ece4d6;
 
-  /* Button — primary */
-  --btn-p-from:   var(--brand-400);
-  --btn-p-to:     var(--brand-600);
-  --btn-p-border: rgba(180, 88, 48, 0.65);
-  --btn-p-shine:  rgba(240, 170, 120, 0.22);
-  --btn-p-shadow: rgba(40,  14,  6,   0.50);
-  --btn-p-glow:   rgba(196, 98,  58,  0.32);
-
-  /* Button — secondary */
-  --btn-s-bg:           rgba(196, 98, 58, 0.10);
-  --btn-s-border:       rgba(196, 98, 58, 0.22);
-  --btn-s-bg-hover:     rgba(196, 98, 58, 0.18);
-  --btn-s-border-hover: rgba(196, 98, 58, 0.38);
-
-  /* Nav active pill */
-  --nav-active-text:    #fff;
-  --nav-active-bg-from: rgba(196, 98, 58, 0.22);
-  --nav-active-bg-to:   rgba(196, 98, 58, 0.06);
-  --nav-active-ring:    rgba(196, 98, 58, 0.28);
-
-  /* Input */
-  --input-bg:           rgba(255, 255, 255, 0.07);
-  --input-border:       rgba(255, 255, 255, 0.11);
-  --input-border-hover: rgba(255, 255, 255, 0.22);
-  --input-border-focus: rgba(216, 124, 78, 0.65);
-  --input-placeholder:  rgba(255, 255, 255, 0.25);
+  /* Inputs */
+  --input-bg:           #ffffff;
+  --input-border:       #e2d9c9;
+  --input-border-hover: #cfc4af;
+  --input-border-focus: var(--brand-400);
+  --input-placeholder:  #b3a897;
 
   /* Focus ring */
-  --focus-ring: rgba(196, 98, 58, 0.70);
+  --focus-ring: rgba(196, 98, 58, 0.55);
 }
 
 /* ══════════════════════════════════════════════════════════════════════════ */
@@ -66,20 +48,28 @@
 @tailwind utilities;
 
 @layer base {
+  html {
+    -webkit-tap-highlight-color: transparent;
+  }
+
   body {
-    @apply text-white font-sans antialiased;
+    @apply text-ink-900 font-sans antialiased;
     background-color: var(--bg-base);
   }
 
+  /* Blurred colour circles floating behind all content (mymind-esque).
+     Pure gradients — no filter, so it stays cheap on mobile GPUs. */
   body::before {
     content: '';
     position: fixed;
     inset: 0;
     z-index: -1;
     background:
-      radial-gradient(ellipse 90% 70% at 5%  5%,  var(--bg-orb-a) 0%, transparent 60%),
-      radial-gradient(ellipse 70% 65% at 95% 95%, var(--bg-orb-b) 0%, transparent 60%),
-      radial-gradient(ellipse 55% 40% at 50% 50%, var(--bg-orb-c) 0%, transparent 55%),
+      radial-gradient(circle 460px at 88% 4%,   var(--bg-orb-a) 0%, transparent 68%),
+      radial-gradient(circle 420px at -4% 26%,  var(--bg-orb-b) 0%, transparent 68%),
+      radial-gradient(circle 560px at 58% 108%, var(--bg-orb-c) 0%, transparent 68%),
+      radial-gradient(circle 340px at 26% -10%, var(--bg-orb-d) 0%, transparent 68%),
+      radial-gradient(circle 380px at 104% 70%, var(--bg-orb-b) 0%, transparent 68%),
       var(--bg-base);
   }
 
@@ -98,117 +88,159 @@
     outline: none;
   }
 
-  ::-webkit-scrollbar { width: 4px; height: 4px; }
+  ::-webkit-scrollbar { width: 5px; height: 5px; }
   ::-webkit-scrollbar-track { background: transparent; }
   ::-webkit-scrollbar-thumb {
-    background: rgba(255, 255, 255, 0.12);
+    background: rgba(60, 42, 24, 0.15);
     border-radius: 9999px;
+  }
+
+  ::selection {
+    background: var(--brand-200);
+    color: var(--ink-900);
   }
 }
 
 @layer components {
 
-  /* Card */
+  /* ── Surfaces ─────────────────────────────────────────────────────────── */
+
   .card {
     background: var(--surface-bg);
     border: 1px solid var(--surface-border);
-    @apply backdrop-blur-xl rounded-2xl;
+    @apply rounded-2xl shadow-card;
   }
 
-  /* Primary Button
-     Terracotta gradient with depth, shine, and tactile hover/press states. */
+  .card-hover {
+    @apply transition-all duration-200 hover:shadow-card-hover hover:-translate-y-0.5;
+  }
+
+  /* Subtle inset panel inside a card (forms, nested groups) */
+  .panel {
+    @apply bg-paper-50 border border-paper-200 rounded-xl;
+  }
+
+  /* ── Typography ───────────────────────────────────────────────────────── */
+
+  /* Editorial serif display — the signature of the design */
+  .display {
+    @apply font-display font-medium tracking-tight text-ink-900;
+    font-optical-sizing: auto;
+  }
+
+  .label {
+    @apply block text-[11px] font-semibold text-ink-400 mb-1.5 uppercase tracking-[0.09em];
+  }
+
+  /* ── Buttons ──────────────────────────────────────────────────────────── */
+
   .btn-primary {
-    @apply text-white px-4 py-2 rounded-xl font-semibold text-sm tracking-wide
-      cursor-pointer
+    @apply inline-flex items-center justify-center gap-2 text-white px-5 py-2.5
+      rounded-full font-semibold text-sm cursor-pointer select-none
       transition-all duration-150
       disabled:opacity-40 disabled:cursor-not-allowed disabled:transform-none;
-    background-image: linear-gradient(160deg, var(--btn-p-from) 0%, var(--btn-p-to) 100%);
-    border: 1px solid var(--btn-p-border);
-    box-shadow:
-      inset 0 1px 0 var(--btn-p-shine),
-      0 1px 3px rgba(0, 0, 0, 0.30),
-      0 3px 10px var(--btn-p-shadow);
+    background-image: linear-gradient(170deg, var(--brand-500) 0%, var(--brand-600) 100%);
+    box-shadow: 0 1px 2px rgba(110, 46, 20, 0.25), 0 6px 16px -6px rgba(168, 78, 42, 0.45);
   }
   .btn-primary:hover:not(:disabled) {
     transform: translateY(-1px);
-    background-image: linear-gradient(160deg, var(--brand-300) 0%, var(--brand-500) 100%);
-    box-shadow:
-      inset 0 1px 0 rgba(240, 170, 120, 0.30),
-      0 2px 5px rgba(0, 0, 0, 0.25),
-      0 6px 18px var(--btn-p-shadow),
-      0 0 20px var(--btn-p-glow);
+    background-image: linear-gradient(170deg, var(--brand-400) 0%, var(--brand-500) 100%);
+    box-shadow: 0 2px 4px rgba(110, 46, 20, 0.20), 0 10px 24px -6px rgba(168, 78, 42, 0.50);
   }
   .btn-primary:active:not(:disabled) {
-    transform: translateY(1px);
-    background-image: linear-gradient(160deg, var(--brand-600) 0%, var(--brand-800) 100%);
-    box-shadow: inset 0 2px 5px rgba(0, 0, 0, 0.35);
+    transform: translateY(0.5px);
+    background-image: linear-gradient(170deg, var(--brand-600) 0%, var(--brand-700) 100%);
+    box-shadow: 0 1px 2px rgba(110, 46, 20, 0.25);
   }
 
-  /* Secondary Button
-     Warm earth glass — transparent tint with brand outline. */
   .btn-secondary {
-    @apply text-white/75 hover:text-white px-4 py-2 rounded-xl
-      font-medium text-sm tracking-wide cursor-pointer
-      transition-all duration-150;
-    background-color: var(--btn-s-bg);
-    border: 1px solid var(--btn-s-border);
+    @apply inline-flex items-center justify-center gap-2 text-ink-700 px-5 py-2.5
+      rounded-full font-semibold text-sm cursor-pointer select-none bg-white
+      transition-all duration-150
+      disabled:opacity-40 disabled:cursor-not-allowed;
+    border: 1px solid var(--input-border);
+    box-shadow: 0 1px 2px rgba(60, 42, 24, 0.04);
   }
-  .btn-secondary:hover {
-    background-color: var(--btn-s-bg-hover);
-    border-color: var(--btn-s-border-hover);
-    transform: translateY(-1px);
+  .btn-secondary:hover:not(:disabled) {
+    @apply bg-paper-50 text-ink-900;
+    border-color: var(--input-border-hover);
   }
-  .btn-secondary:active {
-    transform: translateY(1px);
-    background-color: rgba(196, 98, 58, 0.06);
+  .btn-secondary:active:not(:disabled) {
+    @apply bg-paper-100;
   }
 
-  /* Danger Button */
+  .btn-ghost {
+    @apply inline-flex items-center justify-center gap-2 text-ink-500 hover:text-ink-900
+      px-3 py-2 rounded-full font-medium text-sm cursor-pointer select-none
+      hover:bg-ink-900/[.05] transition-colors duration-150
+      disabled:opacity-40 disabled:cursor-not-allowed;
+  }
+
   .btn-danger {
-    @apply text-red-300/70 hover:text-red-300 hover:bg-red-500/15
-      px-3 py-1.5 rounded-lg text-sm font-medium cursor-pointer
-      transition-all duration-150;
-  }
-  .btn-danger:hover {
-    transform: translateY(-1px);
+    @apply inline-flex items-center justify-center gap-2 text-red-700
+      px-4 py-2 rounded-full text-sm font-semibold cursor-pointer select-none
+      bg-red-50 border border-red-200 hover:bg-red-100 hover:border-red-300
+      transition-all duration-150
+      disabled:opacity-40 disabled:cursor-not-allowed;
   }
 
-  /* Active Sidebar Item — glass pill
-     Gradient background + ring border; no cheap left-edge inset shadow. */
+  /* ── Navigation ───────────────────────────────────────────────────────── */
+
   .nav-active {
-    color: var(--nav-active-text);
-    background: linear-gradient(
-      100deg,
-      var(--nav-active-bg-from) 0%,
-      var(--nav-active-bg-to) 100%
-    );
-    box-shadow: inset 0 0 0 1px var(--nav-active-ring);
+    @apply text-brand-700;
+    background: linear-gradient(100deg, rgba(196, 98, 58, 0.13) 0%, rgba(196, 98, 58, 0.05) 100%);
+    box-shadow: inset 0 0 0 1px rgba(196, 98, 58, 0.18);
   }
 
-  /* Glass Input */
+  /* ── Inputs ───────────────────────────────────────────────────────────── */
+
   .input {
     background: var(--input-bg);
     border: 1px solid var(--input-border);
-    @apply text-white rounded-xl px-3 py-2 w-full
-      focus:outline-none placeholder-white/25 transition-colors text-sm;
+    @apply text-ink-900 rounded-xl px-3.5 py-2.5 w-full text-sm
+      focus:outline-none transition-all duration-150;
   }
-  .input::placeholder {
-    color: var(--input-placeholder);
-  }
-  .input:hover {
-    border-color: var(--input-border-hover);
-  }
+  .input::placeholder { @apply text-ink-300; }
+  .input:hover:not(:focus):not(:disabled) { border-color: var(--input-border-hover); }
   .input:focus {
     border-color: var(--input-border-focus);
+    box-shadow: 0 0 0 3px rgba(216, 124, 78, 0.15);
+  }
+  .input:disabled { @apply opacity-50 cursor-not-allowed bg-paper-100; }
+  select.input { @apply pr-9 appearance-none bg-no-repeat cursor-pointer;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='%23a3988a' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+    background-position: right 0.8rem center;
   }
 
-  /* Label */
-  .label {
-    @apply block text-xs font-medium text-white/40 mb-1.5 uppercase tracking-wider;
-  }
+  /* ── Badges & Chips ───────────────────────────────────────────────────── */
 
-  /* Badge */
   .badge {
-    @apply inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium;
+    @apply inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium;
   }
+
+  /* mymind-esque outlined pill chips — white core, tinted border and text */
+  .chip {
+    @apply inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs
+      font-semibold bg-white border transition-colors duration-150;
+  }
+  .chip-clay   { @apply border-brand-300 text-brand-600; }
+  .chip-rose   { @apply border-rose-300 text-rose-600; }
+  .chip-amber  { @apply border-ocher-300 text-ocher-600; }
+  .chip-sage   { @apply border-sage-300 text-sage-600; }
+  .chip-olive  { @apply border-lime-600/40 text-lime-800; }
+  .chip-stone  { @apply border-ink-200 text-ink-500; }
+  .chip-solid-clay { @apply border-brand-500 bg-brand-500 text-white; }
+
+  /* ── Misc ─────────────────────────────────────────────────────────────── */
+
+  /* Decorative blurred colour circle — position and colour via utilities,
+     e.g. <div aria-hidden className="orb w-72 h-72 bg-rose-200/50 …" /> */
+  .orb {
+    @apply absolute rounded-full pointer-events-none select-none;
+    filter: blur(64px);
+  }
+
+  .hairline { border-color: var(--surface-border); }
+
+  .divide-hairline > * + * { border-top: 1px solid var(--surface-border); }
 }

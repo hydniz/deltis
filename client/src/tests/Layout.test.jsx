@@ -55,10 +55,17 @@ describe('Layout', () => {
     renderLayout();
     await screen.findByTestId('outlet');
     expect(screen.getByText('Home')).toBeInTheDocument();
+    expect(screen.getByText('Sport')).toBeInTheDocument();
+    expect(screen.getByText('Planer')).toBeInTheDocument();
     expect(screen.getByText('Habits')).toBeInTheDocument();
     expect(screen.getByText('Gewicht')).toBeInTheDocument();
     expect(screen.getByText('Ziele')).toBeInTheDocument();
-    expect(screen.getByText('Mehr')).toBeInTheDocument();
+  });
+
+  it('renders the user menu in the mobile top bar', async () => {
+    renderLayout();
+    await screen.findByTestId('outlet');
+    expect(screen.getByRole('button', { name: 'Benutzermenü' })).toBeInTheDocument();
   });
 
   it('renders the sidebar placeholder', async () => {

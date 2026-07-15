@@ -7,6 +7,9 @@ import {
   ResponsiveContainer, LineChart, Line, XAxis, YAxis,
   Tooltip, CartesianGrid, ReferenceLine
 } from 'recharts';
+import {
+  PageHeader, Button, Field, Input, Select, IconButton, EmptyState, Stat, CHART,
+} from '../components/ui';
 
 export default function Weight() {
   const [logs, setLogs] = useState([]);
@@ -69,31 +72,29 @@ export default function Weight() {
 
   const trend = logs.length >= 2 ? logs[0].weight - logs[logs.length - 1].weight : 0;
   const TrendIcon = trend < -0.2 ? TrendingDown : trend > 0.2 ? TrendingUp : Minus;
-  const trendColor = trend < -0.2 ? 'text-emerald-400' : trend > 0.2 ? 'text-red-400' : 'text-slate-400';
+  const trendColor = trend < -0.2 ? 'text-emerald-600' : trend > 0.2 ? 'text-red-600' : 'text-ink-400';
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-white">Gewicht</h1>
-          <p className="text-slate-400 text-sm mt-0.5">Verlauf & Tracking</p>
-        </div>
-      </div>
+      <PageHeader title="Gewicht" subtitle="Verlauf & Tracking" icon={Scale} tone="rose" />
 
+      {/* Entry form */}
       <div className="card p-5">
-        <h2 className="font-semibold text-white mb-4 flex items-center gap-2">
-          <Plus size={16} className="text-brand-400" /> Eintragen
+        <h2 className="display text-lg mb-4 flex items-center gap-2">
+          <Plus size={15} className="text-brand-500" /> Eintragen
         </h2>
         <form onSubmit={handleSubmit} className="flex flex-wrap gap-3">
-          <div className="flex-1 min-w-32">
-            <label className="label">Datum</label>
-            <input type="date" className="input" value={form.date} onChange={e => setForm(f => ({ ...f, date: e.target.value }))} required />
-          </div>
-          <div className="flex-1 min-w-24">
-            <label className="label">Gewicht</label>
-            <input
+          <Field label="Datum" className="flex-1 min-w-32">
+            <Input
+              type="date"
+              value={form.date}
+              onChange={e => setForm(f => ({ ...f, date: e.target.value }))}
+              required
+            />
+          </Field>
+          <Field label="Gewicht" className="flex-1 min-w-24">
+            <Input
               type="number"
-              className="input"
               value={form.weight}
               onChange={e => setForm(f => ({ ...f, weight: e.target.value }))}
               min="20"
@@ -102,43 +103,41 @@ export default function Weight() {
               placeholder="75.5"
               required
             />
-          </div>
-          <div className="w-24">
-            <label className="label">Einheit</label>
-            <select className="input" value={form.unit} onChange={e => setForm(f => ({ ...f, unit: e.target.value }))}>
+          </Field>
+          <Field label="Einheit" className="w-24">
+            <Select value={form.unit} onChange={e => setForm(f => ({ ...f, unit: e.target.value }))}>
               <option value="kg">kg</option>
               <option value="lbs">lbs</option>
-            </select>
-          </div>
+            </Select>
+          </Field>
           <div className="flex items-end">
-            <button type="submit" disabled={saving || !form.weight} className="btn-primary h-10 px-5">
-              {saving ? '...' : 'Speichern'}
-            </button>
+            <Button type="submit" loading={saving} disabled={!form.weight}>
+              Speichern
+            </Button>
           </div>
         </form>
       </div>
 
       {logs.length > 0 && (
         <>
+          {/* Stats */}
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
             {[
-              { label: 'Aktuell', value: current ? `${current} ${unit}` : '–', icon: Scale },
-              { label: 'Minimum', value: min ? `${min} ${unit}` : '–', icon: TrendingDown },
-              { label: 'Maximum', value: max ? `${max} ${unit}` : '–', icon: TrendingUp },
-              { label: 'Durchschnitt', value: avg ? `${avg} ${unit}` : '–', icon: Minus },
-            ].map(({ label, value, icon: Icon }) => (
-              <div key={label} className="card p-4">
-                <p className="text-xs text-slate-500 uppercase tracking-wide">{label}</p>
-                <p className="text-xl font-bold text-white mt-1">{value}</p>
-              </div>
+              { label: 'Aktuell', value: current ? `${current} ${unit}` : '–', icon: Scale, tone: 'rose' },
+              { label: 'Minimum', value: min ? `${min} ${unit}` : '–', icon: TrendingDown, tone: 'sage' },
+              { label: 'Maximum', value: max ? `${max} ${unit}` : '–', icon: TrendingUp, tone: 'clay' },
+              { label: 'Durchschnitt', value: avg ? `${avg} ${unit}` : '–', icon: Minus, tone: 'amber' },
+            ].map(({ label, value, icon, tone }) => (
+              <Stat key={label} icon={icon} label={label} value={value} tone={tone} />
             ))}
           </div>
 
+          {/* Chart */}
           <div className="card p-5">
             <div className="flex items-center justify-between mb-4">
-              <h2 className="font-semibold text-white">Verlauf</h2>
+              <h2 className="display text-lg">Verlauf</h2>
               {trend !== 0 && (
-                <div className={`flex items-center gap-1 text-sm font-medium ${trendColor}`}>
+                <div className={`flex items-center gap-1 text-sm font-semibold ${trendColor}`}>
                   <TrendIcon size={16} />
                   {Math.abs(trend).toFixed(1)} {unit}
                 </div>
@@ -146,36 +145,35 @@ export default function Weight() {
             </div>
             <ResponsiveContainer width="100%" height={220}>
               <LineChart data={chartData}>
-                <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.06)" />
-                <XAxis dataKey="date" tick={{ fill: 'rgba(255,255,255,0.35)', fontSize: 11 }} tickLine={false} />
+                <CartesianGrid strokeDasharray="3 3" stroke={CHART.grid} />
+                <XAxis dataKey="date" tick={CHART.tickLg} tickLine={false} />
                 <YAxis
-                  tick={{ fill: 'rgba(255,255,255,0.35)', fontSize: 11 }}
+                  tick={CHART.tickLg}
                   tickLine={false}
                   axisLine={false}
                   domain={['auto', 'auto']}
                   width={40}
                 />
                 <Tooltip
-                  contentStyle={{ background: 'rgba(30,25,18,0.95)', border: '1px solid rgba(255,255,255,0.12)', borderRadius: 12, color: '#fff', backdropFilter: 'blur(8px)' }}
+                  contentStyle={CHART.tooltip}
                   formatter={(v) => [`${v} ${unit}`, 'Gewicht']}
                 />
-                {avg && <ReferenceLine y={+avg} stroke="rgba(255,255,255,0.15)" strokeDasharray="4 2" />}
-                <Line type="monotone" dataKey="weight" stroke="#c4623a" strokeWidth={2.5} dot={{ fill: '#c4623a', r: 4 }} connectNulls />
+                {avg && <ReferenceLine y={+avg} stroke={CHART.lineMuted} strokeDasharray="4 2" />}
+                <Line type="monotone" dataKey="weight" stroke={CHART.line} strokeWidth={2.5} dot={{ fill: CHART.line, r: 4 }} connectNulls />
               </LineChart>
             </ResponsiveContainer>
           </div>
 
+          {/* Entries */}
           <div className="card p-5">
-            <h2 className="font-semibold text-white mb-4">Einträge</h2>
-            <div className="space-y-2">
+            <h2 className="display text-lg mb-3">Einträge</h2>
+            <div className="divide-hairline">
               {[...logs].sort((a, b) => new Date(b.date) - new Date(a.date)).slice(0, 20).map(l => (
-                <div key={l._id} className="flex items-center justify-between py-2 border-b border-slate-800 last:border-0">
-                  <p className="text-sm text-slate-300">{format(parseISO(l.date), 'EEEE, d. MMMM yyyy', { locale: de })}</p>
-                  <div className="flex items-center gap-4">
-                    <p className="text-sm font-semibold text-white">{l.weight} {l.unit}</p>
-                    <button onClick={() => handleDelete(l._id)} className="text-slate-600 hover:text-red-400 transition-colors">
-                      <Trash2 size={14} />
-                    </button>
+                <div key={l._id} className="flex items-center justify-between py-2.5">
+                  <p className="text-sm text-ink-600">{format(parseISO(l.date), 'EEEE, d. MMMM yyyy', { locale: de })}</p>
+                  <div className="flex items-center gap-2">
+                    <p className="text-sm font-semibold text-ink-900">{l.weight} {l.unit}</p>
+                    <IconButton icon={Trash2} label="Löschen" tone="danger" size={14} onClick={() => handleDelete(l._id)} />
                   </div>
                 </div>
               ))}
@@ -185,11 +183,12 @@ export default function Weight() {
       )}
 
       {!loading && logs.length === 0 && (
-        <div className="card p-12 text-center">
-          <Scale size={36} className="text-slate-600 mx-auto mb-3" />
-          <p className="text-slate-400">Noch kein Gewicht eingetragen</p>
-          <p className="text-slate-600 text-sm mt-1">Trage dein erstes Gewicht oben ein</p>
-        </div>
+        <EmptyState
+          icon={Scale}
+          tone="rose"
+          title="Noch kein Gewicht eingetragen"
+          text="Trage dein erstes Gewicht oben ein – die Kurve entsteht von ganz allein."
+        />
       )}
     </div>
   );

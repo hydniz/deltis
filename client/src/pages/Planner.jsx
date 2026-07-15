@@ -2,52 +2,67 @@ import { useState, useEffect, useCallback } from 'react';
 import api from '../utils/api';
 import { format, startOfWeek, addDays, addWeeks, subWeeks, isSameDay } from 'date-fns';
 import { de } from 'date-fns/locale';
-import { ChevronLeft, ChevronRight, Plus, CheckCircle2, Circle, Trash2, X, Dumbbell, Sparkles } from 'lucide-react';
+import {
+  ChevronLeft, ChevronRight, Plus, CheckCircle2, Circle, Trash2,
+  Dumbbell, Sparkles, CalendarDays,
+} from 'lucide-react';
+import {
+  PageHeader, Button, Field, Input, Select, Textarea, Chip, chipColorFor,
+  Modal, PageLoader,
+} from '../components/ui';
 
+// Card tints per activity type — light pastel surfaces matching the chip palette
 const CARD_COLORS = [
-  'border-brand-700 bg-brand-900/30',
-  'border-emerald-700 bg-emerald-900/30',
-  'border-amber-700 bg-amber-900/30',
-  'border-sky-700 bg-sky-900/30',
-  'border-purple-700 bg-purple-900/30',
-  'border-lime-700 bg-lime-900/30',
-  'border-orange-700 bg-orange-900/30',
-  'border-slate-700 bg-slate-800/50',
+  'border-brand-200 bg-brand-50',
+  'border-sage-200 bg-sage-100/60',
+  'border-ocher-200 bg-ocher-100/60',
+  'border-rose-200 bg-rose-50',
+  'border-lime-200 bg-lime-50',
 ];
 
-// ─Custom Field Input
+// Custom field input
 
 function CustomFieldInput({ field, value, onChange }) {
   if (field.type === 'select') {
     return (
-      <select className="input" value={value || ''} onChange={e => onChange(e.target.value)}>
+      <Select value={value || ''} onChange={e => onChange(e.target.value)}>
         <option value="">– Keine Auswahl –</option>
         {field.options.map(opt => <option key={opt} value={opt}>{opt}</option>)}
-      </select>
+      </Select>
     );
   }
   if (field.type === 'multiselect') {
     const selected = Array.isArray(value) ? value : [];
     return (
-      <div className="flex flex-wrap gap-x-4 gap-y-2 px-1">
+      <div className="flex flex-wrap gap-1.5">
         {field.options.map(opt => (
-          <label key={opt} className="flex items-center gap-2 cursor-pointer">
-            <input type="checkbox" checked={selected.includes(opt)}
-              onChange={e => onChange(e.target.checked ? [...selected, opt] : selected.filter(v => v !== opt))}
-              className="w-4 h-4 accent-violet-600"
-            />
-            <span className="text-sm text-slate-300">{opt}</span>
-          </label>
+          <Chip
+            key={opt}
+            color="clay"
+            active={selected.includes(opt)}
+            onClick={() => onChange(
+              selected.includes(opt) ? selected.filter(v => v !== opt) : [...selected, opt]
+            )}
+          >
+            {opt}
+          </Chip>
         ))}
       </div>
     );
   }
   return (
     <div className="flex gap-2">
-      <input type="number" className="input flex-1" value={value || ''}
-        onChange={e => onChange(e.target.value)} min="0" step="0.01" placeholder={field.unit ? `in ${field.unit}` : ''} />
+      <Input
+        type="number"
+        className="flex-1"
+        value={value || ''}
+        onChange={e => onChange(e.target.value)}
+        min="0"
+        step="0.01"
+        placeholder={field.unit ? `in ${field.unit}` : ''}
+      />
       {field.unit && (
-        <span className="flex items-center px-3 bg-slate-700 rounded-xl text-slate-400 text-sm whitespace-nowrap">{field.unit}</span>
+        <span className="flex items-center px-3 panel text-ink-500 text-sm whitespace-nowrap">{field.unit}</span>
       )}
     </div>
   );
@@ -122,105 +137,111 @@ function AddPlanModal({ date, activityTypes, habits, onSave, onClose }) {
   };
 
   return (
-    <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-end sm:items-center justify-center z-50">
-      <div className="bg-[#1e1e30]/95 backdrop-blur-2xl border border-white/[.1] w-full max-w-md rounded-t-2xl sm:rounded-2xl flex flex-col" style={{ maxHeight: '90dvh' }}>
-        <div className="w-10 h-1 bg-slate-700 rounded-full mx-auto mt-3 sm:hidden flex-shrink-0" />
-
-        <div className="flex items-center justify-between px-5 pt-4 pb-3 border-b border-slate-800 flex-shrink-0">
-          <div>
-            <h2 className="text-base font-semibold text-white">Plan hinzufügen</h2>
-            <p className="text-xs text-slate-500 mt-0.5">{format(date, 'EEEE, d. MMMM', { locale: de })}</p>
-          </div>
-          <button type="button" onClick={onClose} className="text-slate-400 hover:text-slate-200 p-1 -mr-1"><X size={20} /></button>
-        </div>
-
-        {/* Mode toggle */}
-        <div className="flex gap-2 px-5 pt-4 flex-shrink-0">
-          {activityTypes.length > 0 && (
-            <button type="button" onClick={() => setMode('activity')}
-              className={`flex-1 py-2.5 rounded-xl border text-sm font-semibold flex items-center justify-center gap-1.5 transition-colors ${mode === 'activity' ? 'border-brand-500 bg-brand-950/60 text-white' : 'border-slate-700 bg-slate-800/40 text-slate-400'}`}
-            ><Dumbbell size={13} /> Aktivität</button>
-          )}
-          {habits.length > 0 && (
-            <button type="button" onClick={() => setMode('habit')}
-              className={`flex-1 py-2.5 rounded-xl border text-sm font-semibold flex items-center justify-center gap-1.5 transition-colors ${mode === 'habit' ? 'border-emerald-500 bg-emerald-950/60 text-white' : 'border-slate-700 bg-slate-800/40 text-slate-400'}`}
-            ><Sparkles size={13} /> Gewohnheit</button>
-          )}
-        </div>
-
-        <div className="flex-1 overflow-y-auto px-5 py-4">
-          {mode === 'activity' && activityTypes.length > 0 && (
-            <form id="add-form" onSubmit={handleSubmitActivity} className="space-y-4">
-              <div>
-                <label className="label">Aktivität</label>
-                <select className="input" value={actForm.activityTypeId}
-                  onChange={e => { setAct('activityTypeId', e.target.value); setCustomValues({}); }}>
-                  {activityTypes.map(t => <option key={t._id} value={t._id}>{t.label}</option>)}
-                </select>
-              </div>
-              {selectedType?.showDuration !== false && (
-                <div>
-                  <label className="label">Dauer (min)</label>
-                  <input type="number" className="input" value={actForm.duration} onChange={e => setAct('duration', e.target.value)} min="1" placeholder="z.B. 60" />
-                </div>
-              )}
-              {selectedType?.showDistance && (
-                <div>
-                  <label className="label">Distanz (km)</label>
-                  <input type="number" className="input" value={actForm.distance} onChange={e => setAct('distance', e.target.value)} min="0" step="0.1" placeholder="z.B. 5.5" />
-                </div>
-              )}
-              {selectedType?.customFields?.map(field => (
-                <div key={field.key}>
-                  <label className="label">{field.label}{field.unit && <span className="text-slate-500 ml-1">({field.unit})</span>}</label>
-                  <CustomFieldInput field={field} value={customValues[field.key]} onChange={v => setCustomValues(cv => ({ ...cv, [field.key]: v }))} />
-                </div>
-              ))}
-              <div>
-                <label className="label">Notizen</label>
-                <textarea className="input resize-none" rows={2} value={actForm.notes} onChange={e => setAct('notes', e.target.value)} placeholder="Optional..." />
-              </div>
-            </form>
-          )}
-
-          {mode === 'habit' && habits.length > 0 && (
-            <form id="add-form" onSubmit={handleSubmitHabit} className="space-y-4">
-              <div>
-                <label className="label">Gewohnheit</label>
-                <select className="input" value={habitForm.habitId} onChange={e => setHab('habitId', e.target.value)}>
-                  {habits.map(h => <option key={h._id} value={h._id}>{h.name}{h.unitSymbol ? ` (${h.unitSymbol})` : ''}</option>)}
-                </select>
-                {selectedHabit && (
-                  <p className="text-xs text-slate-500 mt-1.5">
-                    {selectedHabit.type === 'boolean' && 'Wird mit einem Klick als erledigt markiert.'}
-                    {selectedHabit.type === 'amount' && `Beim Abhaken kannst du die Menge in ${selectedHabit.unitSymbol || 'Einheiten'} eintragen.`}
-                    {selectedHabit.type === 'duration' && `Beim Abhaken kannst du die Dauer in ${selectedHabit.unitSymbol || 'min'} eintragen.`}
-                  </p>
-                )}
-              </div>
-              <div>
-                <label className="label">Notizen <span className="text-slate-600 font-normal">(optional)</span></label>
-                <textarea className="input resize-none" rows={2} value={habitForm.notes} onChange={e => setHab('notes', e.target.value)} placeholder="Erinnerung, Kontext..." />
-              </div>
-            </form>
-          )}
-
-          {mode === 'activity' && activityTypes.length === 0 && (
-            <p className="text-sm text-slate-500 text-center py-4">Keine Aktivitätstypen vorhanden.</p>
-          )}
-          {mode === 'habit' && habits.length === 0 && (
-            <p className="text-sm text-slate-500 text-center py-4">Keine Gewohnheiten vorhanden.</p>
-          )}
-        </div>
-
-        <div className="flex gap-3 px-5 py-4 border-t border-slate-800 flex-shrink-0">
-          <button type="button" onClick={onClose} className="btn-secondary flex-1">Abbrechen</button>
-          <button type="submit" form="add-form" disabled={saving} className="btn-primary flex-1">
-            {saving ? 'Speichern…' : 'Speichern'}
+    <Modal
+      onClose={onClose}
+      title="Plan hinzufügen"
+      subtitle={format(date, 'EEEE, d. MMMM', { locale: de })}
+      icon={CalendarDays}
+      footer={
+        <>
+          <Button variant="secondary" className="flex-1" onClick={onClose}>Abbrechen</Button>
+          <Button type="submit" form="add-form" className="flex-1" loading={saving}>
+            Speichern
+          </Button>
+        </>
+      }
+    >
+      {/* Mode toggle */}
+      <div className="flex gap-2 mb-5">
+        {activityTypes.length > 0 && (
+          <button
+            type="button"
+            onClick={() => setMode('activity')}
+            className={`flex-1 py-2.5 rounded-xl border text-sm font-semibold flex items-center justify-center gap-1.5 transition-colors ${
+              mode === 'activity'
+                ? 'border-brand-400 bg-brand-50 text-brand-700'
+                : 'border-paper-200 bg-paper-50 text-ink-400 hover:text-ink-600'
+            }`}
+          >
+            <Dumbbell size={13} /> Aktivität
           </button>
-        </div>
+        )}
+        {habits.length > 0 && (
+          <button
+            type="button"
+            onClick={() => setMode('habit')}
+            className={`flex-1 py-2.5 rounded-xl border text-sm font-semibold flex items-center justify-center gap-1.5 transition-colors ${
+              mode === 'habit'
+                ? 'border-sage-400 bg-sage-100/70 text-sage-700'
+                : 'border-paper-200 bg-paper-50 text-ink-400 hover:text-ink-600'
+            }`}
+          >
+            <Sparkles size={13} /> Gewohnheit
+          </button>
+        )}
       </div>
-    </div>
+
+      {mode === 'activity' && activityTypes.length > 0 && (
+        <form id="add-form" onSubmit={handleSubmitActivity} className="space-y-4">
+          <Field label="Aktivität">
+            <Select
+              value={actForm.activityTypeId}
+              onChange={e => { setAct('activityTypeId', e.target.value); setCustomValues({}); }}
+            >
+              {activityTypes.map(t => <option key={t._id} value={t._id}>{t.label}</option>)}
+            </Select>
+          </Field>
+          {selectedType?.showDuration !== false && (
+            <Field label="Dauer (min)">
+              <Input type="number" value={actForm.duration} onChange={e => setAct('duration', e.target.value)} min="1" placeholder="z.B. 60" />
+            </Field>
+          )}
+          {selectedType?.showDistance && (
+            <Field label="Distanz (km)">
+              <Input type="number" value={actForm.distance} onChange={e => setAct('distance', e.target.value)} min="0" step="0.1" placeholder="z.B. 5.5" />
+            </Field>
+          )}
+          {selectedType?.customFields?.map(field => (
+            <Field
+              key={field.key}
+              label={<>{field.label}{field.unit && <span className="text-ink-300 ml-1 normal-case">({field.unit})</span>}</>}
+            >
+              <CustomFieldInput field={field} value={customValues[field.key]} onChange={v => setCustomValues(cv => ({ ...cv, [field.key]: v }))} />
+            </Field>
+          ))}
+          <Field label="Notizen">
+            <Textarea rows={2} value={actForm.notes} onChange={e => setAct('notes', e.target.value)} placeholder="Optional…" />
+          </Field>
+        </form>
+      )}
+
+      {mode === 'habit' && habits.length > 0 && (
+        <form id="add-form" onSubmit={handleSubmitHabit} className="space-y-4">
+          <Field
+            label="Gewohnheit"
+            hint={selectedHabit && (
+              selectedHabit.type === 'boolean' ? 'Wird mit einem Klick als erledigt markiert.'
+              : selectedHabit.type === 'amount' ? `Beim Abhaken kannst du die Menge in ${selectedHabit.unitSymbol || 'Einheiten'} eintragen.`
+              : `Beim Abhaken kannst du die Dauer in ${selectedHabit.unitSymbol || 'min'} eintragen.`
+            )}
+          >
+            <Select value={habitForm.habitId} onChange={e => setHab('habitId', e.target.value)}>
+              {habits.map(h => <option key={h._id} value={h._id}>{h.name}{h.unitSymbol ? ` (${h.unitSymbol})` : ''}</option>)}
+            </Select>
+          </Field>
+          <Field label="Notizen" optional>
+            <Textarea rows={2} value={habitForm.notes} onChange={e => setHab('notes', e.target.value)} placeholder="Erinnerung, Kontext…" />
+          </Field>
+        </form>
+      )}
+
+      {mode === 'activity' && activityTypes.length === 0 && (
+        <p className="text-sm text-ink-400 text-center py-4">Keine Aktivitätstypen vorhanden.</p>
+      )}
+      {mode === 'habit' && habits.length === 0 && (
+        <p className="text-sm text-ink-400 text-center py-4">Keine Gewohnheiten vorhanden.</p>
+      )}
+    </Modal>
   );
 }
 
@@ -261,55 +282,47 @@ function CompleteActivityModal({ plan, onSave, onClose }) {
   };
 
   return (
-    <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-end sm:items-center justify-center z-50">
-      <div className="bg-[#1e1e30]/95 backdrop-blur-2xl border border-white/[.1] w-full max-w-md rounded-t-2xl sm:rounded-2xl flex flex-col" style={{ maxHeight: '90dvh' }}>
-        <div className="w-10 h-1 bg-slate-700 rounded-full mx-auto mt-3 sm:hidden flex-shrink-0" />
-        <div className="flex items-center justify-between px-5 pt-4 pb-3 border-b border-slate-800 flex-shrink-0">
-          <div>
-            <h2 className="text-base font-semibold text-white">Aktivität loggen</h2>
-            <p className="text-xs text-slate-400 mt-0.5">{typeConfig.label || plan.activityType}</p>
-          </div>
-          <button type="button" onClick={onClose} className="text-slate-400 hover:text-slate-200 p-1 -mr-1"><X size={20} /></button>
-        </div>
-        <div className="flex-1 overflow-y-auto px-5 py-4">
-          <form id="complete-act-form" onSubmit={handleSubmit} className="space-y-4">
-            <div>
-              <label className="label">Datum</label>
-              <input type="date" className="input" value={form.date} onChange={e => set('date', e.target.value)} required />
-            </div>
-            {typeConfig.showDuration !== false && (
-              <div>
-                <label className="label">Dauer (min)</label>
-                <input type="number" className="input" value={form.duration} onChange={e => set('duration', e.target.value)} min="1" placeholder="z.B. 60" />
-              </div>
-            )}
-            {typeConfig.showDistance && (
-              <div>
-                <label className="label">Distanz (km)</label>
-                <input type="number" className="input" value={form.distance} onChange={e => set('distance', e.target.value)} min="0" step="0.1" placeholder="z.B. 5.5" />
-              </div>
-            )}
-            {(typeConfig.customFields || []).map(field => (
-              <div key={field.key}>
-                <label className="label">{field.label}{field.unit && <span className="text-slate-500 ml-1">({field.unit})</span>}</label>
-                <CustomFieldInput field={field} value={customValues[field.key]} onChange={v => setCustomValues(cv => ({ ...cv, [field.key]: v }))} />
-              </div>
-            ))}
-            <div>
-              <label className="label">Notizen</label>
-              <textarea className="input resize-none" rows={2} value={form.notes} onChange={e => set('notes', e.target.value)} placeholder="Optional..." />
-            </div>
-          </form>
-        </div>
-        <div className="flex gap-3 px-5 py-4 border-t border-slate-800 flex-shrink-0">
-          <button type="button" onClick={onClose} className="btn-secondary flex-1">Abbrechen</button>
-          <button type="submit" form="complete-act-form" disabled={saving} className="btn-primary flex-1 flex items-center justify-center gap-2">
-            <CheckCircle2 size={16} />
-            {saving ? 'Speichern…' : 'Als erledigt loggen'}
-          </button>
-        </div>
-      </div>
-    </div>
+    <Modal
+      onClose={onClose}
+      title="Aktivität loggen"
+      subtitle={typeConfig.label || plan.activityType}
+      icon={CheckCircle2}
+      footer={
+        <>
+          <Button variant="secondary" className="flex-1" onClick={onClose}>Abbrechen</Button>
+          <Button type="submit" form="complete-act-form" className="flex-1" loading={saving} icon={CheckCircle2}>
+            Als erledigt loggen
+          </Button>
+        </>
+      }
+    >
+      <form id="complete-act-form" onSubmit={handleSubmit} className="space-y-4">
+        <Field label="Datum">
+          <Input type="date" value={form.date} onChange={e => set('date', e.target.value)} required />
+        </Field>
+        {typeConfig.showDuration !== false && (
+          <Field label="Dauer (min)">
+            <Input type="number" value={form.duration} onChange={e => set('duration', e.target.value)} min="1" placeholder="z.B. 60" />
+          </Field>
+        )}
+        {typeConfig.showDistance && (
+          <Field label="Distanz (km)">
+            <Input type="number" value={form.distance} onChange={e => set('distance', e.target.value)} min="0" step="0.1" placeholder="z.B. 5.5" />
+          </Field>
+        )}
+        {(typeConfig.customFields || []).map(field => (
+          <Field
+            key={field.key}
+            label={<>{field.label}{field.unit && <span className="text-ink-300 ml-1 normal-case">({field.unit})</span>}</>}
+          >
+            <CustomFieldInput field={field} value={customValues[field.key]} onChange={v => setCustomValues(cv => ({ ...cv, [field.key]: v }))} />
+          </Field>
+        ))}
+        <Field label="Notizen">
+          <Textarea rows={2} value={form.notes} onChange={e => set('notes', e.target.value)} placeholder="Optional…" />
+        </Field>
+      </form>
+    </Modal>
   );
 }
 
@@ -338,49 +351,46 @@ function CompleteHabitModal({ plan, onSave, onClose }) {
   };
 
   return (
-    <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-end sm:items-center justify-center z-50">
-      <div className="bg-[#1e1e30]/95 backdrop-blur-2xl border border-white/[.1] w-full max-w-sm rounded-t-2xl sm:rounded-2xl flex flex-col">
-        <div className="w-10 h-1 bg-slate-700 rounded-full mx-auto mt-3 sm:hidden flex-shrink-0" />
-        <div className="flex items-center justify-between px-5 pt-4 pb-3 border-b border-slate-800 flex-shrink-0">
-          <div>
-            <h2 className="text-base font-semibold text-white">Gewohnheit abhaken</h2>
-            <p className="text-xs text-emerald-400 mt-0.5">{plan.habitName}</p>
-          </div>
-          <button type="button" onClick={onClose} className="text-slate-400 hover:text-slate-200 p-1 -mr-1"><X size={20} /></button>
-        </div>
-        <form onSubmit={handleSubmit} className="px-5 py-4 space-y-4">
-          <div>
-            <label className="label">Datum</label>
-            <input type="date" className="input" value={date} onChange={e => setDate(e.target.value)} required />
-          </div>
-          {!isBoolean && (
-            <div>
-              <label className="label">
-                Wert{plan.unitSymbol ? ` (${plan.unitSymbol})` : ''}
-              </label>
-              <input type="number" className="input" value={value}
-                onChange={e => setValue(e.target.value)}
-                min="0" step="0.01" placeholder={`z.B. 1 ${plan.unitSymbol || ''}`}
-                autoFocus
-              />
-            </div>
-          )}
-          {isBoolean && (
-            <p className="text-sm text-slate-400">
-              <Sparkles size={14} className="inline text-emerald-400 mr-1.5" />
-              Wird als erledigt in dein Tagebuch eingetragen.
-            </p>
-          )}
-          <div className="flex gap-3 pt-1">
-            <button type="button" onClick={onClose} className="btn-secondary flex-1">Abbrechen</button>
-            <button type="submit" disabled={saving} className="btn-primary flex-1 flex items-center justify-center gap-2">
-              <CheckCircle2 size={16} />
-              {saving ? 'Speichern…' : 'Erledigt'}
-            </button>
-          </div>
-        </form>
-      </div>
-    </div>
+    <Modal
+      onClose={onClose}
+      title="Gewohnheit abhaken"
+      subtitle={plan.habitName}
+      icon={Sparkles}
+      size="sm"
+      footer={
+        <>
+          <Button variant="secondary" className="flex-1" onClick={onClose}>Abbrechen</Button>
+          <Button type="submit" form="complete-habit-form" className="flex-1" loading={saving} icon={CheckCircle2}>
+            Erledigt
+          </Button>
+        </>
+      }
+    >
+      <form id="complete-habit-form" onSubmit={handleSubmit} className="space-y-4">
+        <Field label="Datum">
+          <Input type="date" value={date} onChange={e => setDate(e.target.value)} required />
+        </Field>
+        {!isBoolean && (
+          <Field label={`Wert${plan.unitSymbol ? ` (${plan.unitSymbol})` : ''}`}>
+            <Input
+              type="number"
+              value={value}
+              onChange={e => setValue(e.target.value)}
+              min="0"
+              step="0.01"
+              placeholder={`z.B. 1 ${plan.unitSymbol || ''}`}
+              autoFocus
+            />
+          </Field>
+        )}
+        {isBoolean && (
+          <p className="text-sm text-ink-500">
+            <Sparkles size={14} className="inline text-sage-500 mr-1.5" />
+            Wird als erledigt in dein Tagebuch eingetragen.
+          </p>
+        )}
+      </form>
+    </Modal>
   );
 }
 
@@ -451,26 +461,30 @@ export default function Planner() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-white">Wochenplan</h1>
-          <p className="text-slate-400 text-sm mt-0.5">
-            {format(weekStart, 'd. MMM', { locale: de })} – {format(weekEnd, 'd. MMM yyyy', { locale: de })}
-          </p>
-        </div>
-        <div className="flex items-center gap-2">
-          <button onClick={() => setWeekStart(w => subWeeks(w, 1))} className="btn-secondary p-2"><ChevronLeft size={18} /></button>
-          <button onClick={() => setWeekStart(startOfWeek(new Date(), { weekStartsOn: 1 }))} className="btn-secondary px-3 py-2 text-sm">Heute</button>
-          <button onClick={() => setWeekStart(w => addWeeks(w, 1))} className="btn-secondary p-2"><ChevronRight size={18} /></button>
-        </div>
-      </div>
+      <PageHeader
+        title="Wochenplan"
+        icon={CalendarDays}
+        tone="amber"
+        subtitle={`${format(weekStart, 'd. MMM', { locale: de })} – ${format(weekEnd, 'd. MMM yyyy', { locale: de })}`}
+        action={
+          <div className="flex items-center gap-1.5">
+            <Button variant="secondary" className="!p-2.5" onClick={() => setWeekStart(w => subWeeks(w, 1))} aria-label="Vorherige Woche">
+              <ChevronLeft size={16} />
+            </Button>
+            <Button variant="secondary" size="sm" onClick={() => setWeekStart(startOfWeek(new Date(), { weekStartsOn: 1 }))}>
+              Heute
+            </Button>
+            <Button variant="secondary" className="!p-2.5" onClick={() => setWeekStart(w => addWeeks(w, 1))} aria-label="Nächste Woche">
+              <ChevronRight size={16} />
+            </Button>
+          </div>
+        }
+      />
 
       {loading ? (
-        <div className="flex items-center justify-center py-16">
-          <div className="w-8 h-8 border-2 border-zinc-700 border-t-brand-500 rounded-full animate-spin" />
-        </div>
+        <PageLoader />
       ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-7 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-7 gap-3">
           {days.map(day => {
             const dayDate = format(day, 'yyyy-MM-dd');
             const dayPlans = plans.filter(p => (p.scheduledDate || '').slice(0, 10) === dayDate);
@@ -479,53 +493,64 @@ export default function Planner() {
             const totalItems = dayPlans.length + dayHabitPlans.length;
 
             return (
-              <div key={day.toISOString()} className={`card p-3 ${isToday_ ? 'border-brand-600/50' : ''}`}>
+              <div
+                key={day.toISOString()}
+                className={`card p-3 ${isToday_ ? '!border-brand-300 shadow-card-hover' : ''}`}
+              >
                 {/* Day header */}
                 <div className="flex items-center justify-between mb-3">
                   <div>
-                    <p className={`text-xs font-semibold uppercase tracking-wide ${isToday_ ? 'text-brand-400' : 'text-slate-500'}`}>
+                    <p className={`text-[10px] font-semibold uppercase tracking-[0.09em] ${isToday_ ? 'text-brand-600' : 'text-ink-400'}`}>
                       {format(day, 'EEE', { locale: de })}
                     </p>
-                    <p className={`text-lg font-bold ${isToday_ ? 'text-brand-300' : 'text-slate-300'}`}>
+                    <p className={`display text-xl ${isToday_ ? 'text-brand-600' : ''}`}>
                       {format(day, 'd')}
                     </p>
                   </div>
-                  <button onClick={() => setAddFor(day)}
-                    className="w-9 h-9 flex items-center justify-center rounded-lg bg-slate-800 hover:bg-brand-700 text-slate-400 hover:text-white transition-colors"
+                  <button
+                    onClick={() => setAddFor(day)}
+                    aria-label="Plan hinzufügen"
+                    className="w-8 h-8 flex items-center justify-center rounded-full bg-brand-50 hover:bg-brand-500 text-brand-500 hover:text-white transition-colors"
                   >
-                    <Plus size={15} />
+                    <Plus size={14} />
                   </button>
                 </div>
 
                 <div className="space-y-2">
                   {/* Activity plans */}
                   {dayPlans.map(plan => (
-                    <div key={plan._id} className={`rounded-lg border p-2 ${getCardColor(plan)} ${plan.completed ? 'opacity-60' : ''}`}>
+                    <div key={plan._id} className={`rounded-xl border p-2 ${getCardColor(plan)} ${plan.completed ? 'opacity-55' : ''}`}>
                       <div className="flex items-start justify-between gap-1">
-                        <button onClick={() => handleCompleteActivity(plan)} className="flex-shrink-0 mt-0.5"
-                          title={plan.completed ? 'Als offen markieren' : 'Als erledigt loggen'}>
+                        <button
+                          onClick={() => handleCompleteActivity(plan)}
+                          className="flex-shrink-0 mt-0.5"
+                          title={plan.completed ? 'Als offen markieren' : 'Als erledigt loggen'}
+                        >
                           {plan.completed
-                            ? <CheckCircle2 size={14} className="text-emerald-400" />
-                            : <Circle size={14} className="text-slate-500 hover:text-emerald-400 transition-colors" />
+                            ? <CheckCircle2 size={14} className="text-emerald-600" />
+                            : <Circle size={14} className="text-ink-300 hover:text-emerald-600 transition-colors" />
                           }
                         </button>
                         <div className="flex-1 min-w-0">
-                          <p className={`text-xs font-medium leading-tight ${plan.completed ? 'line-through text-slate-500' : 'text-slate-200'}`}>
+                          <p className={`text-xs font-semibold leading-tight ${plan.completed ? 'line-through text-ink-400' : 'text-ink-800'}`}>
                             {(() => {
                               const current = plan.activityTypeRef?.label || plan.activityType;
                               return plan.historicalLabel ? `${current} (${plan.historicalLabel})` : current;
                             })()}
                           </p>
                           {(plan.duration || plan.distance) && (
-                            <p className="text-xs text-slate-500 mt-0.5">
+                            <p className="text-xs text-ink-500 mt-0.5">
                               {plan.duration ? `${plan.duration} min` : ''}
                               {plan.duration && plan.distance ? ' · ' : ''}
                               {plan.distance ? `${plan.distance} km` : ''}
                             </p>
                           )}
                         </div>
-                        <button onClick={() => api.delete(`/planner/${plan._id}`).then(load)}
-                          className="flex-shrink-0 text-slate-600 hover:text-red-400 transition-colors p-1 -mr-1">
+                        <button
+                          onClick={() => api.delete(`/planner/${plan._id}`).then(load)}
+                          aria-label="Plan löschen"
+                          className="flex-shrink-0 text-ink-300 hover:text-red-600 transition-colors p-1 -mr-1"
+                        >
                           <Trash2 size={12} />
                         </button>
                       </div>
@@ -534,37 +559,42 @@ export default function Planner() {
 
                   {/* Habit plans */}
                   {dayHabitPlans.map(plan => (
-                    <div key={plan._id}
-                      className={`rounded-lg border p-2 ${plan.completed
-                        ? 'border-emerald-800/40 bg-emerald-900/20 opacity-60'
-                        : 'border-emerald-700/50 bg-emerald-900/20'}`}
+                    <div
+                      key={plan._id}
+                      className={`rounded-xl border p-2 border-sage-200 bg-sage-100/60 ${plan.completed ? 'opacity-55' : ''}`}
                     >
                       <div className="flex items-start justify-between gap-1">
-                        <button onClick={() => handleCompleteHabit(plan)} className="flex-shrink-0 mt-0.5"
-                          title={plan.completed ? 'Als offen markieren' : 'Als erledigt markieren'}>
+                        <button
+                          onClick={() => handleCompleteHabit(plan)}
+                          className="flex-shrink-0 mt-0.5"
+                          title={plan.completed ? 'Als offen markieren' : 'Als erledigt markieren'}
+                        >
                           {plan.completed
-                            ? <CheckCircle2 size={14} className="text-emerald-400" />
-                            : <Circle size={14} className="text-emerald-600 hover:text-emerald-400 transition-colors" />
+                            ? <CheckCircle2 size={14} className="text-emerald-600" />
+                            : <Circle size={14} className="text-sage-400 hover:text-emerald-600 transition-colors" />
                           }
                         </button>
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-1">
-                            <Sparkles size={10} className="text-emerald-500 flex-shrink-0" />
-                            <p className={`text-xs font-medium leading-tight truncate ${plan.completed ? 'line-through text-slate-500' : 'text-emerald-200'}`}>
+                            <Sparkles size={10} className="text-sage-500 flex-shrink-0" />
+                            <p className={`text-xs font-semibold leading-tight truncate ${plan.completed ? 'line-through text-ink-400' : 'text-sage-700'}`}>
                               {plan.habitId?.name || plan.habitName}
                             </p>
                           </div>
                           {plan.completed && plan.loggedValue != null && plan.habitType !== 'boolean' && (
-                            <p className="text-xs text-slate-500 mt-0.5">
+                            <p className="text-xs text-ink-500 mt-0.5">
                               {plan.loggedValue} {plan.unitSymbol}
                             </p>
                           )}
                           {plan.notes && !plan.completed && (
-                            <p className="text-xs text-slate-600 mt-0.5 truncate">{plan.notes}</p>
+                            <p className="text-xs text-ink-400 mt-0.5 truncate">{plan.notes}</p>
                           )}
                         </div>
-                        <button onClick={() => api.delete(`/planner/habits/${plan._id}`).then(load)}
-                          className="flex-shrink-0 text-slate-600 hover:text-red-400 transition-colors p-1 -mr-1">
+                        <button
+                          onClick={() => api.delete(`/planner/habits/${plan._id}`).then(load)}
+                          aria-label="Plan löschen"
+                          className="flex-shrink-0 text-ink-300 hover:text-red-600 transition-colors p-1 -mr-1"
+                        >
                           <Trash2 size={12} />
                         </button>
                       </div>
@@ -572,7 +602,7 @@ export default function Planner() {
                   ))}
 
                   {totalItems === 0 && (
-                    <p className="text-xs text-slate-700 text-center py-2">Frei</p>
+                    <p className="text-xs text-ink-200 text-center py-2">Frei</p>
                   )}
                 </div>
               </div>

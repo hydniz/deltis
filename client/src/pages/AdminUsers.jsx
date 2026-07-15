@@ -1,25 +1,14 @@
 import { useState, useEffect, useCallback } from 'react';
 import {
-  Users, UserPlus, Trash2, X, Pencil, AlertCircle, Eye, EyeOff, Lock, AtSign, Shield
+  Users, UserPlus, Trash2, Pencil, AtSign, Lock, Shield,
 } from 'lucide-react';
 import api from '../utils/api';
 import AdminPageHeader from '../components/admin/AdminPageHeader';
 import AdminSpinner from '../components/admin/AdminSpinner';
 import ErrorBanner from '../components/admin/ErrorBanner';
-
-// Toggle switch
-
-function Toggle({ value, onChange }) {
-  return (
-    <button
-      type="button"
-      onClick={() => onChange(!value)}
-      className={`relative w-9 h-5 rounded-full transition-colors flex-shrink-0 focus:outline-none ${value ? 'bg-brand-600' : 'bg-slate-700'}`}
-    >
-      <span className={`absolute top-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform ${value ? 'translate-x-4' : 'translate-x-0.5'}`} />
-    </button>
-  );
-}
+import {
+  Button, Field, Input, PasswordInput, Alert, Modal, Toggle, IconButton, Spinner,
+} from '../components/ui';
 
 // Create modal
 
@@ -28,7 +17,6 @@ function NewUserModal({ onClose, onCreate }) {
   const [password, setPassword] = useState('');
   const [name, setName] = useState('');
   const [isAdmin, setIsAdmin] = useState(false);
-  const [showPw, setShowPw] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [created, setCreated] = useState(null);
@@ -55,127 +43,81 @@ function NewUserModal({ onClose, onCreate }) {
   const canSubmit = username.trim().length >= 3 && password.length >= 8 && !loading;
 
   return (
-    <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-      <div className="card p-6 w-full max-w-md">
-        <div className="flex items-center justify-between mb-5">
-          <h2 className="text-lg font-semibold text-white flex items-center gap-2">
-            <UserPlus size={18} className="text-brand-400" />
-            Neuen Nutzer anlegen
-          </h2>
-          <button onClick={onClose} className="text-slate-500 hover:text-slate-200 transition-colors">
-            <X size={20} />
-          </button>
+    <Modal
+      onClose={onClose}
+      title="Neuen Nutzer anlegen"
+      icon={UserPlus}
+      footer={!created ? (
+        <>
+          <Button variant="secondary" className="flex-1" onClick={onClose}>Abbrechen</Button>
+          <Button className="flex-1" loading={loading} disabled={!canSubmit} onClick={handleCreate}>
+            Anlegen
+          </Button>
+        </>
+      ) : (
+        <Button className="w-full" onClick={onClose}>Fertig</Button>
+      )}
+    >
+      {!created ? (
+        <div className="space-y-4">
+          <Field label={<><AtSign size={12} className="inline mr-1" />Benutzername</>}>
+            <Input
+              value={username}
+              onChange={e => { setUsername(e.target.value); setError(''); }}
+              placeholder="Mindestens 3 Zeichen"
+              autoFocus
+              autoComplete="off"
+            />
+          </Field>
+          <Field label="Name" optional>
+            <Input
+              value={name}
+              onChange={e => setName(e.target.value)}
+              placeholder="Anzeigename – wird Benutzername wenn leer"
+            />
+          </Field>
+          <Field
+            label={<><Lock size={12} className="inline mr-1" />Temporäres Passwort</>}
+            hint="Der Nutzer muss das Passwort beim ersten Login ändern."
+          >
+            <PasswordInput
+              value={password}
+              onChange={e => { setPassword(e.target.value); setError(''); }}
+              placeholder="Mindestens 8 Zeichen"
+              autoComplete="new-password"
+            />
+          </Field>
+
+          <label className="flex items-center gap-3 cursor-pointer select-none">
+            <Toggle value={isAdmin} onChange={setIsAdmin} label="Admin-Konto" />
+            <span className="text-sm text-ink-700 font-medium flex items-center gap-1.5">
+              <Shield size={13} className={isAdmin ? 'text-ocher-500' : 'text-ink-300'} />
+              Admin-Konto
+            </span>
+          </label>
+
+          {error && <Alert tone="error">{error}</Alert>}
         </div>
-
-        {!created ? (
-          <div className="space-y-4">
-            <div>
-              <label className="label">
-                <AtSign size={13} className="inline mr-1" />
-                Benutzername
-              </label>
-              <input
-                type="text"
-                value={username}
-                onChange={e => { setUsername(e.target.value); setError(''); }}
-                className="input"
-                placeholder="Mindestens 3 Zeichen"
-                autoFocus
-                autoComplete="off"
-              />
-            </div>
-            <div>
-              <label className="label">Name (optional)</label>
-              <input
-                type="text"
-                value={name}
-                onChange={e => setName(e.target.value)}
-                className="input"
-                placeholder="Anzeigename – wird Benutzername wenn leer"
-              />
-            </div>
-            <div>
-              <label className="label">
-                <Lock size={13} className="inline mr-1" />
-                Temporäres Passwort
-              </label>
-              <div className="relative">
-                <input
-                  type={showPw ? 'text' : 'password'}
-                  value={password}
-                  onChange={e => { setPassword(e.target.value); setError(''); }}
-                  className="input pr-10"
-                  placeholder="Mindestens 8 Zeichen"
-                  autoComplete="new-password"
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowPw(v => !v)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-200 transition-colors"
-                  tabIndex={-1}
-                >
-                  {showPw ? <EyeOff size={16} /> : <Eye size={16} />}
-                </button>
-              </div>
-              <p className="text-xs text-slate-600 mt-1">
-                Der Nutzer muss das Passwort beim ersten Login ändern.
-              </p>
-            </div>
-
-            <label className="flex items-center gap-3 cursor-pointer select-none">
-              <Toggle value={isAdmin} onChange={setIsAdmin} />
-              <span className="text-sm text-slate-300 flex items-center gap-1.5">
-                <Shield size={13} className={isAdmin ? 'text-brand-400' : 'text-slate-500'} />
-                Admin-Konto
-              </span>
-            </label>
-
-            {error && (
-              <div className="flex items-center gap-2 text-red-400 text-sm bg-red-900/20 border border-red-900/50 rounded-xl px-3 py-2">
-                <AlertCircle size={14} />
-                {error}
-              </div>
-            )}
-
-            <div className="flex gap-3">
-              <button onClick={onClose} className="btn-secondary flex-1">Abbrechen</button>
-              <button
-                onClick={handleCreate}
-                disabled={!canSubmit}
-                className="btn-primary flex-1 flex items-center justify-center gap-2"
-              >
-                {loading && <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />}
-                Anlegen
-              </button>
-            </div>
+      ) : (
+        <Alert tone="success" title={`${created.isAdmin ? 'Admin-Konto' : 'Nutzer'} erfolgreich angelegt!`}>
+          <p className="text-sm mt-1">
+            Zugangsdaten für <span className="font-semibold">{created.name}</span>:
+          </p>
+          <div className="bg-white border border-emerald-200 rounded-lg px-3 py-2 my-2">
+            <p className="text-xs text-ink-400">Benutzername</p>
+            <code className="text-brand-600 text-sm font-mono">{created.username}</code>
           </div>
-        ) : (
-          <div className="space-y-4">
-            <div className="bg-green-900/20 border border-green-700/50 rounded-xl p-4 space-y-2">
-              <p className="text-green-400 text-sm font-medium">
-                {created.isAdmin ? 'Admin-Konto' : 'Nutzer'} erfolgreich angelegt!
-              </p>
-              <p className="text-slate-400 text-sm">
-                Zugangsdaten für <span className="text-white font-medium">{created.name}</span>:
-              </p>
-              <div className="bg-slate-900 rounded-lg px-3 py-2 space-y-1">
-                <p className="text-xs text-slate-500">Benutzername</p>
-                <code className="text-brand-300 text-sm font-mono">{created.username}</code>
-              </div>
-              {created.isAdmin && (
-                <p className="text-xs text-brand-400">
-                  Admin-Login: Benutzername eingeben → "Als Admin anmelden" aktivieren.
-                </p>
-              )}
-              <p className="text-xs text-amber-400">
-                Das Passwort muss beim ersten Login geändert werden.
-              </p>
-            </div>
-            <button onClick={onClose} className="btn-primary w-full">Fertig</button>
-          </div>
-        )}
-      </div>
-    </div>
+          {created.isAdmin && (
+            <p className="text-xs">
+              Admin-Login: Benutzername eingeben → „Als Admin anmelden" aktivieren.
+            </p>
+          )}
+          <p className="text-xs text-ocher-700 mt-1">
+            Das Passwort muss beim ersten Login geändert werden.
+          </p>
+        </Alert>
+      )}
+    </Modal>
   );
 }
 
@@ -185,7 +127,6 @@ function EditUserModal({ user, onClose, onSave }) {
   const [username, setUsername] = useState(user.username || '');
   const [name, setName] = useState(user.name || '');
   const [password, setPassword] = useState('');
-  const [showPw, setShowPw] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
@@ -213,97 +154,48 @@ function EditUserModal({ user, onClose, onSave }) {
   const canSubmit = username.trim().length >= 3 && (!password || password.length >= 8) && !loading;
 
   return (
-    <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-      <div className="card p-6 w-full max-w-md">
-        <div className="flex items-center justify-between mb-5">
-          <h2 className="text-lg font-semibold text-white flex items-center gap-2">
-            <Pencil size={16} className="text-brand-400" />
-            Nutzer bearbeiten
-            {user.isAdmin && <Shield size={14} className="text-brand-400" />}
-          </h2>
-          <button onClick={onClose} className="text-slate-500 hover:text-slate-200 transition-colors">
-            <X size={20} />
-          </button>
-        </div>
+    <Modal
+      onClose={onClose}
+      title="Nutzer bearbeiten"
+      subtitle={user.isAdmin ? 'Admin-Konto' : undefined}
+      icon={Pencil}
+      footer={
+        <>
+          <Button variant="secondary" className="flex-1" onClick={onClose}>Abbrechen</Button>
+          <Button className="flex-1" loading={loading} disabled={!canSubmit} onClick={handleSave}>
+            Speichern
+          </Button>
+        </>
+      }
+    >
+      <div className="space-y-4">
+        <Field label={<><AtSign size={12} className="inline mr-1" />Benutzername</>}>
+          <Input
+            value={username}
+            onChange={e => { setUsername(e.target.value); setError(''); }}
+            autoFocus
+            autoComplete="off"
+          />
+        </Field>
+        <Field label="Name">
+          <Input value={name} onChange={e => setName(e.target.value)} />
+        </Field>
+        <Field
+          label={<><Lock size={12} className="inline mr-1" />Neues temporäres Passwort</>}
+          error={password.length > 0 && password.length < 8 ? 'Mindestens 8 Zeichen' : undefined}
+          hint={password.length >= 8 ? 'Nutzer muss Passwort beim nächsten Login ändern.' : undefined}
+        >
+          <PasswordInput
+            value={password}
+            onChange={e => { setPassword(e.target.value); setError(''); }}
+            placeholder="Leer lassen = Passwort unverändert"
+            autoComplete="new-password"
+          />
+        </Field>
 
-        <div className="space-y-4">
-          <div>
-            <label className="label">
-              <AtSign size={13} className="inline mr-1" />
-              Benutzername
-            </label>
-            <input
-              type="text"
-              value={username}
-              onChange={e => { setUsername(e.target.value); setError(''); }}
-              className="input"
-              autoFocus
-              autoComplete="off"
-            />
-          </div>
-          <div>
-            <label className="label">Name</label>
-            <input
-              type="text"
-              value={name}
-              onChange={e => setName(e.target.value)}
-              className="input"
-            />
-          </div>
-          <div>
-            <label className="label">
-              <Lock size={13} className="inline mr-1" />
-              Neues temporäres Passwort
-            </label>
-            <div className="relative">
-              <input
-                type={showPw ? 'text' : 'password'}
-                value={password}
-                onChange={e => { setPassword(e.target.value); setError(''); }}
-                className="input pr-10"
-                placeholder="Leer lassen = Passwort unverändert"
-                autoComplete="new-password"
-              />
-              <button
-                type="button"
-                onClick={() => setShowPw(v => !v)}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-200 transition-colors"
-                tabIndex={-1}
-              >
-                {showPw ? <EyeOff size={16} /> : <Eye size={16} />}
-              </button>
-            </div>
-            {password.length > 0 && password.length < 8 && (
-              <p className="text-xs text-amber-400 mt-1">Mindestens 8 Zeichen</p>
-            )}
-            {password.length >= 8 && (
-              <p className="text-xs text-amber-400 mt-1">
-                Nutzer muss Passwort beim nächsten Login ändern.
-              </p>
-            )}
-          </div>
-
-          {error && (
-            <div className="flex items-center gap-2 text-red-400 text-sm bg-red-900/20 border border-red-900/50 rounded-xl px-3 py-2">
-              <AlertCircle size={14} />
-              {error}
-            </div>
-          )}
-
-          <div className="flex gap-3">
-            <button onClick={onClose} className="btn-secondary flex-1">Abbrechen</button>
-            <button
-              onClick={handleSave}
-              disabled={!canSubmit}
-              className="btn-primary flex-1 flex items-center justify-center gap-2"
-            >
-              {loading && <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />}
-              Speichern
-            </button>
-          </div>
-        </div>
+        {error && <Alert tone="error">{error}</Alert>}
       </div>
-    </div>
+    </Modal>
   );
 }
 
@@ -349,19 +241,15 @@ export default function AdminUsers() {
   };
 
   return (
-    <div className="p-6 max-w-3xl mx-auto">
+    <div>
       <AdminPageHeader
         icon={Users}
         title="Nutzerverwaltung"
         description={`${users.length} Nutzer registriert`}
         action={
-          <button
-            onClick={() => setShowCreateModal(true)}
-            className="btn-primary flex items-center gap-2"
-          >
-            <UserPlus size={16} />
-            Neuer Nutzer
-          </button>
+          <Button icon={UserPlus} onClick={() => setShowCreateModal(true)}>
+            <span className="hidden sm:inline">Neuer Nutzer</span>
+          </Button>
         }
       />
 
@@ -373,63 +261,62 @@ export default function AdminUsers() {
         <div className="card overflow-hidden">
           <table className="w-full">
             <thead>
-              <tr className="border-b border-slate-800">
-                <th className="text-left px-4 py-3 text-xs font-medium text-slate-500 uppercase tracking-wider">Nutzer</th>
-                <th className="text-left px-4 py-3 text-xs font-medium text-slate-500 uppercase tracking-wider hidden sm:table-cell">Erstellt</th>
+              <tr className="border-b hairline bg-paper-50">
+                <th className="text-left px-4 py-3 text-[11px] font-semibold text-ink-400 uppercase tracking-[0.09em]">Nutzer</th>
+                <th className="text-left px-4 py-3 text-[11px] font-semibold text-ink-400 uppercase tracking-[0.09em] hidden sm:table-cell">Erstellt</th>
                 <th className="px-4 py-3 w-20"></th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-800">
+            <tbody className="divide-y divide-[#ece4d6]">
               {users.map(user => (
-                <tr key={user._id} className="hover:bg-slate-800/30 transition-colors">
+                <tr key={user._id} className="hover:bg-paper-50 transition-colors">
                   <td className="px-4 py-3">
-                    <div className="flex items-center gap-2">
-                      <div className="w-7 h-7 bg-slate-700 rounded-full flex items-center justify-center text-xs font-semibold text-slate-300 shrink-0">
+                    <div className="flex items-center gap-2.5">
+                      <div className="w-8 h-8 bg-paper-100 border border-paper-200 rounded-full flex items-center justify-center text-xs font-semibold text-ink-600 shrink-0">
                         {(user.username || user.name)?.charAt(0)?.toUpperCase()}
                       </div>
                       <div>
                         <div className="flex items-center gap-2 flex-wrap">
-                          <span className="text-sm text-slate-200">{user.name}</span>
+                          <span className="text-sm font-medium text-ink-800">{user.name}</span>
                           {user.isAdmin && (
-                            <span className="text-xs bg-brand-900/60 text-brand-300 px-1.5 py-0.5 rounded-md border border-brand-700/50 flex items-center gap-1">
+                            <span className="text-[10px] font-semibold bg-ocher-100 text-ocher-700 px-1.5 py-0.5 rounded-md border border-ocher-200 flex items-center gap-1">
                               <Shield size={10} />
                               Admin
                             </span>
                           )}
                           {user.mustChangePassword && (
-                            <span className="text-xs bg-amber-900/40 text-amber-400 px-1.5 py-0.5 rounded-md border border-amber-700/40">
+                            <span className="text-[10px] font-semibold bg-amber-50 text-amber-700 px-1.5 py-0.5 rounded-md border border-amber-200">
                               PW ändern
                             </span>
                           )}
                         </div>
                         {user.username && (
-                          <span className="text-xs text-slate-500 font-mono">@{user.username}</span>
+                          <span className="text-xs text-ink-400 font-mono">@{user.username}</span>
                         )}
                       </div>
                     </div>
                   </td>
-                  <td className="px-4 py-3 text-xs text-slate-500 hidden sm:table-cell">
+                  <td className="px-4 py-3 text-xs text-ink-400 hidden sm:table-cell">
                     {new Date(user.createdAt).toLocaleDateString('de-DE')}
                   </td>
                   <td className="px-4 py-3">
-                    <div className="flex items-center justify-end gap-1">
-                      <button
+                    <div className="flex items-center justify-end gap-0.5">
+                      <IconButton
+                        icon={Pencil}
+                        label="Bearbeiten"
+                        tone="brand"
+                        size={15}
                         onClick={() => setEditingUser(user)}
-                        className="p-1.5 rounded-lg text-slate-600 hover:text-brand-400 hover:bg-brand-900/20 transition-colors"
-                        title="Bearbeiten"
-                      >
-                        <Pencil size={15} />
-                      </button>
-                      <button
-                        onClick={() => handleDelete(user)}
-                        disabled={deletingId === user._id}
-                        className="p-1.5 rounded-lg text-slate-600 hover:text-red-400 hover:bg-red-900/20 transition-colors disabled:opacity-50"
-                        title="Löschen"
-                      >
-                        {deletingId === user._id
-                          ? <div className="w-3.5 h-3.5 border-2 border-current border-t-transparent rounded-full animate-spin" />
-                          : <Trash2 size={15} />}
-                      </button>
+                      />
+                      {deletingId === user._id
+                        ? <Spinner size="xs" className="mx-1.5" />
+                        : <IconButton
+                            icon={Trash2}
+                            label="Löschen"
+                            tone="danger"
+                            size={15}
+                            onClick={() => handleDelete(user)}
+                          />}
                     </div>
                   </td>
                 </tr>
