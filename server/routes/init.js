@@ -60,10 +60,12 @@ function wizardSettings() {
       const source = config.getSource(key);
       const locked = isLocked(key, def);
 
-      // Never expose env-sourced or password-type values – only their presence.
+      // This endpoint is public (pre-admin): honour the per-key expose policy
+      // and additionally hide env-sourced values – only their presence shows.
       let value = null;
-      if (source !== 'env' && def.type !== 'password') {
-        value = config.get(key) || null;
+      if (source !== 'env') {
+        const display = config.getDisplayValue(key);
+        if (!display.masked) value = display.value;
       }
 
       return {

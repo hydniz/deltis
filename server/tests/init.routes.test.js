@@ -45,26 +45,26 @@ describe('GET /api/init/status', () => {
   });
 
   it('marks env-configured settings as locked and hides their value', async () => {
-    process.env.UPDATE_BRANCH = 'env-branch';
+    process.env.UPDATE_DOCKER_IMAGE = 'env-image';
     const res = await request(app).get('/api/init/status');
-    const entry = res.body.settings.find(s => s.key === 'UPDATE_BRANCH');
+    const entry = res.body.settings.find(s => s.key === 'UPDATE_DOCKER_IMAGE');
     expect(entry.locked).toBe(true);
     expect(entry.lockedReason).toBe('env');
     expect(entry.value).toBeNull();
-    delete process.env.UPDATE_BRANCH;
+    delete process.env.UPDATE_DOCKER_IMAGE;
   });
 
   it('marks non-env settings as unlocked with their default value', async () => {
-    const envBackup = process.env.UPDATE_BRANCH;
-    delete process.env.UPDATE_BRANCH;
+    const envBackup = process.env.UPDATE_DOCKER_IMAGE;
+    delete process.env.UPDATE_DOCKER_IMAGE;
 
     const res = await request(app).get('/api/init/status');
-    const entry = res.body.settings.find(s => s.key === 'UPDATE_BRANCH');
+    const entry = res.body.settings.find(s => s.key === 'UPDATE_DOCKER_IMAGE');
     expect(entry.locked).toBe(false);
     expect(entry.lockedReason).toBeUndefined();
-    expect(entry.value).toBe('main');
+    expect(entry.value).toBe('hydniz/deltis');
 
-    if (envBackup !== undefined) process.env.UPDATE_BRANCH = envBackup;
+    if (envBackup !== undefined) process.env.UPDATE_DOCKER_IMAGE = envBackup;
   });
 
   it('reports initNeeded=true while an admin without credentials exists', async () => {
@@ -162,37 +162,37 @@ describe('POST /api/init', () => {
   it('applies submitted settings as DB overrides', async () => {
     const res = await request(app).post('/api/init').send({
       ...validBody,
-      settings: { UPDATE_BRANCH: 'develop', UPDATE_RELEASE_CHANNEL: 'beta' },
+      settings: { UPDATE_DOCKER_IMAGE: 'develop', UPDATE_RELEASE_CHANNEL: 'beta' },
     });
     expect(res.status).toBe(201);
-    expect(res.body.applied.sort()).toEqual(['UPDATE_BRANCH', 'UPDATE_RELEASE_CHANNEL']);
+    expect(res.body.applied.sort()).toEqual(['UPDATE_DOCKER_IMAGE', 'UPDATE_RELEASE_CHANNEL']);
     expect(res.body.restartRequired).toBe(false);
 
     const cfg = require('../utils/config');
-    expect(cfg.get('UPDATE_BRANCH')).toBe('develop');
+    expect(cfg.get('UPDATE_DOCKER_IMAGE')).toBe('develop');
     expect(cfg.get('UPDATE_RELEASE_CHANNEL')).toBe('beta');
-    expect(cfg.getSource('UPDATE_BRANCH')).toBe('db');
+    expect(cfg.getSource('UPDATE_DOCKER_IMAGE')).toBe('db');
   });
 
   it('skips env-locked settings instead of overwriting them', async () => {
-    process.env.UPDATE_BRANCH = 'env-branch';
+    process.env.UPDATE_DOCKER_IMAGE = 'env-image';
     const res = await request(app).post('/api/init').send({
       ...validBody,
-      settings: { UPDATE_BRANCH: 'develop' },
+      settings: { UPDATE_DOCKER_IMAGE: 'develop' },
     });
     expect(res.status).toBe(201);
     expect(res.body.applied).toEqual([]);
-    expect(res.body.skipped).toEqual(['UPDATE_BRANCH']);
+    expect(res.body.skipped).toEqual(['UPDATE_DOCKER_IMAGE']);
 
     const cfg = require('../utils/config');
-    expect(cfg.getSource('UPDATE_BRANCH')).toBe('env');
-    delete process.env.UPDATE_BRANCH;
+    expect(cfg.getSource('UPDATE_DOCKER_IMAGE')).toBe('env');
+    delete process.env.UPDATE_DOCKER_IMAGE;
   });
 
   it('ignores empty setting values (keep default)', async () => {
     const res = await request(app).post('/api/init').send({
       ...validBody,
-      settings: { UPDATE_BRANCH: '   ' },
+      settings: { UPDATE_DOCKER_IMAGE: '   ' },
     });
     expect(res.status).toBe(201);
     expect(res.body.applied).toEqual([]);
@@ -231,7 +231,7 @@ describe('POST /api/init', () => {
   it('rejects settings that are not an object', async () => {
     const res = await request(app).post('/api/init').send({
       ...validBody,
-      settings: ['UPDATE_BRANCH'],
+      settings: ['UPDATE_DOCKER_IMAGE'],
     });
     expect(res.status).toBe(400);
   });
