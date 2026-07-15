@@ -13,6 +13,13 @@ Later the Frontend will be supplemented with an android app as well as an ios ap
 ## Coding Styles
 - The application needs a 100% test coverange at all components.
 
+## Mandatory Rules for Every Change
+These rules apply to **every** feature, fix, or refactor — no exceptions:
+- **Documentation:** Always update the affected documentation (`docs/`, README, `docs/UPDATES.md`) in the same change. Code and docs must never drift apart.
+- **Setup wizards:** Always update the setup/onboarding wizards (e.g. first-login onboarding, admin setup) whenever a change affects configuration, features, or flows they cover.
+- **Privacy-first:** Always follow a privacy-first approach — no third-party tracking or analytics, no unnecessary data collection, all data stays on the self-hosted instance, and sensitive data is never logged.
+- **Theming:** Always implement both dark and light mode for every UI component and page. Never ship a UI change that only supports one theme.
+
 ## Tech Stack
 - **Frontend:** React (Vite), TailwindCSS, PWA.
 - **Backend:** Node.js, Express.
