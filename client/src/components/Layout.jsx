@@ -4,7 +4,7 @@ import Sidebar from './Sidebar';
 import UserMenu from './UserMenu';
 import Logo from './Logo';
 import {
-  LayoutDashboard, Sun, Dumbbell, CalendarDays, Sparkles, Scale, Target,
+  LayoutDashboard, Dumbbell, CalendarDays, Sparkles, Scale, Target,
   MoreHorizontal,
 } from 'lucide-react';
 
@@ -13,13 +13,12 @@ import {
 // area stay in the avatar menu of the top bar.
 const mobilePrimary = [
   { to: '/dashboard', icon: LayoutDashboard, label: 'Home', end: true },
-  { to: '/today', icon: Sun, label: 'Heute' },
   { to: '/activities', icon: Dumbbell, label: 'Sport' },
+  { to: '/planner', icon: CalendarDays, label: 'Planer' },
   { to: '/habits', icon: Sparkles, label: 'Habits' },
 ];
 
 const mobileMore = [
-  { to: '/planner', icon: CalendarDays, label: 'Planer' },
   { to: '/weight', icon: Scale, label: 'Gewicht' },
   { to: '/goals', icon: Target, label: 'Ziele' },
 ];

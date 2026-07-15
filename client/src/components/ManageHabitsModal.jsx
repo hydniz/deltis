@@ -5,6 +5,14 @@ import {
   Button, Field, Input, Select, Checkbox, Modal, IconButton, Segmented, Spinner,
 } from './ui';
 import { WEEKDAYS, formatScheduleBadge } from '../utils/habitSchedule';
+import { TARGET_CONDITIONS } from '../utils/habitTarget';
+
+// Habit types: 'boolean' logs a simple done/not-done, the others a value.
+const TYPE_OPTIONS = [
+  { value: 'amount', label: 'Menge' },
+  { value: 'duration', label: 'Dauer' },
+  { value: 'boolean', label: 'Ja/Nein' },
+];
 
 // THE single place to create and configure habits. Everything lives here:
 // selection (what to track), creating custom habits, editing/deleting them,
@@ -31,6 +39,10 @@ function HabitRow({ def, selected, onToggle, onDelete, onUpdate }) {
   const [date, setDate] = useState(def.scheduleDate || '');
   const [missingMode, setMissingMode] = useState(def.missingDayMode ?? 'none');
   const [defaultVal, setDefaultVal] = useState(def.defaultValue ?? 0);
+  const [targetCondition, setTargetCondition] = useState(def.targetCondition ?? 'none');
+  const [targetValue, setTargetValue] = useState(def.targetValue ?? 0);
+
+  const currentType = isCustom ? form.type : def.type;
 
   const toggleDay = (day) => {
     setDays(prev => {
@@ -45,16 +57,22 @@ function HabitRow({ def, selected, onToggle, onDelete, onUpdate }) {
     try {
       let updated = { ...def };
       if (isCustom) {
-        const res = await api.put(`/habits/definitions/${def._id}`, form);
+        // Boolean habits need no unit — a check mark serves as the symbol.
+        const payload = form.type === 'boolean' ? { ...form, unitSymbol: '✓' } : form;
+        const res = await api.put(`/habits/definitions/${def._id}`, payload);
         updated = { ...updated, ...res.data };
       }
       const scheduleDays = scheduleMode === 'weekly' ? [...days] : [];
       const scheduleDate = scheduleMode === 'date' && date ? date : null;
+      const target = currentType === 'boolean'
+        ? { targetCondition: 'none', targetValue: 0 }
+        : { targetCondition, targetValue: +targetValue };
       await api.put(`/habits/settings/${def._id}`, {
         missingDayMode: missingMode,
         defaultValue: +defaultVal,
         scheduleDays,
         scheduleDate,
+        ...target,
       });
       onUpdate({
         ...updated,
@@ -62,6 +80,7 @@ function HabitRow({ def, selected, onToggle, onDelete, onUpdate }) {
         scheduleDate,
         missingDayMode: missingMode,
         defaultValue: +defaultVal,
+        ...target,
       });
       setOpen(false);
     } catch (err) {
@@ -80,7 +99,7 @@ function HabitRow({ def, selected, onToggle, onDelete, onUpdate }) {
           checked={selected}
           onChange={onToggle}
           label={def.name}
-          description={`${def.unitSymbol}${badge ? ` · ${badge}` : ''}`}
+          description={`${def.type === 'boolean' ? 'Ja/Nein' : def.unitSymbol}${badge ? ` · ${badge}` : ''}`}
           className="flex-1"
         />
         <IconButton
@@ -108,19 +127,20 @@ function HabitRow({ def, selected, onToggle, onDelete, onUpdate }) {
                 />
               </Field>
               <div className="grid grid-cols-2 gap-2">
-                <Field label="Einheit">
-                  <Input
-                    value={form.unitSymbol}
-                    onChange={e => setForm(f => ({ ...f, unitSymbol: e.target.value }))}
-                    placeholder="z.B. min, ml"
-                  />
-                </Field>
                 <Field label="Typ">
                   <Select value={form.type} onChange={e => setForm(f => ({ ...f, type: e.target.value }))}>
-                    <option value="amount">Menge</option>
-                    <option value="duration">Dauer</option>
+                    {TYPE_OPTIONS.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
                   </Select>
                 </Field>
+                {form.type !== 'boolean' && (
+                  <Field label="Einheit">
+                    <Input
+                      value={form.unitSymbol}
+                      onChange={e => setForm(f => ({ ...f, unitSymbol: e.target.value }))}
+                      placeholder="z.B. min, ml"
+                    />
+                  </Field>
+                )}
               </div>
             </>
           )}
@@ -173,6 +193,35 @@ function HabitRow({ def, selected, onToggle, onDelete, onUpdate }) {
             )}
           </div>
 
+          {currentType !== 'boolean' && (
+            <div>
+              <p className="text-xs font-semibold text-ink-600 mb-1.5">Tagesziel</p>
+              <div className="flex gap-2">
+                <Select
+                  className="!text-sm flex-1"
+                  value={targetCondition}
+                  onChange={e => setTargetCondition(e.target.value)}
+                >
+                  {TARGET_CONDITIONS.map(c => <option key={c.value} value={c.value}>{c.label}</option>)}
+                </Select>
+                {targetCondition !== 'none' && (
+                  <Input
+                    type="number"
+                    className="!text-sm !w-24"
+                    min="0"
+                    step="0.1"
+                    value={targetValue}
+                    onChange={e => setTargetValue(e.target.value)}
+                    placeholder={def.unitSymbol}
+                  />
+                )}
+              </div>
+              <p className="text-[11px] text-ink-400 mt-1.5">
+                Der Tag zählt nur als erfüllt, wenn der eingetragene Wert das Ziel erreicht.
+              </p>
+            </div>
+          )}
+
           <div>
             <p className="text-xs font-semibold text-ink-600 mb-1.5">Fehlende Tage in Statistik</p>
             <Select
@@ -204,7 +253,11 @@ function HabitRow({ def, selected, onToggle, onDelete, onUpdate }) {
             size="sm"
             className="w-full"
             loading={saving}
-            disabled={scheduleMode === 'date' && !date}
+            disabled={
+              (scheduleMode === 'date' && !date)
+              // max 0 is valid ("höchstens 0 Zigaretten"), min/exact need > 0
+              || (['min', 'exact'].includes(targetCondition) && !(+targetValue > 0))
+            }
           >
             Übernehmen
           </Button>
@@ -256,10 +309,12 @@ export default function ManageHabitsModal({ onSave, onClose, initialShowAdd = fa
 
   const handleAddHabit = async (e) => {
     e.preventDefault();
-    if (!newHabit.name.trim() || !newHabit.unitSymbol.trim()) return;
+    const isBoolean = newHabit.type === 'boolean';
+    if (!newHabit.name.trim() || (!isBoolean && !newHabit.unitSymbol.trim())) return;
     setAddingSaving(true);
     try {
-      const res = await api.post('/habits/definitions', newHabit);
+      const payload = isBoolean ? { ...newHabit, unitSymbol: '✓' } : newHabit;
+      const res = await api.post('/habits/definitions', payload);
       const created = { ...res.data, selected: true };
       setDefs(d => [...d, created]);
       setSelected(prev => new Set([...prev, created._id]));
@@ -404,20 +459,21 @@ export default function ManageHabitsModal({ onSave, onClose, initialShowAdd = fa
                 />
               </Field>
               <div className="grid grid-cols-2 gap-2">
-                <Field label="Einheit">
-                  <Input
-                    value={newHabit.unitSymbol}
-                    onChange={e => setNewHabit(h => ({ ...h, unitSymbol: e.target.value }))}
-                    placeholder="z.B. min, ml, Stück"
-                    required
-                  />
-                </Field>
                 <Field label="Typ">
                   <Select value={newHabit.type} onChange={e => setNewHabit(h => ({ ...h, type: e.target.value }))}>
-                    <option value="amount">Menge</option>
-                    <option value="duration">Dauer</option>
+                    {TYPE_OPTIONS.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
                   </Select>
                 </Field>
+                {newHabit.type !== 'boolean' && (
+                  <Field label="Einheit">
+                    <Input
+                      value={newHabit.unitSymbol}
+                      onChange={e => setNewHabit(h => ({ ...h, unitSymbol: e.target.value }))}
+                      placeholder="z.B. min, ml, Stück"
+                      required
+                    />
+                  </Field>
+                )}
               </div>
               <div className="flex gap-2">
                 <Button variant="secondary" size="sm" className="flex-1" onClick={() => setShowAddForm(false)}>Abbrechen</Button>

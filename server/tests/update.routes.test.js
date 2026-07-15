@@ -374,3 +374,39 @@ describe('computeUpdateAvailable', () => {
     expect(compute({ commitSha: '1234567' }, 'main')).toBeNull();
   });
 });
+
+// Guards the "a channel switch never downgrades" rule: switching to a channel
+// whose latest release trails the installed build must not roll the app back.
+describe('updateBlockReason', () => {
+  const reason = require('../routes/update')._updateBlockReason;
+  const pkg = require('../../package.json');
+  const installed = pkg.stage ? `${pkg.version}-${pkg.stage}` : pkg.version;
+
+  it('allows the update when the channel offers something newer', () => {
+    expect(reason({ version: '999.0.0' }, 'stable', null)).toBeNull();
+  });
+
+  it('blocks a downgrade after a switch to a channel that trails', () => {
+    expect(reason({ version: '0.0.1-alpha' }, 'alpha', null)).toBe('downgrade');
+  });
+
+  it('blocks re-installing the version that is already running', () => {
+    expect(reason({ version: installed }, 'stable', null)).toBe('up-to-date');
+  });
+
+  it('blocks when the GitHub check failed', () => {
+    expect(reason(null, 'stable', 'GitHub API timeout')).toBe('check-failed');
+    expect(reason({ version: '999.0.0' }, 'stable', 'boom')).toBe('check-failed');
+  });
+
+  it('blocks when the versions cannot be compared', () => {
+    expect(reason({ version: null }, 'stable', null)).toBe('unknown');
+  });
+
+  it('never reports a downgrade on the main channel – commits are not ordered', () => {
+    process.env.GIT_COMMIT = 'abcdef1234567890';
+    expect(reason({ commitSha: 'abcdef1' }, 'main', null)).toBe('up-to-date');
+    expect(reason({ commitSha: '1234567' }, 'main', null)).toBeNull();
+    delete process.env.GIT_COMMIT;
+  });
+});

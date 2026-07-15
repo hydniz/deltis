@@ -1,16 +1,26 @@
 import { useState, useEffect, useCallback } from 'react';
-import { SlidersHorizontal } from 'lucide-react';
+import { SlidersHorizontal, Server, ShieldCheck, UserPlus } from 'lucide-react';
 import api from '../utils/api';
 import AdminPageHeader from '../components/admin/AdminPageHeader';
 import SectionCard from '../components/admin/SectionCard';
 import AdminSpinner from '../components/admin/AdminSpinner';
 import ErrorBanner from '../components/admin/ErrorBanner';
 import ConfigRow from '../components/admin/ConfigRow';
-import Alert from '../components/ui/Alert';
+import { SECTION_HELP } from '../components/admin/helpContent';
+import { Alert, HelpTip } from '../components/ui';
 
 // Update-related settings live on the AdminUpdates page – everything about
 // OTA updates is managed in one place there.
 const UPDATES_PAGE_GROUP = 'OTA Update';
+
+// Section order and presentation, keyed by the `group` the API reports.
+// Listed top-down from "what runs the server" to "who may use it"; a group
+// the API adds without an entry here is appended at the end untouched.
+const SECTIONS = [
+  { group: 'Server', icon: Server, help: SECTION_HELP.server },
+  { group: 'Sicherheit', icon: ShieldCheck, help: SECTION_HELP.security },
+  { group: 'Registrierung & Zugang', icon: UserPlus, help: SECTION_HELP.access },
+];
 
 export default function AdminConfig() {
   const [configs, setConfigs] = useState([]);
@@ -49,6 +59,11 @@ export default function AdminConfig() {
     return acc;
   }, {});
 
+  const known = SECTIONS.filter(s => groups[s.group]?.length);
+  const extra = Object.keys(groups)
+    .filter(g => !SECTIONS.some(s => s.group === g))
+    .map(g => ({ group: g, icon: null, help: null }));
+
   return (
     <div>
       <AdminPageHeader
@@ -59,9 +74,20 @@ export default function AdminConfig() {
 
       {/* Env priority info */}
       <Alert tone="warning" title="Priorität der Konfigurationsquellen" className="mb-6">
-        <code>.env</code> hat immer Vorrang vor der Datenbankeinstellung.
-        Werte die in <code>.env</code> / <code>docker-compose.yml</code> gesetzt
-        sind, können hier nicht überschrieben werden.
+        <div className="flex items-start justify-between gap-2">
+          <p>
+            <code>.env</code> hat immer Vorrang vor der Datenbankeinstellung.
+            Werte die in <code>.env</code> / <code>docker-compose.yml</code> gesetzt
+            sind, können hier nicht überschrieben werden.
+          </p>
+          <HelpTip
+            title={SECTION_HELP.precedence.title}
+            short={SECTION_HELP.precedence.short}
+            className="!text-amber-500 hover:!text-amber-900"
+          >
+            {SECTION_HELP.precedence.long}
+          </HelpTip>
+        </div>
       </Alert>
 
       <ErrorBanner message={error} />
@@ -70,10 +96,17 @@ export default function AdminConfig() {
         <AdminSpinner />
       ) : (
         <div className="space-y-6">
-          {Object.entries(groups).map(([groupName, entries]) => (
-            <SectionCard key={groupName} title={groupName}>
+          {[...known, ...extra].map(({ group, icon, help }) => (
+            <SectionCard
+              key={group}
+              icon={icon}
+              title={group}
+              help={help && (
+                <HelpTip title={help.title} short={help.short}>{help.long}</HelpTip>
+              )}
+            >
               <div>
-                {entries.map(entry => (
+                {groups[group].map(entry => (
                   <ConfigRow
                     key={entry.key}
                     entry={entry}

@@ -7,8 +7,8 @@ import Onboarding from './components/Onboarding';
 import AdminLayout from './components/admin/AdminLayout';
 import Landing from './pages/Landing';
 import Login from './pages/Login';
+import Register from './pages/Register';
 import Dashboard from './pages/Dashboard';
-import Today from './pages/Today';
 import Activities from './pages/Activities';
 import Planner from './pages/Planner';
 import Habits from './pages/Habits';
@@ -343,6 +343,7 @@ function AppInner() {
           {/* Public routes */}
           <Route path="/"            element={<RootRoute />} />
           <Route path="/login"       element={<Login />} />
+          <Route path="/register"    element={<Register />} />
           <Route path="/admin/setup" element={<AdminSetup />} />
 
           {/* Admin sub-routes */}
@@ -358,7 +359,8 @@ function AppInner() {
             }
           >
             <Route path="dashboard"  element={<Dashboard />} />
-            <Route path="today"      element={<Today />} />
+            {/* The Heute view merged into the dashboard feed — keep old links working */}
+            <Route path="today"      element={<Navigate to="/dashboard" replace />} />
             <Route path="activities" element={<Activities />} />
             <Route path="planner"    element={<Planner />} />
             <Route path="habits"     element={<Habits />} />

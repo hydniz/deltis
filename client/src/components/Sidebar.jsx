@@ -2,14 +2,13 @@ import { NavLink } from 'react-router-dom';
 import UserMenu from './UserMenu';
 import Logo from './Logo';
 import {
-  LayoutDashboard, Sun, Dumbbell, CalendarDays, Sparkles, Scale, Target,
+  LayoutDashboard, Dumbbell, CalendarDays, Sparkles, Scale, Target,
 } from 'lucide-react';
 
 // Main navigation shows content pages only. Einstellungen and the admin
 // area live in the user menu (avatar) — Nextcloud-style separation.
 const navItems = [
   { to: '/dashboard', icon: LayoutDashboard, label: 'Dashboard', end: true },
-  { to: '/today', icon: Sun, label: 'Heute' },
   { to: '/activities', icon: Dumbbell, label: 'Aktivitäten' },
   { to: '/planner', icon: CalendarDays, label: 'Planer' },
   { to: '/habits', icon: Sparkles, label: 'Gewohnheiten' },

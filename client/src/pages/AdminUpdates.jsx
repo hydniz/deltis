@@ -9,7 +9,8 @@ import AdminPageHeader from '../components/admin/AdminPageHeader';
 import SectionCard from '../components/admin/SectionCard';
 import ErrorBanner from '../components/admin/ErrorBanner';
 import ConfigRow from '../components/admin/ConfigRow';
-import { Button, Alert } from '../components/ui';
+import { SECTION_HELP } from '../components/admin/helpContent';
+import { Button, Alert, HelpTip } from '../components/ui';
 
 // Update-mode descriptions
 
@@ -136,11 +137,38 @@ const CHANNELS = [
   {
     value: 'main',
     label: 'Main Branch',
-    description: 'Neuester Entwicklungsstand – NICHT für Produktivsysteme empfohlen',
+    description: 'Neuester Commit auf dem main-Branch – NICHT für Produktivsysteme empfohlen',
     color: 'red',
     warn: true,
   },
 ];
+
+// Why "Update starten" is unavailable, keyed by `blockReason` from the status
+// endpoint. Each returns { tone, text } for an Alert.
+const BLOCK_HINTS = {
+  'up-to-date': (status, channelLabel) => ({
+    tone: 'success',
+    text: `Version v${status.currentVersion} ist die neueste im Kanal „${channelLabel}“ – `
+      + 'es gibt nichts einzuspielen.',
+  }),
+  downgrade: (status, channelLabel) => ({
+    tone: 'warning',
+    text: `Die neueste Version im Kanal „${channelLabel}“ (v${status.latest?.version}) ist `
+      + `älter als die installierte Version v${status.currentVersion}. Ein Kanalwechsel `
+      + 'führt kein Downgrade durch – es wird erst wieder aktualisiert, wenn dieser Kanal '
+      + 'die installierte Version überholt hat.',
+  }),
+  'check-failed': () => ({
+    tone: 'error',
+    text: 'Es konnte nicht geprüft werden, ob ein Update verfügbar ist – '
+      + 'GitHub war nicht erreichbar.',
+  }),
+  unknown: () => ({
+    tone: 'warning',
+    text: 'Es lässt sich nicht bestimmen, ob die verfügbare Version neuer ist als die '
+      + 'installierte. Das Update wird deshalb nicht angeboten.',
+  }),
+};
 
 function ChannelBadge({ channel }) {
   const cfg = CHANNELS.find(c => c.value === channel) || CHANNELS[0];
@@ -314,6 +342,13 @@ export default function AdminUpdates() {
   const modeConfig = MODES[status?.mode] || null;
   const notConfigured = status && status.configured === false;
 
+  // An update may only be started when something newer actually exists. Until
+  // the status has loaded we do not know, so the button stays disabled.
+  const canStart = status?.updateAvailable === true;
+  const blockHint = status && !notConfigured && BLOCK_HINTS[status.blockReason]
+    ? BLOCK_HINTS[status.blockReason](status, channelConfig.label)
+    : null;
+
   // Hide settings that do not apply to the current runtime environment
   // (context 'docker' only in Docker, 'host' only on host installations).
   // While the status is still loading, context-bound entries stay hidden.
@@ -434,7 +469,15 @@ export default function AdminUpdates() {
                     Update verfügbar
                   </span>
                 )}
-                {status.updateAvailable === false && (
+                {/* "Aktuell" would be a green tick on a channel that simply
+                    trails the installed build – say that instead. */}
+                {status.updateAvailable === false && status.blockReason === 'downgrade' && (
+                  <span className="flex items-center gap-1.5 text-sm font-medium text-ocher-600">
+                    <AlertTriangle size={14} />
+                    Kanal ist älter
+                  </span>
+                )}
+                {status.updateAvailable === false && status.blockReason !== 'downgrade' && (
                   <span className="flex items-center gap-1.5 text-sm font-medium text-emerald-600">
                     <CheckCircle size={14} />
                     Aktuell
@@ -450,7 +493,15 @@ export default function AdminUpdates() {
       )}
 
       {/* Release channel selector – single source of truth for the channel */}
-      <SectionCard icon={GitBranch} title="Release-Kanal">
+      <SectionCard
+        icon={GitBranch}
+        title="Release-Kanal"
+        help={(
+          <HelpTip title={SECTION_HELP.channel.title} short={SECTION_HELP.channel.short}>
+            {SECTION_HELP.channel.long}
+          </HelpTip>
+        )}
+      >
         <div className="p-4 space-y-3">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
             {CHANNELS.map(ch => (
@@ -476,10 +527,19 @@ export default function AdminUpdates() {
             ))}
           </div>
 
+          <p className="text-xs text-ink-400 leading-snug">
+            Ein Kanalwechsel wirkt sofort auf die Versionsprüfung, aber nie von allein auf
+            die Installation. <strong className="font-semibold text-ink-500">Ein Wechsel
+            führt nie ein Downgrade durch:</strong> Ist die neueste Version des gewählten
+            Kanals älter als die installierte, wird kein Update angeboten.
+          </p>
+
           {channelConfig.warn && (
             <Alert tone="error">
               Der Main-Branch enthält unveröffentlichten Code und kann Fehler oder
               Breaking Changes enthalten. Nicht für Produktivsysteme geeignet.
+              Verfolgt wird immer der <code>main</code>-Branch des Repositories –
+              ein eigener Branch kann bewusst nicht angegeben werden.
             </Alert>
           )}
 
@@ -493,7 +553,15 @@ export default function AdminUpdates() {
       </SectionCard>
 
       {/* Update action */}
-      <SectionCard icon={Play} title="Update starten">
+      <SectionCard
+        icon={Play}
+        title="Update starten"
+        help={(
+          <HelpTip title={SECTION_HELP.updateStart.title} short={SECTION_HELP.updateStart.short}>
+            {SECTION_HELP.updateStart.long}
+          </HelpTip>
+        )}
+      >
         <div className="p-4 space-y-4">
           <div className="flex items-start gap-2 text-sm text-ink-500">
             <Info size={15} className="shrink-0 mt-0.5" />
@@ -513,14 +581,17 @@ export default function AdminUpdates() {
               </span>
             </div>
           ) : (
-            <Button
-              icon={Play}
-              loading={starting || updateRunning}
-              disabled={rollbackRunning || notConfigured}
-              onClick={startUpdate}
-            >
-              {updateRunning ? 'Update läuft …' : 'Update starten'}
-            </Button>
+            <div className="space-y-3">
+              {blockHint && <Alert tone={blockHint.tone}>{blockHint.text}</Alert>}
+              <Button
+                icon={Play}
+                loading={starting || updateRunning}
+                disabled={rollbackRunning || notConfigured || !canStart}
+                onClick={startUpdate}
+              >
+                {updateRunning ? 'Update läuft …' : 'Update starten'}
+              </Button>
+            </div>
           )}
 
           <UpdateLog lines={logLines} />
@@ -539,7 +610,18 @@ export default function AdminUpdates() {
       {/* OTA settings – moved here from the system configuration page so
           everything update-related lives on one page */}
       {visibleOtaConfigs.length > 0 && (
-        <SectionCard icon={Settings2} title="Einstellungen">
+        <SectionCard
+          icon={Settings2}
+          title="Einstellungen"
+          help={(
+            <HelpTip
+              title={SECTION_HELP.updateSettings.title}
+              short={SECTION_HELP.updateSettings.short}
+            >
+              {SECTION_HELP.updateSettings.long}
+            </HelpTip>
+          )}
+        >
           <div>
             {visibleOtaConfigs.map(entry => (
               <ConfigRow

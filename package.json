@@ -21,7 +21,8 @@
     "test:all": "npm run server:test && npm run client:test",
     "admin:reset-password": "node scripts/reset-admin-password.js",
     "migrate:status": "node scripts/migration-status.js",
-    "migrate:rollback": "node scripts/rollback-migration.js"
+    "migrate:rollback": "node scripts/rollback-migration.js",
+    "seed:demo": "node scripts/seed-demo.js"
   },
   "jest": {
     "testEnvironment": "node",

@@ -3,7 +3,8 @@ import {
   AlertTriangle, Lock, Eye, EyeOff, RotateCcw, Save, CheckCircle, Info,
 } from 'lucide-react';
 import api from '../../utils/api';
-import { Button, Input, Select, Alert, IconButton, Spinner } from '../ui';
+import { Button, Input, Select, Alert, IconButton, Spinner, HelpTip } from '../ui';
+import { CONFIG_HELP } from './helpContent';
 
 // Source badge
 
@@ -57,13 +58,24 @@ export default function ConfigRow({ entry, onSave, onReset }) {
   const isBootstrap = Boolean(entry.bootstrap);
   const isEditable = (entry.editable || isBootstrap) && !isEnvLocked;
   const isStatus = entry.type === 'status';
+  // `value` is a redacted preview (e.g. mongodb://***:***@host/db) – showing it
+  // is useful, reusing it as an edit draft would save the mask as the value.
+  const isMasked = Boolean(entry.masked);
+  // A secret the server withholds: set, but never sent to the browser. Without
+  // this the reveal toggle would uncover nothing but a dash.
+  const isWithheld = !isStatus && entry.hasValue && entry.value === null;
+  // How much of a password-type value may be shown is the server's call (it may
+  // redact or withhold it), so its row is refetched instead of updated locally –
+  // otherwise a URI that just gained credentials would sit here in plaintext.
+  const serverDecidesDisplay = entry.type === 'password';
+  const help = CONFIG_HELP[entry.key];
 
   const endpoint = isBootstrap
     ? `/admin/config/bootstrap/${entry.key}`
     : `/admin/config/${entry.key}`;
 
   const startEdit = () => {
-    setDraft(entry.value || '');
+    setDraft(isMasked ? '' : (entry.value || ''));
     setEditing(true);
     setError('');
     setSaveOk(false);
@@ -76,7 +88,11 @@ export default function ConfigRow({ entry, onSave, onReset }) {
       await api.put(endpoint, { value: draft });
       setSaveOk(true);
       setEditing(false);
-      onSave(entry.key, draft, isBootstrap ? 'file' : 'db');
+      if (serverDecidesDisplay) {
+        onReset(entry.key);
+      } else {
+        onSave(entry.key, draft, isBootstrap ? 'file' : 'db');
+      }
       setTimeout(() => setSaveOk(false), 2000);
     } catch (err) {
       setError(err.response?.data?.error || 'Speichern fehlgeschlagen.');
@@ -102,6 +118,7 @@ export default function ConfigRow({ entry, onSave, onReset }) {
   const displayValue = () => {
     if (isStatus) return entry.hasValue ? '••••••••' : 'Nicht gesetzt';
     if (!entry.hasValue && !entry.value) return 'Nicht gesetzt';
+    if (isWithheld) return '••••••••';
     if (entry.type === 'password' && !showValue) return '••••••••';
     return entry.value || '—';
   };
@@ -112,6 +129,11 @@ export default function ConfigRow({ entry, onSave, onReset }) {
         <div className="flex items-start justify-between gap-3 mb-1.5">
           <div className="flex items-center gap-2 flex-wrap">
             <span className="text-sm font-semibold text-ink-800">{entry.label}</span>
+            {help && (
+              <HelpTip title={entry.label} short={help.short}>
+                {help.long}
+              </HelpTip>
+            )}
             <SourceBadge source={entry.source} />
             {entry.restartRequired && (
               <span className="text-[10px] px-1.5 py-0.5 rounded bg-ocher-100 text-ocher-700 border border-ocher-200">
@@ -120,7 +142,7 @@ export default function ConfigRow({ entry, onSave, onReset }) {
             )}
           </div>
           <div className="flex items-center gap-1.5 shrink-0">
-            {entry.type === 'password' && entry.hasValue && !isStatus && (
+            {entry.type === 'password' && entry.hasValue && !isStatus && !isWithheld && (
               <IconButton
                 icon={showValue ? EyeOff : Eye}
                 label={showValue ? 'Verbergen' : 'Anzeigen'}
@@ -168,15 +190,31 @@ export default function ConfigRow({ entry, onSave, onReset }) {
         )}
 
         {!editing ? (
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
             <code className={`text-xs font-mono px-2 py-1 rounded-md bg-paper-100 border border-paper-200 ${
               !entry.hasValue ? 'text-ink-300 italic' : 'text-ink-700'
             }`}>
               {displayValue()}
             </code>
+            {isWithheld && (
+              <span className="text-[11px] text-ink-400">
+                Gesetzt – der Wert wird aus Sicherheitsgründen nie angezeigt.
+              </span>
+            )}
+            {isMasked && (
+              <span className="text-[11px] text-ink-400">
+                Zugangsdaten maskiert.
+              </span>
+            )}
           </div>
         ) : (
           <div className="space-y-2">
+            {isMasked && (
+              <Alert tone="info" className="!py-2 !text-xs">
+                Der bisherige Wert wird aus Sicherheitsgründen nur maskiert angezeigt und
+                kann nicht vorausgefüllt werden – bitte vollständig neu eingeben.
+              </Alert>
+            )}
             {entry.type === 'select' ? (
               <Select
                 value={draft}

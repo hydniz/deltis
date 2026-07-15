@@ -54,6 +54,10 @@ router.get('/definitions', auth, async (req, res) => {
         // One-off schedule: habit is only due on this local date (YYYY-MM-DD).
         // Takes precedence over scheduleDays; null = not date-bound.
         scheduleDate: typeof s.scheduleDate === 'string' ? s.scheduleDate : null,
+        // Daily completion target: a day only counts as fulfilled when the
+        // logged value satisfies condition+value ('none' = any log counts).
+        targetCondition: ['min', 'max', 'exact'].includes(s.targetCondition) ? s.targetCondition : 'none',
+        targetValue: Number.isFinite(s.targetValue) ? s.targetValue : 0,
       };
     });
 
@@ -184,7 +188,7 @@ router.post('/definitions/:id/restore', auth, async (req, res) => {
 // Persist per-user habit settings (missing-day mode, default value, schedule)
 router.put('/settings/:id', auth, async (req, res) => {
   try {
-    const { missingDayMode, defaultValue, scheduleDays, scheduleDate } = req.body;
+    const { missingDayMode, defaultValue, scheduleDays, scheduleDate, targetCondition, targetValue } = req.body;
     // Sanitize schedule: unique integer weekdays 0–6, sorted; [] = every day.
     const days = Array.isArray(scheduleDays)
       ? [...new Set(scheduleDays.map(Number).filter(d => Number.isInteger(d) && d >= 0 && d <= 6))].sort()
@@ -193,6 +197,11 @@ router.put('/settings/:id', auth, async (req, res) => {
     const dateOnly = typeof scheduleDate === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(scheduleDate)
       ? scheduleDate
       : null;
+    // Completion target: only known conditions with a sane numeric value.
+    const condition = ['min', 'max', 'exact'].includes(targetCondition) ? targetCondition : 'none';
+    const tValue = condition !== 'none' && Number.isFinite(+targetValue) && +targetValue >= 0
+      ? +targetValue
+      : 0;
     await UserHabitSettings.findOneAndUpdate(
       { userId: req.user._id },
       { $set: { [`habitSettings.${req.params.id}`]: {
@@ -200,6 +209,8 @@ router.put('/settings/:id', auth, async (req, res) => {
         defaultValue: +defaultValue,
         scheduleDays: days,
         scheduleDate: dateOnly,
+        targetCondition: tValue > 0 || condition === 'max' ? condition : 'none',
+        targetValue: tValue,
       } } },
       { upsert: true }
     );
