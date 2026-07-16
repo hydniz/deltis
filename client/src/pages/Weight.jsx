@@ -22,8 +22,8 @@ export default function Weight() {
   });
   const [saving, setSaving] = useState(false);
 
+  // Add/delete refresh silently in place — only the mount shows the loader.
   const load = async () => {
-    setLoading(true);
     try {
       const start = subMonths(new Date(), 6);
       const res = await api.get('/weight', { params: { startDate: start.toISOString() } });
@@ -76,7 +76,7 @@ export default function Weight() {
   const trendColor = trend < -0.2 ? 'text-emerald-600' : trend > 0.2 ? 'text-red-600' : 'text-ink-400';
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 anim-list">
       <PageHeader title="Gewicht" subtitle="Verlauf & Tracking" icon={Scale} tone="rose" />
 
       {/* Entry form */}
@@ -168,7 +168,7 @@ export default function Weight() {
           {/* Entries */}
           <div className="card p-5">
             <h2 className="display text-lg mb-3">Einträge</h2>
-            <div className="divide-hairline">
+            <div className="divide-hairline anim-list">
               {[...logs].sort((a, b) => new Date(b.date) - new Date(a.date)).slice(0, 20).map(l => (
                 <div key={l._id} className="flex items-center justify-between py-2.5">
                   <p className="text-sm text-ink-600">{format(parseISO(l.date), 'EEEE, d. MMMM yyyy', { locale: de })}</p>

@@ -1573,7 +1573,7 @@ export default function Goals() {
         <span className={`w-2 h-2 rounded-full ${GROUP_STYLES[tone].dot}`} />
         {title}
       </h2>
-      <div className="space-y-3">
+      <div className="space-y-3 anim-list">
         {groupGoals.map(g => (
           <GoalProgress
             key={g._id}

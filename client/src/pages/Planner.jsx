@@ -539,8 +539,9 @@ export default function Planner() {
   const weekEnd = addDays(weekStart, 6);
   const days = Array.from({ length: 7 }, (_, i) => addDays(weekStart, i));
 
+  // Mutations (complete, add, delete, copy) call load() directly and refresh
+  // silently in place — only week navigation shows the loader (see effect).
   const load = useCallback(async () => {
-    setLoading(true);
     try {
       const params = { startDate: format(weekStart, 'yyyy-MM-dd'), endDate: format(weekEnd, 'yyyy-MM-dd') };
       const [plansRes, habitPlansRes, typesRes, habitsRes] = await Promise.all([
@@ -560,7 +561,7 @@ export default function Planner() {
     }
   }, [weekStart]);
 
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => { setLoading(true); load(); }, [load]);
   useEffect(() => { setCopyInfo(null); }, [weekStart]);
 
   const handleCopyWeek = async () => {
@@ -639,7 +640,7 @@ export default function Planner() {
       ) : (
         <>
         {/* Week overview: completion progress + copy action */}
-        <div className="card p-4">
+        <div className="card p-4 anim-item">
           <div className="flex flex-col sm:flex-row sm:items-center gap-3">
             <div className="flex-1 min-w-0">
               <div className="flex items-baseline justify-between mb-1.5 gap-2">
@@ -666,7 +667,7 @@ export default function Planner() {
           {copyInfo && <p className="text-xs text-ink-400 mt-2">{copyInfo}</p>}
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-7 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-7 gap-3 anim-list">
           {days.map(day => {
             const dayDate = format(day, 'yyyy-MM-dd');
             const dayPlans = plans.filter(p => (p.scheduledDate || '').slice(0, 10) === dayDate);

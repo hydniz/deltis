@@ -547,8 +547,9 @@ export default function Activities() {
     setActivityTypes(res.data);
   }, []);
 
+  // Mutations refresh silently in place; filter/page changes show the
+  // loader via the effect below.
   const loadActivities = useCallback(async () => {
-    setLoading(true);
     try {
       const res = await api.get('/activities', {
         params: { typeRef: filter || undefined, limit, skip: page * limit }
@@ -563,7 +564,7 @@ export default function Activities() {
   }, [filter, page]);
 
   useEffect(() => { loadTypes(); }, []);
-  useEffect(() => { loadActivities(); }, [loadActivities]);
+  useEffect(() => { setLoading(true); loadActivities(); }, [loadActivities]);
 
   const handleDelete = async (id) => {
     if (!confirm('Aktivität löschen?')) return;
@@ -682,7 +683,7 @@ export default function Activities() {
           }
         />
       ) : (
-        <div className="space-y-2.5">
+        <div className="space-y-2.5 anim-list">
           {activities.map(a => (
             <ActivityCard
               key={a._id}

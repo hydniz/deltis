@@ -60,7 +60,7 @@ export default function PlannerHeatmap() {
   }, [plans, filter]);
 
   return (
-    <div className="card p-4">
+    <div className="card p-4 anim-item" style={{ animationDelay: '160ms' }}>
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-3">
         <div>
           <p className="text-[10px] font-semibold uppercase tracking-[0.09em] text-ink-400">
