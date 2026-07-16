@@ -72,6 +72,94 @@ router.post('/', auth, async (req, res) => {
   }
 });
 
+// Copies all plans (activities + habits) from one week to another. Copies are
+// created as open plans; entries that already exist on the target day (same
+// activity type or habit) are skipped so repeated calls stay idempotent.
+router.post('/copy-week', auth, async (req, res) => {
+  try {
+    const { sourceStart, targetStart } = req.body;
+    if (!sourceStart || !targetStart) {
+      return res.status(400).json({ error: 'sourceStart und targetStart sind erforderlich' });
+    }
+    const src = new Date(sourceStart);
+    const tgt = new Date(targetStart);
+    if (isNaN(src.getTime()) || isNaN(tgt.getTime())) {
+      return res.status(400).json({ error: 'Ungültiges Datum' });
+    }
+
+    const DAY_MS = 24 * 60 * 60 * 1000;
+    const offsetMs = Math.round((tgt - src) / DAY_MS) * DAY_MS;
+    const weekEnd = (start) => new Date(start.getTime() + 6 * DAY_MS + (DAY_MS - 1));
+    const dayKey = (date) => new Date(date).toISOString().slice(0, 10);
+
+    const [srcActivities, srcHabits, tgtActivities, tgtHabits] = await Promise.all([
+      ActivityPlan.find({ userId: req.user._id, scheduledDate: { $gte: src, $lte: weekEnd(src) } }),
+      HabitPlan.find({ userId: req.user._id, scheduledDate: { $gte: src, $lte: weekEnd(src) } }),
+      ActivityPlan.find({ userId: req.user._id, scheduledDate: { $gte: tgt, $lte: weekEnd(tgt) } }),
+      HabitPlan.find({ userId: req.user._id, scheduledDate: { $gte: tgt, $lte: weekEnd(tgt) } }),
+    ]);
+
+    const existingActivityKeys = new Set(
+      tgtActivities.map(p => `${dayKey(p.scheduledDate)}|${p.activityTypeRef || p.activityType}`)
+    );
+    const existingHabitKeys = new Set(
+      tgtHabits.map(p => `${dayKey(p.scheduledDate)}|${p.habitId}`)
+    );
+
+    let skipped = 0;
+    const activityDocs = [];
+    for (const p of srcActivities) {
+      const newDate = new Date(p.scheduledDate.getTime() + offsetMs);
+      if (existingActivityKeys.has(`${dayKey(newDate)}|${p.activityTypeRef || p.activityType}`)) {
+        skipped++;
+        continue;
+      }
+      activityDocs.push({
+        userId: req.user._id,
+        activityType: p.activityType,
+        activityTypeRef: p.activityTypeRef || undefined,
+        activityTypeVersion: p.activityTypeVersion,
+        scheduledDate: newDate,
+        duration: p.duration,
+        distance: p.distance,
+        notes: p.notes,
+        customValues: p.customValues || {},
+      });
+    }
+
+    const habitDocs = [];
+    for (const p of srcHabits) {
+      const newDate = new Date(p.scheduledDate.getTime() + offsetMs);
+      if (existingHabitKeys.has(`${dayKey(newDate)}|${p.habitId}`)) {
+        skipped++;
+        continue;
+      }
+      habitDocs.push({
+        userId: req.user._id,
+        habitId: p.habitId,
+        habitName: p.habitName,
+        unitSymbol: p.unitSymbol,
+        habitType: p.habitType,
+        scheduledDate: newDate,
+        notes: p.notes,
+      });
+    }
+
+    await Promise.all([
+      activityDocs.length ? ActivityPlan.insertMany(activityDocs) : Promise.resolve(),
+      habitDocs.length ? HabitPlan.insertMany(habitDocs) : Promise.resolve(),
+    ]);
+
+    res.status(201).json({
+      copiedActivities: activityDocs.length,
+      copiedHabits: habitDocs.length,
+      skipped,
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 router.put('/:id', auth, async (req, res) => {
   try {
     const plan = await ActivityPlan.findOneAndUpdate(

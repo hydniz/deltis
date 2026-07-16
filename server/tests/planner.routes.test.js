@@ -196,3 +196,98 @@ describe('DELETE /api/planner/habits/:id', () => {
     expect(res.body.success).toBe(true);
   });
 });
+
+// ─Copy Week
+
+describe('POST /api/planner/copy-week', () => {
+  it('copies activity and habit plans into the target week as open plans', async () => {
+    const { token, user } = await createUser();
+    const habit = await HabitDefinition.create({ userId: user._id, name: 'Water', unitSymbol: 'ml', type: 'amount', version: 1, nameHistory: [] });
+    await ActivityPlan.create({
+      userId: user._id, activityType: 'Joggen', scheduledDate: new Date('2024-01-15'),
+      duration: 45, notes: 'Intervals', completed: true,
+    });
+    await HabitPlan.create({
+      userId: user._id, habitId: habit._id, habitName: 'Water', unitSymbol: 'ml', habitType: 'amount',
+      scheduledDate: new Date('2024-01-17'), completed: true, loggedValue: 2000,
+    });
+
+    const res = await request(app)
+      .post('/api/planner/copy-week')
+      .set(authHeader(token))
+      .send({ sourceStart: '2024-01-15', targetStart: '2024-01-22' });
+    expect(res.status).toBe(201);
+    expect(res.body.copiedActivities).toBe(1);
+    expect(res.body.copiedHabits).toBe(1);
+    expect(res.body.skipped).toBe(0);
+
+    const copiedActivity = await ActivityPlan.findOne({
+      userId: user._id, scheduledDate: new Date('2024-01-22'),
+    });
+    expect(copiedActivity.activityType).toBe('Joggen');
+    expect(copiedActivity.duration).toBe(45);
+    expect(copiedActivity.notes).toBe('Intervals');
+    expect(copiedActivity.completed).toBe(false);
+
+    const copiedHabit = await HabitPlan.findOne({
+      userId: user._id, scheduledDate: new Date('2024-01-24'),
+    });
+    expect(copiedHabit.habitName).toBe('Water');
+    expect(copiedHabit.completed).toBe(false);
+    expect(copiedHabit.loggedValue).toBeUndefined();
+  });
+
+  it('skips entries that already exist on the target day', async () => {
+    const { token, user } = await createUser();
+    const habit = await HabitDefinition.create({ userId: user._id, name: 'Water', unitSymbol: 'ml', type: 'amount', version: 1, nameHistory: [] });
+    await ActivityPlan.create({ userId: user._id, activityType: 'Joggen', scheduledDate: new Date('2024-01-15') });
+    await HabitPlan.create({ userId: user._id, habitId: habit._id, habitName: 'Water', scheduledDate: new Date('2024-01-15') });
+    // Already planned on the matching target day
+    await ActivityPlan.create({ userId: user._id, activityType: 'Joggen', scheduledDate: new Date('2024-01-22') });
+    await HabitPlan.create({ userId: user._id, habitId: habit._id, habitName: 'Water', scheduledDate: new Date('2024-01-22') });
+
+    const res = await request(app)
+      .post('/api/planner/copy-week')
+      .set(authHeader(token))
+      .send({ sourceStart: '2024-01-15', targetStart: '2024-01-22' });
+    expect(res.status).toBe(201);
+    expect(res.body.copiedActivities).toBe(0);
+    expect(res.body.copiedHabits).toBe(0);
+    expect(res.body.skipped).toBe(2);
+
+    const targetActivities = await ActivityPlan.find({ userId: user._id, scheduledDate: new Date('2024-01-22') });
+    expect(targetActivities.length).toBe(1);
+  });
+
+  it('returns 400 when dates are missing', async () => {
+    const { token } = await createUser();
+    const res = await request(app)
+      .post('/api/planner/copy-week')
+      .set(authHeader(token))
+      .send({ sourceStart: '2024-01-15' });
+    expect(res.status).toBe(400);
+  });
+
+  it('returns 400 for invalid dates', async () => {
+    const { token } = await createUser();
+    const res = await request(app)
+      .post('/api/planner/copy-week')
+      .set(authHeader(token))
+      .send({ sourceStart: 'not-a-date', targetStart: '2024-01-22' });
+    expect(res.status).toBe(400);
+  });
+
+  it('does not copy plans of another user', async () => {
+    const { token } = await createUser();
+    const { user: other } = await createUser({ name: 'Other' });
+    await ActivityPlan.create({ userId: other._id, activityType: 'Yoga', scheduledDate: new Date('2024-01-15') });
+
+    const res = await request(app)
+      .post('/api/planner/copy-week')
+      .set(authHeader(token))
+      .send({ sourceStart: '2024-01-15', targetStart: '2024-01-22' });
+    expect(res.status).toBe(201);
+    expect(res.body.copiedActivities).toBe(0);
+    expect(res.body.copiedHabits).toBe(0);
+  });
+});
