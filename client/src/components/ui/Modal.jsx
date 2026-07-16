@@ -1,9 +1,14 @@
 import { useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { X } from 'lucide-react';
 
 // Unified modal: bottom sheet on mobile, centered dialog from `sm` upwards.
 // Supports wizard step dots via `steps` (total) + `step` (1-based current).
 // Body scrolls; header and footer stay fixed.
+//
+// Rendered through a portal on document.body: pages animate with transforms
+// (page-enter, anim-list), and a transformed ancestor would otherwise become
+// the containing block for position:fixed — shifting the overlay and dialog.
 
 const SIZES = {
   sm: 'sm:max-w-sm',
@@ -47,7 +52,7 @@ export default function Modal({
     return () => window.removeEventListener('keydown', onKey);
   }, [onClose]);
 
-  return (
+  return createPortal(
     <div
       className={`fixed inset-0 ${zIndex} bg-scrim/40 dark:bg-scrim/60 backdrop-blur-[2px] flex items-end sm:items-center justify-center sm:p-4 anim-overlay`}
       onMouseDown={e => { if (e.target === e.currentTarget) onClose?.(); }}
@@ -100,6 +105,7 @@ export default function Modal({
           </div>
         )}
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }

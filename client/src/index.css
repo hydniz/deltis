@@ -558,11 +558,14 @@
   /* ── Micro-animations (onboarding & delight) ─────────────────────────── */
   /* Stagger via inline style: style={{ animationDelay: `${i * 60}ms` }} */
 
+  /* fill-mode `backwards` (not `both`): a retained transform would turn the
+     element into the containing block for position:fixed descendants and
+     break overlays. `backwards` still hides pre-delay flashes. */
   .anim-fade-up {
-    animation: fade-up 0.55s cubic-bezier(0.22, 1, 0.36, 1) both;
+    animation: fade-up 0.55s cubic-bezier(0.22, 1, 0.36, 1) backwards;
   }
   .anim-pop {
-    animation: pop-in 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+    animation: pop-in 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) backwards;
   }
   .anim-float {
     animation: float-slow 7s ease-in-out infinite;
@@ -574,7 +577,7 @@
 
   /* Route content entrance — Layout re-applies this on every navigation */
   .page-enter {
-    animation: page-in 0.32s cubic-bezier(0.22, 1, 0.36, 1) both;
+    animation: page-in 0.32s cubic-bezier(0.22, 1, 0.36, 1) backwards;
   }
 
   /* Modal: backdrop fades; the panel rises as a sheet on mobile and
@@ -634,13 +637,13 @@
 
   /* Soft single-block entrance for content that loads in place */
   .anim-item {
-    animation: fade-up-sm 0.4s cubic-bezier(0.22, 1, 0.36, 1) both;
+    animation: fade-up-sm 0.4s cubic-bezier(0.22, 1, 0.36, 1) backwards;
   }
 
   /* Staggered entrance for the direct children of list/feed containers.
      Delays cap at the 13th child so long lists never feel sluggish. */
   .anim-list > * {
-    animation: fade-up-sm 0.4s cubic-bezier(0.22, 1, 0.36, 1) both;
+    animation: fade-up-sm 0.4s cubic-bezier(0.22, 1, 0.36, 1) backwards;
   }
   .anim-list > :nth-child(2)  { animation-delay: 45ms; }
   .anim-list > :nth-child(3)  { animation-delay: 90ms; }
