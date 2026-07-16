@@ -24,10 +24,19 @@ export const handlers = [
   http.get('/api', () => {
     return HttpResponse.json({
       version: '1.0.0+test123',
-      apiVersion: 5,
+      apiVersion: 6,
       emergencyMode: false,
       updateFailed: false,
     });
+  }),
+
+  // Strava integration — unconfigured by default; tests that exercise the
+  // integration override these handlers.
+  http.get('/api/strava/status', () => {
+    return HttpResponse.json({ configured: false, connected: false, connection: null, activityCount: 0 });
+  }),
+  http.get('/api/strava/sport-types', () => {
+    return HttpResponse.json([]);
   }),
 
   // Cached update check (drives the sidebar badge).

@@ -88,6 +88,7 @@ app.use('/api/habits', require('./routes/habits'));
 app.use('/api/weight', require('./routes/weight'));
 app.use('/api/goals', require('./routes/goals'));
 app.use('/api/activity-types', require('./routes/activityTypes'));
+app.use('/api/strava', require('./routes/strava'));
 
 if (process.env.NODE_ENV === 'production') {
   app.use(express.static(path.join(__dirname, '../client/dist')));
@@ -294,6 +295,10 @@ async function start() {
 
   // Periodic "new release available?" check for the admin UI badge.
   require('./routes/update').startBackgroundChecks();
+
+  // Strava polling fallback — each tick checks config/credentials itself,
+  // so starting it unconditionally is safe even when Strava is unconfigured.
+  require('./services/stravaPoller').start();
 }
 
 start().catch(err => {

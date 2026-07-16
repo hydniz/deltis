@@ -1,6 +1,6 @@
 import { NavLink, Link, Outlet } from 'react-router-dom';
 import UserMenu, { useUpdateAvailable } from '../UserMenu';
-import { ArrowLeft, ShieldCheck, Users, SlidersHorizontal, RefreshCw } from 'lucide-react';
+import { ArrowLeft, ShieldCheck, Users, SlidersHorizontal, RefreshCw, Plug } from 'lucide-react';
 
 // The admin area is a deliberately separate shell (Nextcloud-style):
 // dark top bar with a way back to the app, its own sub-navigation and an
@@ -9,6 +9,7 @@ import { ArrowLeft, ShieldCheck, Users, SlidersHorizontal, RefreshCw } from 'luc
 const adminNav = [
   { to: '/admin/users', icon: Users, label: 'Benutzer' },
   { to: '/admin/config', icon: SlidersHorizontal, label: 'System' },
+  { to: '/admin/integrations', icon: Plug, label: 'Integrationen' },
   { to: '/admin/updates', icon: RefreshCw, label: 'Updates' },
 ];
 

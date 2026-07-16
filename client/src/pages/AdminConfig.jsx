@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { SlidersHorizontal, Server, ShieldCheck, UserPlus } from 'lucide-react';
+import { SlidersHorizontal, Server, ShieldCheck, UserPlus, Plug } from 'lucide-react';
 import api from '../utils/api';
 import AdminPageHeader from '../components/admin/AdminPageHeader';
 import SectionCard from '../components/admin/SectionCard';
@@ -20,6 +20,7 @@ const SECTIONS = [
   { group: 'Server', icon: Server, help: SECTION_HELP.server },
   { group: 'Sicherheit', icon: ShieldCheck, help: SECTION_HELP.security },
   { group: 'Registrierung & Zugang', icon: UserPlus, help: SECTION_HELP.access },
+  { group: 'Integrationen', icon: Plug, help: null },
 ];
 
 export default function AdminConfig() {

@@ -3,7 +3,7 @@ import api from '../utils/api';
 import { format, parseISO } from 'date-fns';
 import { de } from 'date-fns/locale';
 import {
-  Plus, Target, Trash2, X, Dumbbell, Sparkles, AlertTriangle, Check, Clock, Pencil,
+  Plus, Target, Trash2, X, Dumbbell, Sparkles, AlertTriangle, Check, Clock, Pencil, Activity,
 } from 'lucide-react';
 import {
   ResponsiveContainer, LineChart, Line, XAxis, YAxis,
@@ -11,10 +11,13 @@ import {
 } from 'recharts';
 import {
   PageHeader, Button, Field, Input, Select, Chip, Segmented, Modal,
-  IconButton, EmptyState, PageLoader, ProgressBar, useChart,
+  IconButton, EmptyState, PageLoader, ProgressBar, useChart, Alert,
 } from '../components/ui';
 import ActivityTypeWizard from '../components/ActivityTypeWizard';
 import ManageHabitsModal from '../components/ManageHabitsModal';
+import StravaCriteriaBuilder, {
+  normalizeCriteria, criteriaSummary, emptyGroup,
+} from '../components/StravaCriteriaBuilder';
 
 // Interval helpers
 
@@ -88,6 +91,7 @@ function GoalProgress({ goal, actions }) {
   const { conditions: condResults, conditionOperator: condOp, met: goalMet, weeklyData, stepResults = [] } = progress || {};
   const isLongTerm = goal.type.startsWith('long-term');
   const isHabit = goal.targetRefModel === 'HabitDefinition' || goal.targetRefModel === 'habit';
+  const isStrava = goal.targetRefModel === 'StravaActivity';
   const iv = goal.intervalValue || 1;
   const iu = goal.intervalUnit || 'week';
   const customFields = goal.customFields || [];
@@ -159,8 +163,8 @@ function GoalProgress({ goal, actions }) {
             <Chip variant="soft" color={isLongTerm ? 'amber' : 'olive'}>
               {isLongTerm ? 'Langfristig' : intervalBadgeLabel(iv, iu)}
             </Chip>
-            <Chip variant="soft" color={isHabit ? 'sage' : 'clay'} icon={isHabit ? Sparkles : Dumbbell}>
-              {isHabit ? 'Gewohnheit' : 'Aktivität'}
+            <Chip variant="soft" color={isHabit ? 'sage' : 'clay'} icon={isHabit ? Sparkles : isStrava ? Activity : Dumbbell}>
+              {isHabit ? 'Gewohnheit' : isStrava ? 'Strava' : 'Aktivität'}
             </Chip>
           </div>
           {goal.description && <p className="text-xs text-ink-400 mt-1.5">{goal.description}</p>}
@@ -178,6 +182,9 @@ function GoalProgress({ goal, actions }) {
             {goal.targetName && <span className="text-ink-600 font-medium">{goal.targetName}</span>}
             {!isLongTerm && <> {intervalTargetLabel(iv, iu)}</>}
           </p>
+          {isStrava && (
+            <p className="text-xs text-ink-400 mt-0.5">{criteriaSummary(goal.stravaCriteria)}</p>
+          )}
           {goal.endDate && (
             <p className="text-xs text-ink-300 mt-0.5">Bis {format(parseISO(goal.endDate), 'd. MMMM yyyy', { locale: de })}</p>
           )}
@@ -442,7 +449,7 @@ function ActivityFilterEditor({ filters, filterFields, onAdd, onUpdate, onRemove
 
 // Goal creation wizard
 
-function CreateGoalModal({ activityTypes, habits, onSave, onClose, onTargetsChanged }) {
+function CreateGoalModal({ activityTypes, habits, strava, onSave, onClose, onTargetsChanged }) {
   const [form, setForm] = useState({
     name: '',
     description: '',
@@ -456,6 +463,7 @@ function CreateGoalModal({ activityTypes, habits, onSave, onClose, onTargetsChan
     conditions: [{ metric: 'count', condition: 'min', targetValue: '', unitSymbol: 'Mal', valueScope: 'total', aggregation: 'sum', activityFilters: [] }],
     startDate: new Date().toISOString().slice(0, 10),
     endDate: '',
+    stravaCriteria: null,
   });
   const [steps, setSteps] = useState([]);
   const [saving, setSaving] = useState(false);
@@ -493,11 +501,12 @@ function CreateGoalModal({ activityTypes, habits, onSave, onClose, onTargetsChan
   };
 
   const isActivityGoal = form.targetCategory === 'activity';
+  const isStravaGoal = form.targetCategory === 'strava';
   const selectedActivityType = activityTypes.find(t => t._id === form.targetRef);
   const selectedHabit = habits.find(h => h._id === form.targetRef);
 
   const unitForMetric = (metric, actType, habit) => {
-    if (metric === 'count') return isActivityGoal ? 'Mal' : 'Tage';
+    if (metric === 'count') return form.targetCategory === 'habit' ? 'Tage' : 'Mal';
     if (metric === 'distance') return 'km';
     if (metric === 'duration') return 'min';
     if (metric === 'value') return habit?.unitSymbol || '';
@@ -511,6 +520,18 @@ function CreateGoalModal({ activityTypes, habits, onSave, onClose, onTargetsChan
   };
 
   const handleCategoryChange = (category) => {
+    if (category === 'strava') {
+      setForm(f => ({
+        ...f,
+        targetCategory: 'strava',
+        targetRefModel: 'StravaActivity',
+        // Strava goals reference no document — the criteria tree is the target.
+        targetRef: 'strava',
+        stravaCriteria: f.stravaCriteria || emptyGroup(),
+        conditions: [{ metric: 'count', condition: 'min', targetValue: '', unitSymbol: 'Mal', valueScope: 'total', aggregation: 'sum', activityFilters: [] }],
+      }));
+      return;
+    }
     const isAct = category === 'activity';
     const firstHabit = habits[0];
     const defaultMetric = isAct ? 'count' : 'value';
@@ -522,6 +543,15 @@ function CreateGoalModal({ activityTypes, habits, onSave, onClose, onTargetsChan
       targetRef: isAct ? (activityTypes[0]?._id || '') : (firstHabit?._id || ''),
       conditions: [{ metric: defaultMetric, condition: 'min', targetValue: '', unitSymbol: defaultUnit, valueScope: 'total', aggregation: 'sum', activityFilters: [] }],
     }));
+  };
+
+  // Long-term Strava goals are not supported (yet) — switching to long-term
+  // falls back to the activity category.
+  const handleLongTermChange = (isLongTerm) => {
+    if (isLongTerm && form.targetCategory === 'strava') {
+      handleCategoryChange('activity');
+    }
+    set('isLongTerm', isLongTerm);
   };
 
   const handleRefChange = (ref) => {
@@ -671,6 +701,7 @@ function CreateGoalModal({ activityTypes, habits, onSave, onClose, onTargetsChan
         type: goalType,
         targetRef: form.targetRef,
         targetRefModel: form.targetRefModel,
+        stravaCriteria: isStravaGoal ? normalizeCriteria(form.stravaCriteria) : undefined,
         conditionOperator: form.conditionOperator,
         conditions: validConditions.map(c => ({ ...c, targetValue: +c.targetValue })),
         // Legacy fields from first condition for backward compat
@@ -756,7 +787,7 @@ function CreateGoalModal({ activityTypes, habits, onSave, onClose, onTargetsChan
             <div className="grid grid-cols-2 gap-2">
               <button
                 type="button"
-                onClick={() => set('isLongTerm', false)}
+                onClick={() => handleLongTermChange(false)}
                 className={`p-3.5 rounded-xl border text-left transition-colors ${
                   !form.isLongTerm
                     ? 'border-brand-400 bg-brand-50 text-ink-900'
@@ -768,7 +799,7 @@ function CreateGoalModal({ activityTypes, habits, onSave, onClose, onTargetsChan
               </button>
               <button
                 type="button"
-                onClick={() => set('isLongTerm', true)}
+                onClick={() => handleLongTermChange(true)}
                 className={`p-3.5 rounded-xl border text-left transition-colors ${
                   form.isLongTerm
                     ? 'border-ocher-400 bg-ocher-100/60 text-ink-900'
@@ -831,7 +862,7 @@ function CreateGoalModal({ activityTypes, habits, onSave, onClose, onTargetsChan
         {currentStep === 2 && (<>
           <div>
             <label className="label">Kategorie</label>
-            <div className="grid grid-cols-2 gap-2">
+            <div className={`grid grid-cols-2 gap-2 ${strava?.configured && !form.isLongTerm ? 'sm:grid-cols-3' : ''}`}>
               <button
                 type="button"
                 onClick={() => handleCategoryChange('activity')}
@@ -856,9 +887,38 @@ function CreateGoalModal({ activityTypes, habits, onSave, onClose, onTargetsChan
                 <div className="flex items-center gap-1.5 font-semibold text-sm"><Sparkles size={13} /> Gewohnheit</div>
                 <div className="text-xs opacity-70 mt-0.5">Tägliche Routinen…</div>
               </button>
+              {strava?.configured && !form.isLongTerm && (
+                <button
+                  type="button"
+                  onClick={() => handleCategoryChange('strava')}
+                  className={`p-3.5 rounded-xl border text-left transition-colors ${
+                    form.targetCategory === 'strava'
+                      ? 'border-brand-400 bg-brand-50 text-ink-900'
+                      : 'border-paper-200 bg-paper-50 text-ink-400 hover:text-ink-600'
+                  }`}
+                >
+                  <div className="flex items-center gap-1.5 font-semibold text-sm"><Activity size={13} /> Strava</div>
+                  <div className="text-xs opacity-70 mt-0.5">Nach Kriterien…</div>
+                </button>
+              )}
             </div>
           </div>
 
+          {isStravaGoal && (<>
+            {!strava?.connected && (
+              <Alert tone="warning">
+                Du hast noch kein Strava-Konto verbunden. Verbinde es in den Einstellungen,
+                damit der Fortschritt gemessen werden kann.
+              </Alert>
+            )}
+            <StravaCriteriaBuilder
+              criteria={form.stravaCriteria}
+              onChange={c => set('stravaCriteria', c)}
+              sportTypes={strava?.sportTypes || []}
+            />
+          </>)}
+
+          {!isStravaGoal && (
           <Field label={isActivityGoal ? 'Welche Aktivität?' : 'Welche Gewohnheit?'}>
             {(isActivityGoal ? activityTypes.length > 0 : habits.length > 0) ? (
               <>
@@ -893,6 +953,7 @@ function CreateGoalModal({ activityTypes, habits, onSave, onClose, onTargetsChan
               </button>
             )}
           </Field>
+          )}
 
           <div>
             <div className="flex items-center justify-between mb-2">
@@ -916,7 +977,11 @@ function CreateGoalModal({ activityTypes, habits, onSave, onClose, onTargetsChan
                   )}
                   <Field label="Messgröße">
                     <Select value={cond.metric} onChange={e => handleMetricChangeForCondition(i, e.target.value)}>
-                      {isActivityGoal ? (<>
+                      {isStravaGoal ? (<>
+                        <option value="count">Anzahl Aktivitäten</option>
+                        <option value="duration">Dauer (min)</option>
+                        <option value="distance">Distanz (km)</option>
+                      </>) : isActivityGoal ? (<>
                         <option value="count">Anzahl Aktivitäten</option>
                         {selectedActivityType?.showDuration !== false && <option value="duration">Dauer (min)</option>}
                         {selectedActivityType?.showDistance && <option value="distance">Distanz (km)</option>}
@@ -964,7 +1029,7 @@ function CreateGoalModal({ activityTypes, habits, onSave, onClose, onTargetsChan
                     <Field label="Was wird gemessen?">
                       <ScopeSelector
                         cond={cond}
-                        isActivityGoal={isActivityGoal}
+                        isActivityGoal={isActivityGoal || isStravaGoal}
                         isLongTerm={form.isLongTerm}
                         onChange={changes => updateConditionFields(i, changes)}
                       />
@@ -1099,9 +1164,11 @@ function CreateGoalModal({ activityTypes, habits, onSave, onClose, onTargetsChan
 
 // Edit modal (periodic & long-term)
 
-function EditGoalModal({ goal, onSave, onClose }) {
+function EditGoalModal({ goal, stravaSportTypes = [], onSave, onClose }) {
   const isActivityGoal = goal.targetRefModel === 'ActivityType' || goal.targetRefModel === 'activity';
+  const isStravaGoal = goal.targetRefModel === 'StravaActivity';
   const isLongTerm = goal.type.startsWith('long-term');
+  const [stravaCriteria, setStravaCriteria] = useState(goal.stravaCriteria || emptyGroup());
 
   const getFilterableFieldsEdit = () => {
     const fields = [];
@@ -1232,6 +1299,7 @@ function EditGoalModal({ goal, onSave, onClose }) {
         targetValue: fc ? +fc.targetValue : goal.targetValue,
         unitSymbol: fc?.unitSymbol || goal.unitSymbol,
         metric: fc?.metric || goal.metric,
+        ...(isStravaGoal ? { stravaCriteria: normalizeCriteria(stravaCriteria) } : {}),
       });
       onSave();
     } catch (err) {
@@ -1323,6 +1391,13 @@ function EditGoalModal({ goal, onSave, onClose }) {
           {/* Conditions */}
           {editTab === 'conditions' && (
             <div className="space-y-3">
+              {isStravaGoal && (
+                <StravaCriteriaBuilder
+                  criteria={stravaCriteria}
+                  onChange={setStravaCriteria}
+                  sportTypes={stravaSportTypes}
+                />
+              )}
               <div className="flex items-center justify-between">
                 <p className="text-xs text-ink-400">Was muss erfüllt sein, damit das Ziel gilt?</p>
                 <button
@@ -1357,7 +1432,11 @@ function EditGoalModal({ goal, onSave, onClose }) {
                         });
                       }}
                     >
-                      {isActivityGoal ? (<>
+                      {isStravaGoal ? (<>
+                        <option value="count">Anzahl Aktivitäten</option>
+                        <option value="duration">Dauer (min)</option>
+                        <option value="distance">Distanz (km)</option>
+                      </>) : isActivityGoal ? (<>
                         <option value="count">Anzahl Aktivitäten</option>
                         <option value="duration">Dauer (min)</option>
                         <option value="distance">Distanz (km)</option>
@@ -1408,7 +1487,7 @@ function EditGoalModal({ goal, onSave, onClose }) {
                     <Field label="Was wird gemessen?">
                       <ScopeSelector
                         cond={cond}
-                        isActivityGoal={isActivityGoal}
+                        isActivityGoal={isActivityGoal || isStravaGoal}
                         isLongTerm={isLongTerm}
                         onChange={changes => updateCondFields(i, changes)}
                       />
@@ -1521,6 +1600,21 @@ export default function Goals() {
   const [loading, setLoading] = useState(true);
   const [showCreate, setShowCreate] = useState(false);
   const [editGoal, setEditGoal] = useState(null);
+  const [strava, setStrava] = useState({ configured: false, connected: false, sportTypes: [] });
+
+  // Strava availability decides whether the goal wizard offers the Strava
+  // category — loaded separately so a failure never blocks the goals page.
+  useEffect(() => {
+    api.get('/strava/status')
+      .then(async res => {
+        let sportTypes = [];
+        if (res.data.connected) {
+          try { sportTypes = (await api.get('/strava/sport-types')).data; } catch { /* optional */ }
+        }
+        setStrava({ configured: res.data.configured, connected: res.data.connected, sportTypes });
+      })
+      .catch(() => {});
+  }, []);
 
   const load = async () => {
     setLoading(true);
@@ -1629,6 +1723,7 @@ export default function Goals() {
         <CreateGoalModal
           activityTypes={activityTypes}
           habits={habits}
+          strava={strava}
           onSave={() => { setShowCreate(false); load(); }}
           onClose={() => setShowCreate(false)}
           onTargetsChanged={reloadTargets}
@@ -1638,6 +1733,7 @@ export default function Goals() {
       {editGoal && (
         <EditGoalModal
           goal={editGoal}
+          stravaSportTypes={strava.sportTypes}
           onSave={() => { setEditGoal(null); load(); }}
           onClose={() => setEditGoal(null)}
         />

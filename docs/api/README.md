@@ -19,6 +19,7 @@
 | Goals | [goals.md](goals.md) | `/api/goals` |
 | Planner | [planner.md](planner.md) | `/api/planner` |
 | Weight | [weight.md](weight.md) | `/api/weight` |
+| Strava | [strava.md](strava.md) | `/api/strava` |
 | Data (export/import) | [data.md](data.md) | `/api/data` |
 | Admin | [admin.md](admin.md) | `/api/admin` |
 
