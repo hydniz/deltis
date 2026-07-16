@@ -88,6 +88,11 @@ if grep -q '^DELTIS_IMAGE=' "$ENV_FILE"; then
 else
   echo "DELTIS_IMAGE=$NEW_IMAGE" >> "$ENV_FILE"
 fi
+# Sourcing $ENV_FILE above exported the OLD image ref into this shell, and
+# docker compose gives the process environment precedence over the .env
+# file — without this export compose would recreate the containers from
+# the previous image while the deploy still reports success.
+export DELTIS_IMAGE="$NEW_IMAGE"
 
 echo "→ Recreating containers ..."
 docker compose up -d --no-build --force-recreate
@@ -114,6 +119,16 @@ if [ "$STATUS" != "healthy" ]; then
   exit 1
 fi
 echo "✓ App is healthy."
+
+# The health gate alone cannot catch a deploy that restarted the old image
+# (that one is just as healthy) — verify the container runs the new ref.
+RUNNING_IMAGE="$(docker container inspect "$APP_CONTAINER" --format '{{.Config.Image}}')"
+if [ "$RUNNING_IMAGE" != "$NEW_IMAGE" ]; then
+  echo "✗ Container runs $RUNNING_IMAGE instead of $NEW_IMAGE – the deploy did not take effect."
+  echo "  Check DELTIS_IMAGE in $ENV_FILE and the compose environment, then retry."
+  exit 1
+fi
+echo "✓ Running image verified: $RUNNING_IMAGE"
 
 # 5. Prune old images of this instance
 # Only touches tags of this instance's prefix; keeps the new and previous image
