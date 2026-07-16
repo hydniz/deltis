@@ -78,6 +78,19 @@ describe('Onboarding – Anzeige & Resume', () => {
     expect(screen.queryByText('Eigene')).not.toBeInTheDocument();
   });
 
+  it('preselects no habits – the user opts in', async () => {
+    renderOnboarding({ onboardingStep: 2 });
+    await screen.findByText('Wasser');
+    expect(screen.queryAllByRole('button', { pressed: true })).toHaveLength(0);
+    expect(screen.getByText('0 von 2 ausgewählt')).toBeInTheDocument();
+  });
+
+  it('preselects no activity types – the user opts in', async () => {
+    renderOnboarding({ onboardingStep: 3 });
+    await screen.findByText('Joggen');
+    expect(screen.getByText('0 von 2 ausgewählt')).toBeInTheDocument();
+  });
+
   it('does not render for users without pending onboarding', async () => {
     server.use(http.get('/api/auth/me', () => HttpResponse.json(mockUser)));
     localStorage.setItem('auth_token', 'valid-token');
@@ -112,7 +125,7 @@ describe('Onboarding – Schritte & Speichern', () => {
     expect(await screen.findByText('Dein Profil')).toBeInTheDocument();
   });
 
-  it('saves the habit selection without the deselected habit', async () => {
+  it('saves only the opted-in habits', async () => {
     let savedSelection = null;
     server.use(
       http.put('/api/habits/selection', async ({ request }) => {
@@ -129,13 +142,36 @@ describe('Onboarding – Schritte & Speichern', () => {
     const user = userEvent.setup();
     renderOnboarding({ onboardingStep: 2 });
 
-    await user.click(await screen.findByText('Schlaf'));
+    await user.click(await screen.findByText('Wasser'));
     await user.click(screen.getByRole('button', { name: 'Weiter' }));
 
     await waitFor(() => expect(savedSelection).toEqual(['h1']));
   });
 
-  it('saves the chosen activity types', async () => {
+  it('saves an empty habit selection when nothing is opted in', async () => {
+    let savedSelection = null;
+    server.use(
+      http.put('/api/habits/selection', async ({ request }) => {
+        savedSelection = (await request.json()).selectedIds;
+        return HttpResponse.json({ success: true });
+      }),
+      http.put('/api/auth/me/onboarding', async ({ request }) => {
+        const body = await request.json();
+        return HttpResponse.json({
+          ...mockUser, onboardingPending: true, onboardingStep: body.step,
+        });
+      })
+    );
+    const user = userEvent.setup();
+    renderOnboarding({ onboardingStep: 2 });
+
+    await screen.findByText('Wasser');
+    await user.click(screen.getByRole('button', { name: 'Weiter' }));
+
+    await waitFor(() => expect(savedSelection).toEqual([]));
+  });
+
+  it('saves only the opted-in activity types', async () => {
     let savedLabels = null;
     server.use(
       http.post('/api/activity-types/setup', async ({ request }) => {
@@ -152,7 +188,7 @@ describe('Onboarding – Schritte & Speichern', () => {
     const user = userEvent.setup();
     renderOnboarding({ onboardingStep: 3 });
 
-    await user.click(await screen.findByText('Yoga'));
+    await user.click(await screen.findByText('Joggen'));
     await user.click(screen.getByRole('button', { name: 'Weiter' }));
 
     await waitFor(() => expect(savedLabels).toEqual(['Joggen']));

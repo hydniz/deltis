@@ -84,24 +84,21 @@ export default function Onboarding() {
   const [weightUnit, setWeightUnit] = useState(user?.weightUnit || 'kg');
   const [weight, setWeight] = useState('');
 
-  // Step 2 – predefined habits (all preselected, user deselects)
+  // Step 2 – predefined habits (opt-in: none preselected)
   const [habitDefs, setHabitDefs] = useState(null);
   const [selectedHabits, setSelectedHabits] = useState(new Set());
 
-  // Step 3 – predefined activity types
+  // Step 3 – predefined activity types (opt-in: none preselected)
   const [typeDefaults, setTypeDefaults] = useState(null);
   const [selectedTypes, setSelectedTypes] = useState(new Set());
 
   useEffect(() => {
     api.get('/habits/definitions').then(res => {
-      const predefined = res.data.filter(d => d.isPredefined);
-      setHabitDefs(predefined);
-      setSelectedHabits(new Set(predefined.map(d => d._id)));
+      setHabitDefs(res.data.filter(d => d.isPredefined));
     }).catch(() => setHabitDefs([]));
 
     api.get('/activity-types/defaults').then(res => {
       setTypeDefaults(res.data);
-      setSelectedTypes(new Set(res.data.map(d => d.label)));
     }).catch(() => setTypeDefaults([]));
   }, []);
 
@@ -280,7 +277,7 @@ export default function Onboarding() {
                 <StepHeading
                   icon={Sparkles}
                   title="Deine Gewohnheiten"
-                  text="Welche davon möchtest du täglich tracken? Abwählen, was du nicht brauchst — eigene kannst du später anlegen."
+                  text="Welche davon möchtest du täglich tracken? Wähle aus, was du brauchst — eigene kannst du später anlegen."
                 />
                 <div className="grid sm:grid-cols-2 gap-2 max-h-72 overflow-y-auto pr-0.5">
                   {habitDefs === null && <p className="text-sm text-ink-400 col-span-2 text-center py-6">Lade…</p>}
