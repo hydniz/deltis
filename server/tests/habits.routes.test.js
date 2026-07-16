@@ -57,7 +57,7 @@ describe('GET /api/habits/definitions', () => {
     expect(res.body.some(h => h.name === 'Secret Habit')).toBe(false);
   });
 
-  it('marks all habits as selected when user has no selection', async () => {
+  it('marks no habits as selected when user has no selection (opt-in)', async () => {
     const { token } = await createUser();
     await HabitDefinition.create({ userId: null, name: 'Kreatin', unitSymbol: 'g', type: 'amount', isPredefined: true, version: 1, nameHistory: [] });
 
@@ -65,7 +65,25 @@ describe('GET /api/habits/definitions', () => {
       .get('/api/habits/definitions')
       .set(authHeader(token));
     expect(res.status).toBe(200);
-    expect(res.body.every(h => h.selected === true)).toBe(true);
+    expect(res.body.every(h => h.selected === false)).toBe(true);
+  });
+
+  it('marks only explicitly selected habits as selected', async () => {
+    const { token, user } = await createUser();
+    const picked = await createHabitDef(user._id, { name: 'Picked' });
+    await createHabitDef(user._id, { name: 'Not picked' });
+
+    await request(app)
+      .put('/api/habits/selection')
+      .set(authHeader(token))
+      .send({ selectedIds: [picked._id.toString()] });
+
+    const res = await request(app)
+      .get('/api/habits/definitions')
+      .set(authHeader(token));
+    expect(res.status).toBe(200);
+    expect(res.body.find(h => h.name === 'Picked').selected).toBe(true);
+    expect(res.body.find(h => h.name === 'Not picked').selected).toBe(false);
   });
 });
 

@@ -4,6 +4,7 @@ import { de } from 'date-fns/locale';
 import api from '../utils/api';
 import { Spinner, chipColorFor } from './ui';
 import { progressRatio, formatTarget } from '../utils/habitTarget';
+import { levelFor, EMPTY_CELL } from '../utils/heatmap';
 
 // GitHub-style dot heatmap for one habit: columns = weeks (oldest left),
 // rows = Mo–So. Saturation encodes progress towards the daily target —
@@ -20,15 +21,6 @@ const TONE_LEVELS = {
   olive: ['bg-lime-600/25', 'bg-lime-600/45', 'bg-lime-600/70', 'bg-lime-600'],
   stone: ['bg-ink-500/25', 'bg-ink-500/45', 'bg-ink-500/70', 'bg-ink-500'],
 };
-const EMPTY_CELL = 'bg-ink-900/[.07]';
-
-function levelFor(ratio) {
-  if (ratio >= 1) return 3;
-  if (ratio >= 0.65) return 2;
-  if (ratio >= 0.35) return 1;
-  return 0;
-}
-
 export default function HabitHeatmap({ habit }) {
   const [logsByDay, setLogsByDay] = useState(null);
 

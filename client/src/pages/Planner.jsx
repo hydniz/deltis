@@ -12,6 +12,7 @@ import {
   PageHeader, Button, Field, Input, Select, Textarea, Chip, chipColorFor,
   Modal, PageLoader, ProgressBar,
 } from '../components/ui';
+import PlannerHeatmap from '../components/PlannerHeatmap';
 
 // Card tints per activity type — light pastel surfaces matching the chip palette
 const CARD_COLORS = [
@@ -825,6 +826,10 @@ export default function Planner() {
             );
           })}
         </div>
+
+        {/* Completion heatmap over the recent weeks — remounts on every load()
+            so it stays in sync after completing, adding or deleting plans. */}
+        <PlannerHeatmap />
         </>
       )}
 

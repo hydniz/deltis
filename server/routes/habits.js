@@ -35,9 +35,9 @@ router.get('/definitions', auth, async (req, res) => {
 
     const selectedIds = (settings?.selectedHabitIds || []).map(id => id.toString());
     const hiddenIds = (settings?.hiddenHabitIds || []).map(id => id.toString());
-    // Without an explicit selection every habit counts as selected (legacy
-    // default); once the user saved a choice, an empty list means none.
-    const noneSelected = selectedIds.length === 0 && !settings?.hasSelection;
+    // Opt-in: only explicitly selected habits count as selected. New users
+    // start with none; migration 003 grandfathers accounts that used habits
+    // under the old all-selected-by-default rule.
     const habitSettings = settings?.habitSettings || {};
 
     let result = definitions.map(d => {
@@ -46,7 +46,7 @@ router.get('/definitions', auth, async (req, res) => {
       return {
         ...d.toObject(),
         hidden,
-        selected: !hidden && (noneSelected || selectedIds.includes(d._id.toString())),
+        selected: !hidden && selectedIds.includes(d._id.toString()),
         missingDayMode: s.missingDayMode || 'none',
         defaultValue: s.defaultValue ?? 0,
         // Weekdays (0 = Sunday … 6 = Saturday) the habit is scheduled on;
