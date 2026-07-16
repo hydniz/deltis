@@ -73,7 +73,7 @@ export default function Login() {
         <div className="orb w-56 h-56 right-[8%] bottom-[12%] bg-rose-200/45" />
       </div>
 
-      <div className="relative w-full max-w-sm">
+      <div className="relative w-full max-w-sm anim-fade-up">
 
         {/* Branding */}
         <div className="text-center mb-8">

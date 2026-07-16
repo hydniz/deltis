@@ -724,7 +724,7 @@ export default function Planner() {
                           title={plan.completed ? 'Als offen markieren' : 'Als erledigt loggen'}
                         >
                           {plan.completed
-                            ? <CheckCircle2 size={14} className="text-emerald-600" />
+                            ? <CheckCircle2 size={14} className="text-emerald-600 anim-check" />
                             : <Circle size={14} className="text-ink-300 hover:text-emerald-600 transition-colors" />
                           }
                         </button>
@@ -777,7 +777,7 @@ export default function Planner() {
                           title={plan.completed ? 'Als offen markieren' : 'Als erledigt markieren'}
                         >
                           {plan.completed
-                            ? <CheckCircle2 size={14} className="text-emerald-600" />
+                            ? <CheckCircle2 size={14} className="text-emerald-600 anim-check" />
                             : <Circle size={14} className="text-sage-400 hover:text-emerald-600 transition-colors" />
                           }
                         </button>

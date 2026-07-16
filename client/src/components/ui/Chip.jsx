@@ -57,7 +57,7 @@ export default function Chip({
     return <span className={base} {...rest}>{Icon && <Icon size={12} />}{children}</span>;
   }
   return (
-    <button type="button" onClick={onClick} className={`${base} cursor-pointer hover:shadow-sm`} {...rest}>
+    <button type="button" onClick={onClick} className={`${base} cursor-pointer hover:shadow-sm chip-press`} {...rest}>
       {Icon && <Icon size={12} />}
       {children}
     </button>

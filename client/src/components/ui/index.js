@@ -15,3 +15,4 @@ export { default as Stat } from './Stat';
 export { Spinner, PageLoader } from './Spinner';
 export { useChart, CHART_LIGHT, CHART_DARK } from './chartTheme';
 export { TONE_BUBBLE, TONE_ACCENT_BORDER } from './tones';
+export { default as Skeleton } from './Skeleton';

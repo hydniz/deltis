@@ -16,11 +16,13 @@ export function Spinner({ size = 'md', contrast = false, className = '' }) {
   );
 }
 
-// Full-area loader for page-level loading states.
+// Full-area loader for page-level loading states. Fades in with a short
+// delay so fast page loads never flash a spinner.
 export function PageLoader() {
   return (
-    <div className="flex items-center justify-center py-24">
+    <div className="flex flex-col items-center justify-center gap-3 py-24 loader-delayed">
       <Spinner size="lg" />
+      <p className="text-xs text-ink-300 font-medium">Lädt …</p>
     </div>
   );
 }

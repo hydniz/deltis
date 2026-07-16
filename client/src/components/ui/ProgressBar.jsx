@@ -14,7 +14,7 @@ export default function ProgressBar({ pct, tone = 'auto', className = '' }) {
   return (
     <div className={`h-2 bg-paper-200 rounded-full overflow-hidden ${className}`}>
       <div
-        className={`h-full rounded-full transition-all duration-500 ${TONES[resolved]}`}
+        className={`h-full rounded-full transition-all duration-500 anim-bar ${TONES[resolved]}`}
         style={{ width: `${clamped}%` }}
       />
     </div>
