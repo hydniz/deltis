@@ -12,6 +12,7 @@ beforeAll(async () => {
 afterEach(async () => {
   await clearDb();
   require('../utils/config')._resetCache();
+  require('../routes/init').resetRateLimits();
   serverState.setupMode = false;
 });
 

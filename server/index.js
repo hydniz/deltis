@@ -17,12 +17,25 @@ const BACKUP_LOCK = path.join(__dirname, '..', 'backups', '.backup.lock');
 
 const app = express();
 
+app.disable('x-powered-by');
+
+// Behind a reverse proxy (NAS/HTTPS termination) the client IP arrives in
+// X-Forwarded-For. TRUST_PROXY controls how many proxy hops are trusted —
+// without it rate limiting would key on the proxy IP (or worse, a spoofable
+// header). Unset = no proxy is trusted (direct deployment).
+const trustProxy = process.env.TRUST_PROXY;
+if (trustProxy) {
+  app.set('trust proxy', /^\d+$/.test(trustProxy) ? parseInt(trustProxy, 10) : trustProxy);
+}
+
+app.use(require('./middleware/securityHeaders'));
 app.use(cors({
   origin: process.env.NODE_ENV === 'production' ? false : 'http://localhost:5173',
   credentials: true,
 }));
 app.use(cookieParser());
 app.use(express.json());
+app.use(require('./middleware/sanitizeBody'));
 
 // Block write requests while a backup is in progress
 app.use((req, res, next) => {

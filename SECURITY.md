@@ -11,7 +11,9 @@ administration tools.
 
 Authentication uses **httpOnly JWT cookies** (30-day expiry). The cookie is set by `POST /api/auth/login` and cleared by `POST /api/auth/logout`. It is inaccessible to JavaScript — XSS attacks cannot steal it.
 
-The JWT payload contains only `{ userId }`. On every request the server calls `jwt.verify()` (microseconds) and loads the user from the database by `_id`. Credentials (password, pepper) are **never** checked per-request.
+The JWT payload contains `{ userId, sv }`. On every request the server calls `jwt.verify()` (microseconds) and loads the user from the database by `_id`. Credentials (password, pepper) are **never** checked per-request.
+
+`sv` is the **session version**: every password change (self-service or admin reset) increments `user.sessionVersion`, which immediately invalidates all previously issued tokens for that account. The session performing the change receives a freshly signed cookie and stays logged in; every other device/cookie is logged out.
 
 ### Regular users
 
@@ -152,3 +154,58 @@ See [docs/api/auth.md](docs/api/auth.md) for the full reference.
 | `PUT` | `/api/auth/me/username` | ✓ | Set or change username |
 | `PUT` | `/api/auth/me/password` | ✓ | Change password (requires current password) |
 | `PUT` | `/api/auth/me/password/forced` | ✓ | Forced change (no current password; only when `mustChangePassword` is true) |
+
+---
+
+## Request Hardening
+
+The following protections apply to **every** API request:
+
+### Input sanitization (`server/middleware/sanitizeBody.js`)
+
+`req.body` and `req.query` are recursively cleaned before any route handler
+runs: keys starting with `$`, keys containing `.` and prototype-pollution keys
+(`__proto__`, `constructor`, `prototype`) are removed. This blocks MongoDB
+operator injection (e.g. `{ "identifier": { "$gt": "" } }`) at the door.
+Additionally, `POST /api/auth/login` strictly requires string credentials.
+
+### Per-route authorization invariants
+
+- Every data route filters by `userId: req.user._id` — reads and writes.
+- Update payloads are **field-whitelisted**; `userId`, `_id`, version fields
+  and history arrays can never be set by a client (mass-assignment protection).
+- Cross-document references are ownership-checked: an `activityTypeRef`,
+  `habitId` or goal `targetRef` must belong to the requesting user (habits may
+  also be global/predefined). Foreign references return `404`.
+- Admin routes require `isAdmin` (`adminOnly` middleware); the public setup
+  endpoints (`/api/admin/setup*`, `/api/init`) are rate limited and lock
+  themselves once the first admin account exists.
+
+### Session security
+
+- Cookies: `httpOnly`, `SameSite=Lax`, `Secure` in production.
+- Password change/reset invalidates all other sessions (see session version).
+- `TRUST_PROXY` (env) controls how many reverse-proxy hops are trusted for
+  client IPs — required for correct rate limiting behind a proxy.
+
+### Response headers (`server/middleware/securityHeaders.js`)
+
+`X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`,
+`Referrer-Policy: no-referrer`, a Content-Security-Policy for the SPA,
+`Permissions-Policy`, and `Strict-Transport-Security` in production.
+`X-Powered-By` is disabled.
+
+### Data lifecycle
+
+- Deleting a user (admin) cascades to **all** personal data: logs, plans,
+  goals, activity types, habit definitions and settings.
+- ZIP imports are limited (10 MB upload, 64 entries, 50 MB uncompressed) to
+  prevent zip-bomb resource exhaustion.
+
+### Known accepted trade-offs
+
+- Login responses distinguish "unknown username" from "wrong password"
+  (`PASSWORD_REQUIRED` drives the two-step login UI). Username enumeration is
+  accepted for now; revisit before opening registration to the public internet.
+- The rate limiter is in-memory (single instance). For multi-instance
+  deployments move it to a shared store.

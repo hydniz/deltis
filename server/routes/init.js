@@ -15,6 +15,15 @@ const pw = require('../utils/password');
 const config = require('../utils/config');
 const bootstrapConfig = require('../utils/bootstrapConfig');
 const serverState = require('../utils/serverState');
+const { createRateLimiter } = require('../utils/rateLimit');
+
+// The wizard is public until the first admin exists — throttle it so the
+// endpoint cannot be hammered (account-creation spam, setting probing).
+const initLimiter = createRateLimiter({
+  windowMs: 15 * 60 * 1000,
+  max: 30,
+  message: 'Zu viele Versuche. Bitte versuche es später erneut.',
+});
 
 const COOKIE_OPTIONS = {
   httpOnly: true,
@@ -111,7 +120,7 @@ router.get('/status', async (_req, res) => {
 // Public while no credentialed admin exists. Creates the admin account,
 // applies the submitted settings (locked keys are skipped, never applied)
 // and logs the new admin in via the httpOnly JWT cookie.
-router.post('/', async (req, res) => {
+router.post('/', initLimiter, async (req, res) => {
   try {
     if (serverState.setupMode) {
       return res.status(503).json({
@@ -197,7 +206,11 @@ router.post('/', async (req, res) => {
       });
     }
 
-    const token = jwt.sign({ userId: admin._id }, JWT_SECRET, { expiresIn: '30d' });
+    const token = jwt.sign(
+      { userId: admin._id, sv: admin.sessionVersion || 0 },
+      JWT_SECRET,
+      { expiresIn: '30d' }
+    );
     res.cookie('auth_token', token, COOKIE_OPTIONS);
 
     const data = admin.toJSON();
@@ -215,3 +228,5 @@ router.post('/', async (req, res) => {
 });
 
 module.exports = router;
+// Test hook: rate-limiter state is per-process and would bleed between tests.
+module.exports.resetRateLimits = () => initLimiter.reset();

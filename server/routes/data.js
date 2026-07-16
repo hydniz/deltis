@@ -216,6 +216,18 @@ router.post('/import', auth, upload.single('file'), async (req, res) => {
     try { zip = new AdmZip(req.file.buffer); }
     catch { return res.status(400).json({ error: 'Ungültige ZIP-Datei' }); }
 
+    // Zip-bomb guard: the upload itself is capped at 10 MB by multer, but a
+    // crafted archive can decompress to orders of magnitude more. Check the
+    // declared uncompressed sizes BEFORE reading any entry.
+    const entries = zip.getEntries();
+    if (entries.length > 64) {
+      return res.status(400).json({ error: 'Archiv enthält zu viele Dateien.' });
+    }
+    const totalUncompressed = entries.reduce((sum, e) => sum + (e.header.size || 0), 0);
+    if (totalUncompressed > 50 * 1024 * 1024) {
+      return res.status(400).json({ error: 'Archiv ist entpackt zu groß.' });
+    }
+
     const results = { weight: 0, habits: 0, activities: 0, plans: 0, goals: 0, settings: false, errors: [] };
 
     // Helper: resolve or create habit/activity type by name

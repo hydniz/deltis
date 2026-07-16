@@ -53,14 +53,26 @@ router.get('/', auth, async (req, res) => {
   }
 });
 
+// Resolves an activityTypeRef ONLY when it belongs to the requesting user —
+// referencing another user's type is rejected (cross-tenant reference).
+async function resolveOwnActivityType(refId, userId) {
+  const typeDoc = await ActivityType.findOne({ _id: refId, userId }).select('version');
+  if (!typeDoc) {
+    const err = new Error('Aktivitätstyp nicht gefunden');
+    err.status = 404;
+    throw err;
+  }
+  return typeDoc;
+}
+
 router.post('/', auth, async (req, res) => {
   try {
     const { activityType, activityTypeRef, date, duration, distance, notes, customValues } = req.body;
 
     let activityTypeVersion;
     if (activityTypeRef) {
-      const typeDoc = await ActivityType.findById(activityTypeRef).select('version');
-      activityTypeVersion = typeDoc?.version;
+      const typeDoc = await resolveOwnActivityType(activityTypeRef, req.user._id);
+      activityTypeVersion = typeDoc.version;
     }
 
     const activity = await ActivityLog.create({
@@ -76,21 +88,42 @@ router.post('/', auth, async (req, res) => {
     });
     res.status(201).json(activity);
   } catch (err) {
-    res.status(400).json({ error: err.message });
+    res.status(err.status || 400).json({ error: err.message });
   }
 });
 
 router.put('/:id', auth, async (req, res) => {
   try {
+    // Field whitelist: userId/_id and version bookkeeping stay server-owned.
+    const { activityType, activityTypeRef, date, duration, distance, notes, customValues } = req.body;
+    const update = {};
+    if (activityType !== undefined) update.activityType = activityType;
+    if (date !== undefined) update.date = new Date(date);
+    if (duration !== undefined) update.duration = duration;
+    if (distance !== undefined) update.distance = distance;
+    if (notes !== undefined) update.notes = notes;
+    if (customValues !== undefined) update.customValues = customValues || {};
+    const unset = {};
+    if (activityTypeRef !== undefined) {
+      if (activityTypeRef) {
+        const typeDoc = await resolveOwnActivityType(activityTypeRef, req.user._id);
+        update.activityTypeRef = activityTypeRef;
+        update.activityTypeVersion = typeDoc.version;
+      } else {
+        unset.activityTypeRef = 1;
+        unset.activityTypeVersion = 1;
+      }
+    }
+
     const activity = await ActivityLog.findOneAndUpdate(
       { _id: req.params.id, userId: req.user._id },
-      req.body,
+      { $set: update, ...(Object.keys(unset).length ? { $unset: unset } : {}) },
       { new: true }
     );
     if (!activity) return res.status(404).json({ error: 'Nicht gefunden' });
     res.json(activity);
   } catch (err) {
-    res.status(400).json({ error: err.message });
+    res.status(err.status || 400).json({ error: err.message });
   }
 });
 

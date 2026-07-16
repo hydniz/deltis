@@ -11,6 +11,10 @@ const userSchema = new mongoose.Schema({
   isAdmin: { type: Boolean, default: false },
   adminSecretHash: { type: String, select: false },
   weightUnit: { type: String, default: 'kg' },
+  // Incremented on every password change/reset. The JWT carries the value it
+  // was issued with (`sv` claim); a mismatch invalidates the session, so a
+  // stolen cookie dies the moment the password is changed.
+  sessionVersion: { type: Number, default: 0 },
   // First-login setup wizard. Only users created after this feature get
   // `onboardingPending: true`; existing accounts (field absent → false)
   // never see the wizard. `onboardingStep` lets the client resume exactly

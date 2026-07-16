@@ -183,12 +183,13 @@ function checkMetricValid(metric, customFields = []) {
   return { valid: true };
 }
 
-async function enrichGoal(goal) {
+async function enrichGoal(goal, userId) {
   const obj = goal.toObject ? goal.toObject() : { ...goal };
   const isActivity = obj.targetRefModel === 'ActivityType' || obj.targetRefModel === 'activity';
 
   if (isActivity && mongoose.Types.ObjectId.isValid(obj.targetRef)) {
-    const at = await ActivityType.findById(obj.targetRef).select('label customFields').lean();
+    // Scoped to the owner: a foreign targetRef must not leak labels/fields.
+    const at = await ActivityType.findOne({ _id: obj.targetRef, userId }).select('label customFields').lean();
     obj.targetName = at?.label ?? 'Unbekannt';
     obj.customFields = at?.customFields || [];
 
@@ -204,8 +205,13 @@ async function enrichGoal(goal) {
     obj.targetName = typeof obj.targetRef === 'string' ? obj.targetRef : 'Unbekannt';
     obj.customFields = [];
   } else {
-    // Habit-Ziel
-    const hd = await HabitDefinition.findById(obj.targetRef).select('name unitSymbol').lean();
+    // Habit-Ziel — own or global habits only
+    const hd = mongoose.Types.ObjectId.isValid(obj.targetRef)
+      ? await HabitDefinition.findOne({
+          _id: obj.targetRef,
+          $or: [{ userId }, { userId: null }],
+        }).select('name unitSymbol').lean()
+      : null;
     obj.targetName = hd?.name ?? 'Unbekannt';
     obj.customFields = [];
     if (!obj.unitSymbol && hd?.unitSymbol) obj.unitSymbol = hd.unitSymbol;
@@ -218,7 +224,7 @@ async function enrichGoal(goal) {
 router.get('/', auth, async (req, res) => {
   try {
     const goals = await Goal.find({ userId: req.user._id, isActive: true }).sort({ createdAt: -1 });
-    const enriched = await Promise.all(goals.map(enrichGoal));
+    const enriched = await Promise.all(goals.map(g => enrichGoal(g, req.user._id)));
     res.json(enriched);
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -313,26 +319,62 @@ router.get('/:id/progress', auth, async (req, res) => {
   }
 });
 
+// Strips server-owned fields from a goal payload. Everything else is
+// validated by the Mongoose schema (strict mode drops unknown keys).
+function safeGoalBody(body) {
+  const { userId: _u, _id: _i, __v: _v, createdAt: _c, ...safe } = body;
+  return safe;
+}
+
+// A goal may only reference the user's own activity types, or the user's own
+// / global habit definitions — never another user's documents.
+async function assertOwnTargetRef(body, userId) {
+  const { targetRef, targetRefModel } = body;
+  if (targetRef === undefined) return;
+  if (!mongoose.Types.ObjectId.isValid(targetRef)) return; // legacy string label
+
+  const ownActivityType = () => ActivityType.exists({ _id: targetRef, userId });
+  const visibleHabit = () => HabitDefinition.exists({
+    _id: targetRef,
+    $or: [{ userId }, { userId: null }],
+  });
+
+  let ok;
+  if (targetRefModel === 'ActivityType') ok = await ownActivityType();
+  else if (targetRefModel === 'HabitDefinition') ok = await visibleHabit();
+  else ok = (await ownActivityType()) || (await visibleHabit());
+
+  if (!ok) {
+    const err = new Error('Zielobjekt nicht gefunden');
+    err.status = 404;
+    throw err;
+  }
+}
+
 router.post('/', auth, async (req, res) => {
   try {
-    const goal = await Goal.create({ userId: req.user._id, ...req.body });
-    res.status(201).json(await enrichGoal(goal));
+    const body = safeGoalBody(req.body);
+    await assertOwnTargetRef(body, req.user._id);
+    const goal = await Goal.create({ ...body, userId: req.user._id });
+    res.status(201).json(await enrichGoal(goal, req.user._id));
   } catch (err) {
-    res.status(400).json({ error: err.message });
+    res.status(err.status || 400).json({ error: err.message });
   }
 });
 
 router.put('/:id', auth, async (req, res) => {
   try {
+    const body = safeGoalBody(req.body);
+    await assertOwnTargetRef(body, req.user._id);
     const goal = await Goal.findOneAndUpdate(
       { _id: req.params.id, userId: req.user._id },
-      req.body,
+      { $set: body },
       { new: true }
     );
     if (!goal) return res.status(404).json({ error: 'Nicht gefunden' });
-    res.json(await enrichGoal(goal));
+    res.json(await enrichGoal(goal, req.user._id));
   } catch (err) {
-    res.status(400).json({ error: err.message });
+    res.status(err.status || 400).json({ error: err.message });
   }
 });
 
