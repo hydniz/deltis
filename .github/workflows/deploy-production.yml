@@ -15,6 +15,6 @@ jobs:
     uses: ./.github/workflows/deploy.yml
     with:
       environment: production
-      image_ref: habit-tracker:${{ github.ref_name }}
+      image_ref: deltis:${{ github.ref_name }}
       tag_prefix: v
     secrets: inherit

@@ -10,7 +10,7 @@ Exports all user data as a ZIP archive containing CSV and JSON files.
 
 **Response `200`** — `application/zip` binary stream
 
-**Content-Disposition:** `attachment; filename="habit-tracker-export-YYYY-MM-DD.zip"`
+**Content-Disposition:** `attachment; filename="deltis-export-YYYY-MM-DD.zip"`
 
 ### ZIP contents
 

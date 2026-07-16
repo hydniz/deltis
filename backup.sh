@@ -1,5 +1,5 @@
 #!/bin/bash
-# Habit Tracker – Database Backup
+# Deltis – Database Backup
 #
 # Locks write access during backup (the app stays readable).
 # Usage: ./backup.sh
@@ -14,11 +14,11 @@ if [ -f "$SCRIPT_DIR/.env" ]; then
   # shellcheck disable=SC1091
   set -a; . "$SCRIPT_DIR/.env"; set +a
 fi
-CONTAINER_NAME="${DELTIS_INSTANCE:-habit-tracker}-mongo"
+CONTAINER_NAME="${DELTIS_INSTANCE:-deltis}-mongo"
 BACKUP_DIR="$SCRIPT_DIR/backups"
 LOCK_FILE="$BACKUP_DIR/.backup.lock"
 TIMESTAMP=$(date +%Y%m%d_%H%M%S)
-BACKUP_FILE="$BACKUP_DIR/habit_tracker_${TIMESTAMP}.archive.gz"
+BACKUP_FILE="$BACKUP_DIR/deltis_${TIMESTAMP}.archive.gz"
 
 GREEN='\033[0;32m'; RED='\033[0;31m'; YELLOW='\033[1;33m'
 CYAN='\033[0;36m'; BOLD='\033[1m'; NC='\033[0m'
@@ -58,7 +58,7 @@ mkdir -p "$BACKUP_DIR"
 # Backup
 
 echo ""
-echo -e "${BOLD}=== Habit Tracker – Database Backup ===${NC}"
+echo -e "${BOLD}=== Deltis – Database Backup ===${NC}"
 echo ""
 
 info "Locking write access..."
@@ -67,9 +67,9 @@ touch "$LOCK_FILE"
 info "Waiting 2 seconds for in-flight requests..."
 sleep 2
 
-info "Dumping database (habit_tracker → ${BACKUP_FILE##*/})..."
+info "Dumping database (deltis → ${BACKUP_FILE##*/})..."
 $RUNTIME exec "$CONTAINER_NAME" mongodump \
-  --db habit_tracker \
+  --db deltis \
   --archive=/tmp/backup.archive \
   --gzip \
   --quiet

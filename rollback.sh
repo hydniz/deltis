@@ -1,5 +1,5 @@
 #!/bin/bash
-# Habit Tracker – Deployment Rollback
+# Deltis – Deployment Rollback
 #
 # Rolls the app back to the image that was running before the last deploy
 # and optionally restores the pre-deploy database backup.
@@ -64,7 +64,7 @@ fi
 # Confirmation
 
 echo ""
-echo -e "${BOLD}=== Habit Tracker – Rollback ===${NC}"
+echo -e "${BOLD}=== Deltis – Rollback ===${NC}"
 echo ""
 echo -e "  ${CYAN}Roll back to image:${NC}  $PREVIOUS_IMAGE"
 if $WITH_DB; then

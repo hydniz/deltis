@@ -1,5 +1,5 @@
 #!/bin/bash
-# Habit Tracker – Host-mode self-update (started detached by routes/update.js)
+# Deltis – Host-mode self-update (started detached by routes/update.js)
 #
 # Runs OUTSIDE the node process it is about to replace:
 #   1. stop the running app

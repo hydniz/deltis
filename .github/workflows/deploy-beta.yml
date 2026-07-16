@@ -16,7 +16,7 @@ jobs:
       image_ref: ${{ steps.v.outputs.image_ref }}
     steps:
       - id: v
-        run: echo "image_ref=habit-tracker:beta-${GITHUB_SHA::7}" >> "$GITHUB_OUTPUT"
+        run: echo "image_ref=deltis:beta-${GITHUB_SHA::7}" >> "$GITHUB_OUTPUT"
 
   deploy:
     name: Deploy

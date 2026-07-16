@@ -8,7 +8,7 @@ const readline = require('readline');
 const mongoose = require('mongoose');
 const bcrypt = require('bcryptjs');
 
-const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/habit_tracker';
+const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/deltis';
 const MIN_LENGTH = 8;
 const ROUNDS = 12;
 

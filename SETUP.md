@@ -89,7 +89,7 @@ cp .env.production.example .env
 Minimum `.env` for local development:
 
 ```env
-MONGODB_URI=mongodb://localhost:27017/habit_tracker
+MONGODB_URI=mongodb://localhost:27017/deltis
 PORT=3001
 NODE_ENV=development
 

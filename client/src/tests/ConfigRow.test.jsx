@@ -66,7 +66,7 @@ describe('ConfigRow value display', () => {
       type: 'password',
       editable: false,
       bootstrap: true,
-      value: 'mongodb://***:***@db.local:27017/habit_tracker',
+      value: 'mongodb://***:***@db.local:27017/deltis',
       masked: true,
       hasValue: true,
     };
@@ -77,7 +77,7 @@ describe('ConfigRow value display', () => {
       expect(screen.getByText('••••••••')).toBeInTheDocument();
 
       await user.click(screen.getByRole('button', { name: 'Anzeigen' }));
-      expect(screen.getByText('mongodb://***:***@db.local:27017/habit_tracker')).toBeInTheDocument();
+      expect(screen.getByText('mongodb://***:***@db.local:27017/deltis')).toBeInTheDocument();
       expect(screen.getByText(/Zugangsdaten maskiert/)).toBeInTheDocument();
     });
 

@@ -4,8 +4,8 @@
 
 | Trigger | Target | Image tag |
 |---|---|---|
-| Push to `main` | **beta** instance | `habit-tracker:beta-<short-sha>` |
-| Stable release tag `vX.Y.Z` (no `-beta`/`-alpha` suffix) | **production** instance | `habit-tracker:vX.Y.Z` |
+| Push to `main` | **beta** instance | `deltis:beta-<short-sha>` |
+| Stable release tag `vX.Y.Z` (no `-beta`/`-alpha` suffix) | **production** instance | `deltis:vX.Y.Z` |
 
 Both paths use the same reusable pipeline ([deploy.yml](../.github/workflows/deploy.yml)):
 
@@ -69,7 +69,7 @@ compose `.env` file:
 
 ```sh
 # /volume1/deltis/.env          (production – defaults, file may even be omitted)
-DELTIS_INSTANCE=habit-tracker
+DELTIS_INSTANCE=deltis
 APP_PORT=3001
 MONGO_PORT=27017
 
@@ -86,9 +86,46 @@ The pipeline manages the `DELTIS_IMAGE=` line in this file — leave it alone.
 Each directory also needs its own `.env.production` (app secrets, see
 `.env.production.example`); it is not touched by deploys.
 
-The production defaults equal the previous hard-coded names
-(`habit-tracker-app`, `habit-tracker-mongo`, volume `habit-tracker-mongo-data`),
-so the existing instance keeps its containers and data without migration.
+### Migrating an instance created before the rename to Deltis
+
+Instances deployed while the project was still called *habit-tracker* use the old
+default names (`habit-tracker-app`, `habit-tracker-mongo`, volume
+`habit-tracker-mongo-data`) and store their data in the MongoDB database
+`habit_tracker`. All defaults are now `deltis`, so migrate **once, before
+deploying a renamed build** — otherwise the app starts against an empty database.
+
+**Quick path** (keep old container/volume names, only copy the database):
+
+```sh
+# 1. Pin the old names in the instance .env
+echo "DELTIS_INSTANCE=habit-tracker" >> .env
+
+# 2. Copy the database to its new name (app may keep running; writes made
+#    between copy and deploy are lost, so do this right before deploying)
+docker exec habit-tracker-mongo sh -c \
+  "mongodump --db habit_tracker --archive --quiet \
+   | mongorestore --archive --nsFrom 'habit_tracker.*' --nsTo 'deltis.*' --drop --quiet"
+
+# 3. Deploy the renamed build as usual
+```
+
+**Clean path** (fully rename containers and volume, requires downtime):
+
+```sh
+# 1. Copy the database as in step 2 above, then stop the old instance
+docker compose down
+
+# 2. Clone the data volume to its new name
+docker volume create deltis-mongo-data
+docker run --rm -v habit-tracker-mongo-data:/from -v deltis-mongo-data:/to \
+  alpine cp -a /from/. /to/
+
+# 3. Remove any DELTIS_INSTANCE=habit-tracker line from .env, deploy,
+#    verify, then clean up: docker volume rm habit-tracker-mongo-data
+```
+
+Old backups (`habit_tracker_*.archive.gz`) remain restorable — `restore.sh`
+remaps the legacy namespaces to `deltis` automatically.
 
 ## Releasing
 

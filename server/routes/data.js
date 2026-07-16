@@ -196,7 +196,7 @@ router.get('/export', auth, async (req, res) => {
     zip.addFile('habit_plans.json',    Buffer.from(habitPlansJson,'utf8'));
     zip.addFile('goals.json',          Buffer.from(goalsJson,     'utf8'));
 
-    const filename = `habit-tracker-export-${new Date().toISOString().slice(0, 10)}.zip`;
+    const filename = `deltis-export-${new Date().toISOString().slice(0, 10)}.zip`;
     res.setHeader('Content-Type', 'application/zip');
     res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
     res.end(zip.toBuffer());

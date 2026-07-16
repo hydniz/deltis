@@ -1,7 +1,7 @@
 // Node-native MongoDB backup / restore for the migration runner.
 //
 // Runs entirely inside the Node process: no mongodump CLI, no Docker socket.
-// Sufficient for the small (<10 MB) datasets of a personal habit tracker; not
+// Sufficient for the small (<10 MB) datasets of a personal Deltis instance; not
 // intended as a general-purpose backup solution.
 //
 // Format: gzipped Extended-JSON (EJSON) — preserves all BSON types

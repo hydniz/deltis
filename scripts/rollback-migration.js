@@ -18,7 +18,7 @@ const mongoose = require('mongoose');
 
 const { restoreBackup, listBackups, defaultDir } = require('../server/migrations/backup');
 
-const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/habit_tracker';
+const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/deltis';
 
 function prettySize(file) {
   try {

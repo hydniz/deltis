@@ -146,7 +146,7 @@ const { runMigrations } = require('./migrations/runner');
 const appConfig = require('./utils/config');
 
 async function connectAndInit() {
-  const uri = bootstrapConfig.get('MONGODB_URI') || 'mongodb://localhost:27017/habit_tracker';
+  const uri = bootstrapConfig.get('MONGODB_URI') || 'mongodb://localhost:27017/deltis';
   await mongoose.connect(uri, { serverSelectionTimeoutMS: 5000 });
 
   mongoose.connection.on('error', err => {

@@ -191,7 +191,7 @@ function StepDatabase({ onDone }) {
             mono
             value={uri}
             onChange={e => { setUri(e.target.value); setError(''); }}
-            placeholder="mongodb://localhost:27017/habit_tracker"
+            placeholder="mongodb://localhost:27017/deltis"
             autoFocus
           />
         </Field>
