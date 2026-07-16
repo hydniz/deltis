@@ -158,7 +158,7 @@ function ExportImport() {
       const url = URL.createObjectURL(new Blob([res.data], { type: 'application/zip' }));
       const a = document.createElement('a');
       a.href = url;
-      a.download = `habit-tracker-export-${new Date().toISOString().slice(0, 10)}.zip`;
+      a.download = `deltis-export-${new Date().toISOString().slice(0, 10)}.zip`;
       a.click();
       URL.revokeObjectURL(url);
     } catch {

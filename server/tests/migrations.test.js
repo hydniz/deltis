@@ -21,7 +21,7 @@ function restoreConsole() {
 
 // Track tmp dirs/files for cleanup in afterEach.
 const tmpResources = [];
-function tmpDir(prefix = 'habit-tracker-mig-test-') {
+function tmpDir(prefix = 'deltis-mig-test-') {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), prefix));
   tmpResources.push(dir);
   return dir;
@@ -355,7 +355,7 @@ describe('migration runner — schema-ahead-of-code guard', () => {
 describe('migration runner — lock and index invariants', () => {
   it('releases the migration lock even when a migration fails', async () => {
     const dir = tmpDir();
-    const backupDir = tmpDir('habit-tracker-mig-backup-');
+    const backupDir = tmpDir('deltis-mig-backup-');
     writeMigration(dir, '001', 'fail', `    throw new Error('intentional');`);
 
     const MigrationLock = require('../models/MigrationLock');
@@ -372,7 +372,7 @@ describe('migration runner — lock and index invariants', () => {
 
   it('unique indexes survive a failed-migration rollback (syncIndexes runs after restore)', async () => {
     const dir = tmpDir();
-    const backupDir = tmpDir('habit-tracker-mig-backup-');
+    const backupDir = tmpDir('deltis-mig-backup-');
 
     const UserHabitSettings = require('../models/UserHabitSettings');
     const uid = new mongoose.Types.ObjectId();

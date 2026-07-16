@@ -1,5 +1,5 @@
 #!/bin/bash
-# Habit Tracker – Database Restore
+# Deltis – Database Restore
 #
 # Stops the app, restores a backup, then restarts the app.
 # MongoDB stays running throughout.
@@ -23,9 +23,9 @@ if [ -f "$SCRIPT_DIR/.env" ]; then
   # shellcheck disable=SC1091
   set -a; . "$SCRIPT_DIR/.env"; set +a
 fi
-CONTAINER_NAME="${DELTIS_INSTANCE:-habit-tracker}-mongo"
-APP_CONTAINER="${DELTIS_INSTANCE:-habit-tracker}-app"
-APP_IMAGE="${DELTIS_IMAGE:-habit-tracker:latest}"
+CONTAINER_NAME="${DELTIS_INSTANCE:-deltis}-mongo"
+APP_CONTAINER="${DELTIS_INSTANCE:-deltis}-app"
+APP_IMAGE="${DELTIS_IMAGE:-deltis:latest}"
 BACKUP_DIR="$SCRIPT_DIR/backups"
 PRE_MIGRATION_DIR="$BACKUP_DIR/pre-migration"
 PRE_UPDATE_DIR="$BACKUP_DIR/pre-update"
@@ -146,7 +146,7 @@ SIZE=$(du -sh "$BACKUP_FILE" | cut -f1)
 # Confirmation
 
 echo ""
-echo -e "${BOLD}=== Habit Tracker – Restore Database ===${NC}"
+echo -e "${BOLD}=== Deltis – Restore Database ===${NC}"
 echo ""
 echo -e "  ${CYAN}Backup file:${NC}  $BACKUP_FILE"
 echo -e "  ${CYAN}Format:${NC}       $FORMAT"
@@ -201,8 +201,12 @@ touch "$LOCK_FILE"
 if [ "$FORMAT" = "archive" ]; then
   info "Restoring from mongodump archive..."
   $RUNTIME cp "$BACKUP_FILE" "${CONTAINER_NAME}:/tmp/restore.archive"
+  # Archives created before the rename to Deltis used the DB name
+  # "habit_tracker" – remap those namespaces to "deltis" on restore.
   $RUNTIME exec "$CONTAINER_NAME" mongorestore \
-    --db habit_tracker \
+    --nsInclude 'deltis.*' \
+    --nsInclude 'habit_tracker.*' \
+    --nsFrom 'habit_tracker.*' --nsTo 'deltis.*' \
     --archive=/tmp/restore.archive \
     --gzip \
     --drop \
@@ -221,7 +225,7 @@ elif [ "$FORMAT" = "ejson" ]; then
     node -e "
       const mongoose = require('mongoose');
       const { restoreBackup } = require('./server/migrations/backup');
-      mongoose.connect('mongodb://127.0.0.1:27017/habit_tracker')
+      mongoose.connect('mongodb://127.0.0.1:27017/deltis')
         .then(() => restoreBackup({ db: mongoose.connection.db, file: '/tmp/restore.ejson.gz' }))
         .then(() => { console.log('Restore complete.'); process.exit(0); })
         .catch(err => { console.error(err.message); process.exit(1); });

@@ -35,7 +35,7 @@ const UserHabitSettings = require('../server/models/UserHabitSettings');
 const WeightLog = require('../server/models/WeightLog');
 const Goal = require('../server/models/Goal');
 
-const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/habit_tracker';
+const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/deltis';
 const DEMO_PASSWORD = 'demo1234';
 const WEEKS = 10;
 

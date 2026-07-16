@@ -37,7 +37,7 @@ export const CONFIG_HELP = {
       <>
         <p>
           Die Verbindungszeichenkette zur MongoDB, z.B.
-          <code>mongodb://localhost:27017/habit_tracker</code>.
+          <code>mongodb://localhost:27017/deltis</code>.
         </p>
         <p>
           Aus Sicherheitsgründen werden eingebettete Zugangsdaten maskiert

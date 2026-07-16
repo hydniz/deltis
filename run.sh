@@ -1,12 +1,12 @@
 #!/bin/bash
-# Habit Tracker – Start/Stop Script
+# Deltis – Start/Stop Script
 # Usage: ./run.sh [start|stop|restart|status|logs|prod|compose:up|compose:down]
 
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-CONTAINER_NAME="habit-tracker-mongo"
-MONGO_VOLUME="habit-tracker-mongo-data"
+CONTAINER_NAME="deltis-mongo"
+MONGO_VOLUME="deltis-mongo-data"
 PID_FILE="$SCRIPT_DIR/.run.pid"
 LOG_FILE="$SCRIPT_DIR/.run.log"
 
@@ -111,7 +111,7 @@ get_compose() {
 }
 
 cmd_compose_up() {
-  echo -e "\n${BOLD}Habit Tracker – Production (Compose)${NC}\n"
+  echo -e "\n${BOLD}Deltis – Production (Compose)${NC}\n"
   if [ ! -f "$SCRIPT_DIR/.env.production" ]; then
     err ".env.production not found!"
     exit 1
@@ -124,7 +124,7 @@ cmd_compose_up() {
 }
 
 cmd_compose_down() {
-  echo -e "\n${BOLD}Habit Tracker – Stop Production${NC}\n"
+  echo -e "\n${BOLD}Deltis – Stop Production${NC}\n"
   cd "$SCRIPT_DIR"
   COMPOSE=$(get_compose)
   $COMPOSE down
@@ -146,7 +146,7 @@ cmd_compose_rebuild() {
 # Commands
 
 cmd_start() {
-  echo -e "\n${BOLD}Habit Tracker – Development Mode${NC}\n"
+  echo -e "\n${BOLD}Deltis – Development Mode${NC}\n"
 
   if server_running; then
     err "App is already running (PID: $(cat "$PID_FILE"))"
@@ -167,14 +167,14 @@ cmd_start() {
     exit 1
   fi
 
-  echo -e "\n${GREEN}${BOLD}✓ Habit Tracker is running!${NC}"
+  echo -e "\n${GREEN}${BOLD}✓ Deltis is running!${NC}"
   echo -e "  ${CYAN}Network:${NC}  http://192.168.80.57:5173"
   echo -e "  ${CYAN}Local:${NC}    http://localhost:5173"
   echo -e ""
 }
 
 cmd_stop() {
-  echo -e "\n${BOLD}Habit Tracker – Stopping${NC}\n"
+  echo -e "\n${BOLD}Deltis – Stopping${NC}\n"
   stop_server
   stop_mongo
   echo -e "\n${GREEN}All stopped.${NC}\n"
@@ -187,7 +187,7 @@ cmd_restart() {
 }
 
 cmd_status() {
-  echo -e "\n${BOLD}=== Habit Tracker Status ===${NC}\n"
+  echo -e "\n${BOLD}=== Deltis Status ===${NC}\n"
   mongo_running && echo -e "  MongoDB:  ${GREEN}● running${NC}" || echo -e "  MongoDB:  ${RED}● stopped${NC}"
   server_running && echo -e "  Server:   ${GREEN}● running${NC}" || echo -e "  Server:   ${RED}● stopped${NC}"
   echo ""
@@ -198,7 +198,7 @@ cmd_logs() {
 }
 
 cmd_prod() {
-  echo -e "\n${BOLD}Habit Tracker – Production${NC}\n"
+  echo -e "\n${BOLD}Deltis – Production${NC}\n"
   if server_running; then err "App is already running."; exit 1; fi
 
   cd "$SCRIPT_DIR"

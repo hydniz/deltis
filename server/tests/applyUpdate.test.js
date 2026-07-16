@@ -18,10 +18,10 @@ afterAll(() => fs.rmSync(tmpDir, { recursive: true, force: true }));
 function appInspect(overrides = {}) {
   return {
     Id: 'aaaaaaaaaaaabbbbbbbbbbbb',
-    Name: '/habit-tracker-app',
+    Name: '/deltis-app',
     Config: {
       Image: 'hydniz/deltis:1.0.0',
-      Env: ['NODE_ENV=production', 'MONGODB_URI=mongodb://mongo:27017/habit_tracker', 'PATH=/usr/bin'],
+      Env: ['NODE_ENV=production', 'MONGODB_URI=mongodb://mongo:27017/deltis', 'PATH=/usr/bin'],
       Labels: { 'com.docker.compose.service': 'app' },
       ExposedPorts: { '3001/tcp': {} },
     },
@@ -51,7 +51,7 @@ describe('buildReplacementConfig', () => {
   it('keeps only runtime env vars and drops image-baked ones', async () => {
     const cfg = await buildReplacementConfig(appInspect(), 'hydniz/deltis:2.0.0');
     expect(cfg.Image).toBe('hydniz/deltis:2.0.0');
-    expect(cfg.Env).toEqual(['MONGODB_URI=mongodb://mongo:27017/habit_tracker']);
+    expect(cfg.Env).toEqual(['MONGODB_URI=mongodb://mongo:27017/deltis']);
     expect(cfg.HostConfig.Binds).toEqual(['/host/backups:/app/backups']);
   });
 
@@ -84,7 +84,7 @@ describe('waitHealthy', () => {
 });
 
 describe('doUpdate', () => {
-  const spec = { appName: 'habit-tracker-app', newImage: 'hydniz/deltis:2.0.0', healthTimeoutSec: 30 };
+  const spec = { appName: 'deltis-app', newImage: 'hydniz/deltis:2.0.0', healthTimeoutSec: 30 };
 
   it('swaps the container and records started-new on success', async () => {
     docker.inspectContainer
@@ -97,15 +97,15 @@ describe('doUpdate', () => {
     expect(code).toBe(0);
 
     expect(docker.stopContainer).toHaveBeenCalledWith('aaaaaaaaaaaabbbbbbbbbbbb', 30);
-    expect(docker.renameContainer).toHaveBeenCalledWith('aaaaaaaaaaaabbbbbbbbbbbb', 'habit-tracker-app-old');
-    expect(docker.createContainer).toHaveBeenCalledWith('habit-tracker-app', expect.objectContaining({
+    expect(docker.renameContainer).toHaveBeenCalledWith('aaaaaaaaaaaabbbbbbbbbbbb', 'deltis-app-old');
+    expect(docker.createContainer).toHaveBeenCalledWith('deltis-app', expect.objectContaining({
       Image: 'hydniz/deltis:2.0.0',
     }));
     expect(docker.startContainer).toHaveBeenCalledWith('new123456789');
 
     const st = state.read();
     expect(st.phase).toBe('started-new');
-    expect(st.oldContainerName).toBe('habit-tracker-app-old');
+    expect(st.oldContainerName).toBe('deltis-app-old');
   });
 
   it('automatically restores the old container when the new one is unhealthy', async () => {
@@ -121,8 +121,8 @@ describe('doUpdate', () => {
 
     // Recovery: failed container removed, old renamed back and started.
     expect(docker.removeContainer).toHaveBeenCalledWith('new123456789', true);
-    expect(docker.renameContainer).toHaveBeenCalledWith('habit-tracker-app-old', 'habit-tracker-app');
-    expect(docker.startContainer).toHaveBeenLastCalledWith('habit-tracker-app');
+    expect(docker.renameContainer).toHaveBeenCalledWith('deltis-app-old', 'deltis-app');
+    expect(docker.startContainer).toHaveBeenLastCalledWith('deltis-app');
 
     const st = state.read();
     expect(st.phase).toBe('failed');
@@ -148,19 +148,19 @@ describe('doUpdate', () => {
 });
 
 describe('doRollback', () => {
-  const spec = { appName: 'habit-tracker-app', healthTimeoutSec: 30 };
+  const spec = { appName: 'deltis-app', healthTimeoutSec: 30 };
 
   it('swaps the old container back in', async () => {
     docker.inspectContainer
-      .mockResolvedValueOnce({ Id: 'old', Name: '/habit-tracker-app-old' }) // rollback target exists
+      .mockResolvedValueOnce({ Id: 'old', Name: '/deltis-app-old' }) // rollback target exists
       .mockRejectedValueOnce(new Error('no such container'))               // -failed does not exist
       .mockResolvedValue(healthyInspect());                                // health polling
     const code = await doRollback(spec);
     expect(code).toBe(0);
 
-    expect(docker.stopContainer).toHaveBeenCalledWith('habit-tracker-app', 30);
-    expect(docker.renameContainer).toHaveBeenCalledWith('habit-tracker-app', 'habit-tracker-app-failed');
-    expect(docker.renameContainer).toHaveBeenCalledWith('habit-tracker-app-old', 'habit-tracker-app');
+    expect(docker.stopContainer).toHaveBeenCalledWith('deltis-app', 30);
+    expect(docker.renameContainer).toHaveBeenCalledWith('deltis-app', 'deltis-app-failed');
+    expect(docker.renameContainer).toHaveBeenCalledWith('deltis-app-old', 'deltis-app');
     expect(state.read().phase).toBe('rolled-back');
   });
 

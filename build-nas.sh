@@ -1,5 +1,5 @@
 #!/bin/bash
-# Habit Tracker – Build and export Docker image for NAS deployment
+# Deltis – Build and export Docker image for NAS deployment
 #
 # Builds a linux/amd64 image (compatible with most NAS devices) and saves
 # it as a .tar.gz archive for transfer to the NAS.
@@ -10,7 +10,7 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PLATFORM="linux/amd64"
-IMAGE="habit-tracker:latest"
+IMAGE="deltis:latest"
 
 # Use podman if available, fall back to docker
 if command -v podman &>/dev/null; then
@@ -29,12 +29,12 @@ else
   echo "Target architecture: amd64 (default for most NAS devices)"
 fi
 
-EXPORT_FILE="$SCRIPT_DIR/habit-tracker-$(date +%Y%m%d).tar.gz"
+EXPORT_FILE="$SCRIPT_DIR/deltis-$(date +%Y%m%d).tar.gz"
 
 GREEN='\033[0;32m'; CYAN='\033[0;36m'; BOLD='\033[1m'; NC='\033[0m'
 
 echo ""
-echo -e "${BOLD}=== Habit Tracker – NAS Build ===${NC}"
+echo -e "${BOLD}=== Deltis – NAS Build ===${NC}"
 echo ""
 
 echo -e "${CYAN}→${NC} Building image (${PLATFORM})..."
@@ -52,7 +52,7 @@ echo ""
 echo -e "${BOLD}Next steps:${NC}"
 echo ""
 echo -e "  1. Copy files to your NAS:"
-echo -e "     ${CYAN}scp $(basename "$EXPORT_FILE") .env.production.example docker-compose.yml backup.sh restore.sh <user>@<nas-ip>:/path/habit-tracker/${NC}"
+echo -e "     ${CYAN}scp $(basename "$EXPORT_FILE") .env.production.example docker-compose.yml backup.sh restore.sh <user>@<nas-ip>:/path/deltis/${NC}"
 echo ""
 echo -e "  2. On the NAS: rename .env.production.example → .env.production and fill in values"
 echo -e "     ${CYAN}cp .env.production.example .env.production${NC}"

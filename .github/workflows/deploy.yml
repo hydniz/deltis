@@ -17,7 +17,7 @@ on:
         required: true
         type: string
       image_ref:
-        description: 'Full image ref to build and deploy (e.g. habit-tracker:v1.2.3)'
+        description: 'Full image ref to build and deploy (e.g. deltis:v1.2.3)'
         required: true
         type: string
       tag_prefix:

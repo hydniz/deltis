@@ -1,5 +1,5 @@
 #!/bin/bash
-# Habit Tracker – Server-side deploy step (executed via SSH by the CI pipeline)
+# Deltis – Server-side deploy step (executed via SSH by the CI pipeline)
 #
 # Runs inside the instance directory (TARGET_DIR) after the CI has copied:
 #   - the new image as a gzipped tar archive
@@ -14,7 +14,7 @@
 #
 # Must be run from inside the instance directory:
 #   cd $TARGET_DIR && bash scripts/deploy-remote.sh <image-tar.gz> <new-image-ref> <tag-prefix>
-#   e.g. bash scripts/deploy-remote.sh deltis-deploy.tar.gz habit-tracker:v1.2.3 v
+#   e.g. bash scripts/deploy-remote.sh deltis-deploy.tar.gz deltis:v1.2.3 v
 
 set -euo pipefail
 
@@ -35,7 +35,7 @@ if [ -f "$ENV_FILE" ]; then
   # shellcheck disable=SC1091
   set -a; . "$ENV_FILE"; set +a
 fi
-INSTANCE="${DELTIS_INSTANCE:-habit-tracker}"
+INSTANCE="${DELTIS_INSTANCE:-deltis}"
 MONGO_CONTAINER="${INSTANCE}-mongo"
 APP_CONTAINER="${INSTANCE}-app"
 
@@ -49,7 +49,7 @@ if docker container inspect "$MONGO_CONTAINER" --format '{{.State.Running}}' 2>/
   BACKUP_FILE="backups/predeploy_$(date +%Y%m%d_%H%M%S).archive.gz"
   echo "→ Pre-deploy backup: $BACKUP_FILE"
   docker exec "$MONGO_CONTAINER" mongodump \
-    --db habit_tracker \
+    --db deltis \
     --archive=/tmp/pre_deploy.archive \
     --gzip --quiet
   docker cp "$MONGO_CONTAINER:/tmp/pre_deploy.archive" "$BACKUP_FILE"

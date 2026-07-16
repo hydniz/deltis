@@ -7,18 +7,18 @@ afterEach(() => cfg._resetCache());
 
 describe('maskCredentials', () => {
   it('masks user and password but keeps host and database', () => {
-    expect(cfg.maskCredentials('mongodb://admin:s3cret@db.local:27017/habit_tracker'))
-      .toBe('mongodb://***:***@db.local:27017/habit_tracker');
+    expect(cfg.maskCredentials('mongodb://admin:s3cret@db.local:27017/deltis'))
+      .toBe('mongodb://***:***@db.local:27017/deltis');
   });
 
   it('masks a username even without a password', () => {
-    expect(cfg.maskCredentials('mongodb://admin@db.local/habit_tracker'))
-      .toBe('mongodb://***:***@db.local/habit_tracker');
+    expect(cfg.maskCredentials('mongodb://admin@db.local/deltis'))
+      .toBe('mongodb://***:***@db.local/deltis');
   });
 
   it('leaves a URI without credentials untouched', () => {
-    expect(cfg.maskCredentials('mongodb://localhost:27017/habit_tracker'))
-      .toBe('mongodb://localhost:27017/habit_tracker');
+    expect(cfg.maskCredentials('mongodb://localhost:27017/deltis'))
+      .toBe('mongodb://localhost:27017/deltis');
   });
 
   it('handles mongodb+srv URIs', () => {
@@ -54,9 +54,9 @@ describe('getDisplayValue', () => {
 
   it('does not call a URI masked when it had no credentials to mask', () => {
     const backup = process.env.MONGODB_URI;
-    process.env.MONGODB_URI = 'mongodb://localhost:27017/habit_tracker';
+    process.env.MONGODB_URI = 'mongodb://localhost:27017/deltis';
     expect(cfg.getDisplayValue('MONGODB_URI')).toEqual({
-      value: 'mongodb://localhost:27017/habit_tracker',
+      value: 'mongodb://localhost:27017/deltis',
       masked: false,
     });
     if (backup === undefined) delete process.env.MONGODB_URI;

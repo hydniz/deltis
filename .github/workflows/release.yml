@@ -46,29 +46,29 @@ jobs:
         run: |
           docker build \
             --build-arg GIT_COMMIT=$(git rev-parse --short HEAD) \
-            -t habit-tracker:${{ github.ref_name }} .
+            -t deltis:${{ github.ref_name }} .
 
       - name: Prepare release assets
         run: |
           mkdir release
 
           # Save the versioned app image as a tar.gz
-          docker save habit-tracker:${{ github.ref_name }} \
-            | gzip > release/habit-tracker-${{ github.ref_name }}.tar.gz
+          docker save deltis:${{ github.ref_name }} \
+            | gzip > release/deltis-${{ github.ref_name }}.tar.gz
 
           # Generate a release-ready docker-compose.yml:
           #   - remove "build: ." so no source code is needed
           #   - pin the DELTIS_IMAGE default to the released version tag
           sed \
             -e '/^\s*build:/d' \
-            -e 's|habit-tracker:latest|habit-tracker:${{ github.ref_name }}|g' \
+            -e 's|deltis:latest|deltis:${{ github.ref_name }}|g' \
             docker-compose.yml > release/docker-compose.yml
 
       - name: Upload assets to GitHub Release
         uses: softprops/action-gh-release@v2
         with:
           files: |
-            release/habit-tracker-${{ github.ref_name }}.tar.gz
+            release/deltis-${{ github.ref_name }}.tar.gz
             release/docker-compose.yml
           body: |
             ## Installation
@@ -76,7 +76,7 @@ jobs:
             1. Lade beide Dateien herunter.
             2. Lade das Docker-Image:
                ```sh
-               docker load < habit-tracker-${{ github.ref_name }}.tar.gz
+               docker load < deltis-${{ github.ref_name }}.tar.gz
                ```
             3. Erstelle eine `.env.production`-Datei (Vorlage im Repository).
             4. Starte die Anwendung:

@@ -8,7 +8,7 @@ services:
   # docs/DEPLOYMENT.md.
   mongo:
     image: mongo:7
-    container_name: ${DELTIS_INSTANCE:-habit-tracker}-mongo
+    container_name: ${DELTIS_INSTANCE:-deltis}-mongo
     volumes:
       - mongo_data:/data/db
     ports:
@@ -24,8 +24,8 @@ services:
   # App (Express + pre-built React frontend)
   app:
     build: .
-    image: ${DELTIS_IMAGE:-habit-tracker:latest}
-    container_name: ${DELTIS_INSTANCE:-habit-tracker}-app
+    image: ${DELTIS_IMAGE:-deltis:latest}
+    container_name: ${DELTIS_INSTANCE:-deltis}-app
     ports:
       - "${APP_PORT:-3001}:3001"
     volumes:
@@ -44,7 +44,7 @@ services:
       NODE_ENV: production
       # Override MONGODB_URI from .env.production – inside the container
       # MongoDB is reachable via the service name 'mongo', not localhost.
-      MONGODB_URI: mongodb://mongo:27017/habit_tracker
+      MONGODB_URI: mongodb://mongo:27017/deltis
     depends_on:
       mongo:
         condition: service_healthy
@@ -54,4 +54,4 @@ volumes:
   mongo_data:
     # Instance-scoped volume name – two instances on one host must never share
     # the same MongoDB data directory.
-    name: ${DELTIS_INSTANCE:-habit-tracker}-mongo-data
+    name: ${DELTIS_INSTANCE:-deltis}-mongo-data

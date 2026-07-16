@@ -1,5 +1,5 @@
-# Habit Tracker - Project Guidelines
-This habit tracker is called Deltis which is a variation of delta.
+# Deltis - Project Guidelines
+The application is called Deltis, which is a variation of delta.
 
 ## Context
 A self-hosted personal habit called deltis and activity tracking PWA. Designed for NAS deployment via Docker.

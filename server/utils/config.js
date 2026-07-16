@@ -86,7 +86,7 @@ const DEFINITIONS = {
     // any user:password in the authority section is masked away.
     expose: 'credentials',
     restartRequired: true,
-    default: 'mongodb://localhost:27017/habit_tracker',
+    default: 'mongodb://localhost:27017/deltis',
   },
   // Sicherheit
   // editable: false keeps the standard PUT /api/admin/config/:key route from

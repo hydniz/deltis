@@ -176,14 +176,14 @@ describe('GET /api/admin/config', () => {
 
     it('masks credentials in the MongoDB URI but keeps host and database', async () => {
       const envBackup = process.env.MONGODB_URI;
-      process.env.MONGODB_URI = 'mongodb://admin:s3cret@db.local:27017/habit_tracker';
+      process.env.MONGODB_URI = 'mongodb://admin:s3cret@db.local:27017/deltis';
 
       const { token } = await createAdminUser();
       const res = await request(app)
         .get('/api/admin/config')
         .set(authHeader(token));
       const entry = res.body.find(e => e.key === 'MONGODB_URI');
-      expect(entry.value).toBe('mongodb://***:***@db.local:27017/habit_tracker');
+      expect(entry.value).toBe('mongodb://***:***@db.local:27017/deltis');
       expect(entry.value).not.toContain('s3cret');
       expect(entry.value).not.toContain('admin');
       expect(entry.masked).toBe(true);
@@ -195,14 +195,14 @@ describe('GET /api/admin/config', () => {
 
     it('returns a credential-free MongoDB URI unmasked', async () => {
       const envBackup = process.env.MONGODB_URI;
-      process.env.MONGODB_URI = 'mongodb://localhost:27017/habit_tracker';
+      process.env.MONGODB_URI = 'mongodb://localhost:27017/deltis';
 
       const { token } = await createAdminUser();
       const res = await request(app)
         .get('/api/admin/config')
         .set(authHeader(token));
       const entry = res.body.find(e => e.key === 'MONGODB_URI');
-      expect(entry.value).toBe('mongodb://localhost:27017/habit_tracker');
+      expect(entry.value).toBe('mongodb://localhost:27017/deltis');
       // Nothing was hidden, so the row must not claim otherwise.
       expect(entry.masked).toBeUndefined();
 
