@@ -498,6 +498,50 @@ describe('bundled migrations', () => {
     expect(settings.habitSettings[habitId1.toString()]).toEqual({ goal: 8 });
   });
 
+  it('003-habit-selection-opt-in grandfathers habit users, moves the rest to opt-in', async () => {
+    const backupDir = tmpDir('mig-backup-');
+    const UserHabitSettings = require('../models/UserHabitSettings');
+
+    const users = mongoose.connection.collection('users');
+    const habits = mongoose.connection.collection('habitdefinitions');
+    const logs = mongoose.connection.collection('habitlogs');
+
+    const globalHabit = (await habits.insertOne({
+      userId: null, name: 'Wasser', unitSymbol: 'ml', type: 'amount',
+      isPredefined: true, version: 1, nameHistory: [], createdAt: new Date(),
+    })).insertedId;
+    const hiddenHabit = (await habits.insertOne({
+      userId: null, name: 'Kreatin', unitSymbol: 'g', type: 'amount',
+      isPredefined: true, version: 1, nameHistory: [], createdAt: new Date(),
+    })).insertedId;
+
+    // 1: used habits, no explicit selection → grandfathered (minus hidden)
+    const legacyUser = (await users.insertOne({ uuid: 'legacy-1', name: 'Legacy', createdAt: new Date() })).insertedId;
+    await logs.insertOne({ userId: legacyUser, habitId: globalHabit, habitVersion: 1, date: new Date(), value: 1, createdAt: new Date() });
+    await UserHabitSettings.create({ userId: legacyUser, hiddenHabitIds: [hiddenHabit], hasSelection: false });
+
+    // 2: never logged a habit → falls through to opt-in (no settings written)
+    const freshUser = (await users.insertOne({ uuid: 'fresh-1', name: 'Fresh', createdAt: new Date() })).insertedId;
+
+    // 3: explicit selection → untouched
+    const pickyUser = (await users.insertOne({ uuid: 'picky-1', name: 'Picky', createdAt: new Date() })).insertedId;
+    await logs.insertOne({ userId: pickyUser, habitId: globalHabit, habitVersion: 1, date: new Date(), value: 1, createdAt: new Date() });
+    await UserHabitSettings.create({ userId: pickyUser, selectedHabitIds: [hiddenHabit], hasSelection: true });
+
+    silenceConsole();
+    await runMigrations({ dir: realMigrationsDir, backupDir, exitOnFailure: false });
+    restoreConsole();
+
+    const legacySettings = await UserHabitSettings.findOne({ userId: legacyUser });
+    expect(legacySettings.hasSelection).toBe(true);
+    expect(legacySettings.selectedHabitIds.map(id => id.toString())).toEqual([globalHabit.toString()]);
+
+    expect(await UserHabitSettings.findOne({ userId: freshUser })).toBeNull();
+
+    const pickySettings = await UserHabitSettings.findOne({ userId: pickyUser });
+    expect(pickySettings.selectedHabitIds.map(id => id.toString())).toEqual([hiddenHabit.toString()]);
+  });
+
   it('bundled migrations end up recorded with the correct names', async () => {
     const backupDir = tmpDir('mig-backup-');
     silenceConsole();
@@ -506,7 +550,7 @@ describe('bundled migrations', () => {
 
     const Migration = require('../models/Migration');
     const names = (await Migration.find().sort({ appliedAt: 1 }).lean()).map(m => m.name);
-    expect(names).toEqual(['001-versioned-refs', '002-habit-settings']);
+    expect(names).toEqual(['001-versioned-refs', '002-habit-settings', '003-habit-selection-opt-in']);
   });
 });
 

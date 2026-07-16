@@ -157,9 +157,9 @@ describe('habit selection after onboarding', () => {
       isPredefined: true, version: 1, nameHistory: [],
     });
 
-    // Before any selection: everything counts as selected (legacy default)
+    // Before any selection: nothing counts as selected (opt-in default)
     let res = await request(app).get('/api/habits/definitions').set(authHeader(token));
-    expect(res.body[0].selected).toBe(true);
+    expect(res.body[0].selected).toBe(false);
 
     await request(app)
       .put('/api/habits/selection')

@@ -38,8 +38,10 @@ describe('Session expiry mid-use', () => {
       () => expect(screen.getByPlaceholderText('Dein Benutzername')).toBeInTheDocument(),
       { timeout: 3000 }
     );
-    // … with an explanation.
-    expect(screen.getByText('Deine Sitzung ist abgelaufen. Bitte melde dich erneut an.')).toBeInTheDocument();
+    // … with an explanation. findByText: the notice appears only after
+    // Login's mount effect has read the expiry flag — a sync getByText
+    // races that effect and flakes.
+    expect(await screen.findByText('Deine Sitzung ist abgelaufen. Bitte melde dich erneut an.')).toBeInTheDocument();
     expect(sessionStorage.getItem(SESSION_EXPIRED_KEY)).toBeNull();
   });
 
