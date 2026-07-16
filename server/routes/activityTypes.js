@@ -97,11 +97,13 @@ router.get('/', auth, async (req, res) => {
 
 router.post('/', auth, async (req, res) => {
   try {
+    // Server-owned fields last: the client must not override userId,
+    // version or nameHistory (mass assignment).
     const type = await ActivityType.create({
+      ...req.body,
       userId: req.user._id,
       version: 1,
       nameHistory: [],
-      ...req.body,
     });
     res.status(201).json(type);
   } catch (err) {

@@ -19,6 +19,17 @@ const COOKIE_OPTIONS = {
   maxAge: 30 * 24 * 60 * 60 * 1000, // 30 days
 };
 
+// Signs a session JWT bound to the user's current sessionVersion and sets the
+// httpOnly cookie. Bumping sessionVersion (password change) kills the token.
+function issueSession(res, user) {
+  const token = jwt.sign(
+    { userId: user._id, sv: user.sessionVersion || 0 },
+    JWT_SECRET,
+    { expiresIn: '30d' }
+  );
+  res.cookie('auth_token', token, COOKIE_OPTIONS);
+}
+
 // Abuse protection: registration is strictly limited, login gets a generous
 // brute-force guard. In-memory per IP — fine for a single-instance NAS setup.
 const registerLimiter = createRateLimiter({
@@ -89,8 +100,7 @@ router.post('/register', registerLimiter, async (req, res) => {
       onboardingPending: true, // self-registered users get the setup wizard
     });
 
-    const token = jwt.sign({ userId: user._id }, JWT_SECRET, { expiresIn: '30d' });
-    res.cookie('auth_token', token, COOKIE_OPTIONS);
+    issueSession(res, user);
 
     const data = user.toJSON();
     data.hasPassword = true;
@@ -103,7 +113,14 @@ router.post('/register', registerLimiter, async (req, res) => {
 router.post('/login', loginLimiter, async (req, res) => {
   try {
     const { identifier, password } = req.body;
-    if (!identifier) return res.status(400).json({ error: 'Benutzername erforderlich.' });
+    // Strict types: objects here would become MongoDB query operators
+    // (NoSQL injection) or corrupt the bcrypt comparison.
+    if (!identifier || typeof identifier !== 'string') {
+      return res.status(400).json({ error: 'Benutzername erforderlich.' });
+    }
+    if (password != null && typeof password !== 'string') {
+      return res.status(400).json({ error: 'Ungültiges Passwort-Format.' });
+    }
 
     const user = await User.findOne({
       $or: [{ uuid: identifier }, { username: identifier }]
@@ -137,8 +154,7 @@ router.post('/login', loginLimiter, async (req, res) => {
     }
     // else: UUID-only migration mode — no credentials set yet, allow through
 
-    const token = jwt.sign({ userId: user._id }, JWT_SECRET, { expiresIn: '30d' });
-    res.cookie('auth_token', token, COOKIE_OPTIONS);
+    issueSession(res, user);
 
     const data = user.toJSON();
     data.hasPassword = !!(user.passwordHash || user.adminSecretHash);
@@ -170,9 +186,23 @@ router.get('/me', auth, (req, res) => {
 router.put('/me', auth, async (req, res) => {
   try {
     const { name, weightUnit } = req.body;
+    // Whitelist + validate: only these two profile fields are user-editable.
+    const update = {};
+    if (name !== undefined) {
+      if (typeof name !== 'string' || !name.trim() || name.trim().length > 60) {
+        return res.status(400).json({ error: 'Name muss 1–60 Zeichen lang sein.' });
+      }
+      update.name = name.trim();
+    }
+    if (weightUnit !== undefined) {
+      if (!['kg', 'lbs'].includes(weightUnit)) {
+        return res.status(400).json({ error: 'Ungültige Gewichtseinheit.' });
+      }
+      update.weightUnit = weightUnit;
+    }
     const user = await User.findByIdAndUpdate(
       req.user._id,
-      { name, weightUnit },
+      { $set: update },
       { new: true }
     );
     res.json(user);
@@ -274,7 +304,11 @@ router.put('/me/password', auth, async (req, res) => {
 
     user.passwordHash = await pw.hash(newPassword);
     user.mustChangePassword = false;
+    // Kill every other session (stolen or shared cookies included) and keep
+    // only this one alive with a freshly issued token.
+    user.sessionVersion = (user.sessionVersion || 0) + 1;
     await user.save();
+    issueSession(res, user);
     res.json({ ok: true });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -294,7 +328,9 @@ router.put('/me/password/forced', auth, async (req, res) => {
     const user = await User.findById(req.user._id);
     user.passwordHash = await pw.hash(newPassword);
     user.mustChangePassword = false;
+    user.sessionVersion = (user.sessionVersion || 0) + 1;
     await user.save();
+    issueSession(res, user);
     res.json({ ok: true });
   } catch (err) {
     res.status(500).json({ error: err.message });

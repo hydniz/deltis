@@ -45,14 +45,26 @@ router.get('/', auth, async (req, res) => {
   }
 });
 
+// Resolves an activityTypeRef ONLY when it belongs to the requesting user —
+// referencing another user's type is rejected (cross-tenant reference).
+async function resolveOwnActivityType(refId, userId) {
+  const typeDoc = await ActivityType.findOne({ _id: refId, userId }).select('version');
+  if (!typeDoc) {
+    const err = new Error('Aktivitätstyp nicht gefunden');
+    err.status = 404;
+    throw err;
+  }
+  return typeDoc;
+}
+
 router.post('/', auth, async (req, res) => {
   try {
     const { activityType, activityTypeRef, scheduledDate, duration, distance, notes, customValues } = req.body;
 
     let activityTypeVersion;
     if (activityTypeRef) {
-      const typeDoc = await ActivityType.findById(activityTypeRef).select('version');
-      activityTypeVersion = typeDoc?.version;
+      const typeDoc = await resolveOwnActivityType(activityTypeRef, req.user._id);
+      activityTypeVersion = typeDoc.version;
     }
 
     const plan = await ActivityPlan.create({
@@ -68,7 +80,7 @@ router.post('/', auth, async (req, res) => {
     });
     res.status(201).json(plan);
   } catch (err) {
-    res.status(400).json({ error: err.message });
+    res.status(err.status || 400).json({ error: err.message });
   }
 });
 
@@ -162,15 +174,37 @@ router.post('/copy-week', auth, async (req, res) => {
 
 router.put('/:id', auth, async (req, res) => {
   try {
+    // Field whitelist: userId/_id and version bookkeeping stay server-owned.
+    const { activityType, activityTypeRef, scheduledDate, duration, distance, notes, customValues, completed } = req.body;
+    const update = {};
+    if (activityType !== undefined) update.activityType = activityType;
+    if (scheduledDate !== undefined) update.scheduledDate = new Date(scheduledDate);
+    if (duration !== undefined) update.duration = duration;
+    if (distance !== undefined) update.distance = distance;
+    if (notes !== undefined) update.notes = notes;
+    if (customValues !== undefined) update.customValues = customValues || {};
+    if (completed !== undefined) update.completed = !!completed;
+    const unset = {};
+    if (activityTypeRef !== undefined) {
+      if (activityTypeRef) {
+        const typeDoc = await resolveOwnActivityType(activityTypeRef, req.user._id);
+        update.activityTypeRef = activityTypeRef;
+        update.activityTypeVersion = typeDoc.version;
+      } else {
+        unset.activityTypeRef = 1;
+        unset.activityTypeVersion = 1;
+      }
+    }
+
     const plan = await ActivityPlan.findOneAndUpdate(
       { _id: req.params.id, userId: req.user._id },
-      req.body,
+      { $set: update, ...(Object.keys(unset).length ? { $unset: unset } : {}) },
       { new: true }
     );
     if (!plan) return res.status(404).json({ error: 'Nicht gefunden' });
     res.json(plan);
   } catch (err) {
-    res.status(400).json({ error: err.message });
+    res.status(err.status || 400).json({ error: err.message });
   }
 });
 
@@ -210,7 +244,12 @@ router.get('/habits', auth, async (req, res) => {
 router.post('/habits', auth, async (req, res) => {
   try {
     const { habitId, scheduledDate, notes } = req.body;
-    const habit = await HabitDefinition.findById(habitId).select('name unitSymbol type');
+    // Only own or global (predefined) habits may be planned.
+    const habit = await HabitDefinition.findOne({
+      _id: habitId,
+      $or: [{ userId: req.user._id }, { userId: null }],
+    }).select('name unitSymbol type');
+    if (!habit) return res.status(404).json({ error: 'Habit nicht gefunden' });
     const plan = await HabitPlan.create({
       userId: req.user._id,
       habitId,
@@ -249,9 +288,17 @@ router.post('/habits/:id/complete', auth, async (req, res) => {
 
 router.put('/habits/:id', auth, async (req, res) => {
   try {
+    // Field whitelist: userId/_id/habitId snapshots stay server-owned.
+    const { scheduledDate, notes, completed, loggedValue } = req.body;
+    const update = {};
+    if (scheduledDate !== undefined) update.scheduledDate = new Date(scheduledDate);
+    if (notes !== undefined) update.notes = notes;
+    if (completed !== undefined) update.completed = !!completed;
+    if (loggedValue !== undefined) update.loggedValue = loggedValue;
+
     const plan = await HabitPlan.findOneAndUpdate(
       { _id: req.params.id, userId: req.user._id },
-      req.body,
+      { $set: update },
       { new: true }
     );
     if (!plan) return res.status(404).json({ error: 'Nicht gefunden' });

@@ -2,6 +2,7 @@
 // habit selection.
 const express = require('express');
 const router = express.Router();
+const mongoose = require('mongoose');
 const auth = require('../middleware/auth');
 const HabitDefinition = require('../models/HabitDefinition');
 const HabitLog = require('../models/HabitLog');
@@ -77,9 +78,12 @@ router.get('/definitions', auth, async (req, res) => {
 router.put('/selection', auth, async (req, res) => {
   try {
     const { selectedIds } = req.body;
+    // Only well-formed ObjectIds enter the selection list.
+    const ids = (Array.isArray(selectedIds) ? selectedIds : [])
+      .filter(id => mongoose.isValidObjectId(id));
     await UserHabitSettings.findOneAndUpdate(
       { userId: req.user._id },
-      { $set: { selectedHabitIds: selectedIds, hasSelection: true } },
+      { $set: { selectedHabitIds: ids, hasSelection: true } },
       { upsert: true }
     );
     res.json({ success: true });
@@ -112,7 +116,7 @@ router.put('/definitions/:id', auth, async (req, res) => {
     const current = await HabitDefinition.findOne({ _id: req.params.id, userId: req.user._id });
     if (!current) return res.status(404).json({ error: 'Nicht gefunden oder vordefiniert' });
 
-    const { nameHistory: _nh, version: _v, _id: _i, createdAt: _c, userId: _u, __v: _vv, ...safeBody } = req.body;
+    const { nameHistory: _nh, version: _v, _id: _i, createdAt: _c, userId: _u, __v: _vv, isPredefined: _p, ...safeBody } = req.body;
 
     const nameChanged = safeBody.name && safeBody.name !== current.name;
     const unitChanged = safeBody.unitSymbol && safeBody.unitSymbol !== current.unitSymbol;
@@ -188,7 +192,13 @@ router.post('/definitions/:id/restore', auth, async (req, res) => {
 // Persist per-user habit settings (missing-day mode, default value, schedule)
 router.put('/settings/:id', auth, async (req, res) => {
   try {
+    // The id becomes a Mongoose path segment (habitSettings.<id>) — accept
+    // only real ObjectIds so no crafted key can be injected.
+    if (!mongoose.isValidObjectId(req.params.id)) {
+      return res.status(400).json({ error: 'Ungültige Habit-ID.' });
+    }
     const { missingDayMode, defaultValue, scheduleDays, scheduleDate, targetCondition, targetValue } = req.body;
+    const mode = ['none', 'default'].includes(missingDayMode) ? missingDayMode : 'none';
     // Sanitize schedule: unique integer weekdays 0–6, sorted; [] = every day.
     const days = Array.isArray(scheduleDays)
       ? [...new Set(scheduleDays.map(Number).filter(d => Number.isInteger(d) && d >= 0 && d <= 6))].sort()
@@ -205,8 +215,8 @@ router.put('/settings/:id', auth, async (req, res) => {
     await UserHabitSettings.findOneAndUpdate(
       { userId: req.user._id },
       { $set: { [`habitSettings.${req.params.id}`]: {
-        missingDayMode,
-        defaultValue: +defaultValue,
+        missingDayMode: mode,
+        defaultValue: Number.isFinite(+defaultValue) ? +defaultValue : 0,
         scheduleDays: days,
         scheduleDate: dateOnly,
         targetCondition: tValue > 0 || condition === 'max' ? condition : 'none',
@@ -250,8 +260,13 @@ router.post('/logs', auth, async (req, res) => {
     const startOfDay = new Date(d.getFullYear(), d.getMonth(), d.getDate());
     const endOfDay = new Date(d.getFullYear(), d.getMonth(), d.getDate(), 23, 59, 59, 999);
 
-    const habitDef = await HabitDefinition.findById(habitId).select('version');
-    const habitVersion = habitDef?.version;
+    // Logs may only reference the user's own or global (predefined) habits.
+    const habitDef = await HabitDefinition.findOne({
+      _id: habitId,
+      $or: [{ userId: req.user._id }, { userId: null }],
+    }).select('version');
+    if (!habitDef) return res.status(404).json({ error: 'Habit nicht gefunden' });
+    const habitVersion = habitDef.version;
 
     const log = await HabitLog.findOneAndUpdate(
       { userId: req.user._id, habitId, date: { $gte: startOfDay, $lte: endOfDay } },

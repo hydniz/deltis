@@ -30,8 +30,11 @@ async function clearDb() {
 
 function buildApp() {
   const app = express();
+  app.disable('x-powered-by');
+  app.use(require('../../middleware/securityHeaders'));
   app.use(express.json());
   app.use(cookieParser());
+  app.use(require('../../middleware/sanitizeBody'));
 
   app.use('/api', require('../../routes/version').router);
   app.use('/api/init', require('../../routes/init'));

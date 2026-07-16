@@ -8,11 +8,20 @@ const User = require('../models/User');
 const pw = require('../utils/password');
 const bootstrapConfig = require('../utils/bootstrapConfig');
 const serverState = require('../utils/serverState');
+const { createRateLimiter } = require('../utils/rateLimit');
 
 const adminOnly = (req, res, next) => {
   if (!req.user?.isAdmin) return res.status(403).json({ error: 'Kein Zugriff' });
   next();
 };
+
+// The setup endpoints are public until the first admin exists — throttle
+// them so they cannot be brute-forced or spammed.
+const setupLimiter = createRateLimiter({
+  windowMs: 15 * 60 * 1000,
+  max: 30,
+  message: 'Zu viele Versuche. Bitte versuche es später erneut.',
+});
 
 // Public setup routes (no auth required)
 
@@ -44,7 +53,7 @@ router.get('/setup-status', async (req, res) => {
 // Available as long as no admin password has been set (pre-admin phase), regardless
 // of setup mode. This lets users configure security settings when MONGODB_URI is
 // already provided via .env but JWT/pepper are not yet configured.
-router.post('/setup/security-config', async (req, res) => {
+router.post('/setup/security-config', setupLimiter, async (req, res) => {
   try {
     // Block once the first admin account is fully set up.
     if (!serverState.setupMode) {
@@ -86,17 +95,17 @@ router.post('/setup/security-config', async (req, res) => {
   }
 });
 
-router.post('/setup', async (req, res) => {
+router.post('/setup', setupLimiter, async (req, res) => {
   try {
     const admin = await User.findOne({ isAdmin: true }).select('+adminSecretHash +passwordHash');
     if (admin?.passwordHash || admin?.adminSecretHash) {
       return res.status(400).json({ error: 'Setup bereits abgeschlossen' });
     }
     const { username, password } = req.body;
-    if (!username || username.length < 3) {
+    if (!username || typeof username !== 'string' || username.length < 3) {
       return res.status(400).json({ error: 'Benutzername muss mindestens 3 Zeichen haben' });
     }
-    if (!password || password.length < 8) {
+    if (!password || typeof password !== 'string' || password.length < 8) {
       return res.status(400).json({ error: 'Passwort muss mindestens 8 Zeichen haben' });
     }
     const passwordHash = await pw.hash(password);
@@ -119,7 +128,7 @@ router.post('/setup', async (req, res) => {
 // /etc/deltis/deltis.config.json, then attempts a MongoDB reconnect.
 // On success the server exits setup mode and the wizard can proceed to
 // create the admin account.
-router.post('/setup/bootstrap', async (req, res) => {
+router.post('/setup/bootstrap', setupLimiter, async (req, res) => {
   if (!serverState.setupMode) {
     return res.status(403).json({
       error: 'Server nicht im Einrichtungsmodus. Konfiguration über den Admin-Bereich ändern.',
@@ -280,14 +289,19 @@ router.put('/users/:id', auth, adminOnly, async (req, res) => {
     }
 
     if (password !== undefined && password !== '') {
-      if (password.length < 8) {
+      if (typeof password !== 'string' || password.length < 8) {
         return res.status(400).json({ error: 'Passwort muss mindestens 8 Zeichen lang sein.' });
       }
       update.passwordHash = await pw.hash(password);
       update.mustChangePassword = true;
     }
 
-    const updated = await User.findByIdAndUpdate(req.params.id, update, { new: true });
+    // A password reset invalidates every existing session of that user.
+    const updated = await User.findByIdAndUpdate(
+      req.params.id,
+      { $set: update, ...(update.passwordHash ? { $inc: { sessionVersion: 1 } } : {}) },
+      { new: true }
+    );
     res.json({
       _id: updated._id,
       username: updated.username,
@@ -307,7 +321,22 @@ router.delete('/users/:id', auth, adminOnly, async (req, res) => {
     if (user._id.equals(req.user._id)) {
       return res.status(400).json({ error: 'Du kannst dein eigenes Konto nicht löschen.' });
     }
-    await User.findByIdAndDelete(req.params.id);
+
+    // Data protection: deleting an account removes ALL personal data with it —
+    // no orphaned logs, plans, goals or settings stay behind.
+    const uid = user._id;
+    await Promise.all([
+      require('../models/WeightLog').deleteMany({ userId: uid }),
+      require('../models/HabitLog').deleteMany({ userId: uid }),
+      require('../models/ActivityLog').deleteMany({ userId: uid }),
+      require('../models/ActivityPlan').deleteMany({ userId: uid }),
+      require('../models/HabitPlan').deleteMany({ userId: uid }),
+      require('../models/Goal').deleteMany({ userId: uid }),
+      require('../models/ActivityType').deleteMany({ userId: uid }),
+      require('../models/HabitDefinition').deleteMany({ userId: uid }),
+      require('../models/UserHabitSettings').deleteMany({ userId: uid }),
+    ]);
+    await User.findByIdAndDelete(uid);
     res.json({ ok: true });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -315,3 +344,5 @@ router.delete('/users/:id', auth, adminOnly, async (req, res) => {
 });
 
 module.exports = router;
+// Test hook: rate-limiter state is per-process and would bleed between tests.
+module.exports.resetRateLimits = () => setupLimiter.reset();

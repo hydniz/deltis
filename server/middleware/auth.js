@@ -8,9 +8,9 @@ module.exports = async (req, res, next) => {
 
   // Verify signature and expiry first. Any JWT error (invalid/expired/tampered)
   // means the cookie is stale → clear it and return 401.
-  let userId;
+  let userId, sv;
   try {
-    ({ userId } = jwt.verify(token, JWT_SECRET));
+    ({ userId, sv } = jwt.verify(token, JWT_SECRET));
   } catch {
     res.clearCookie('auth_token');
     return res.status(401).json({ error: 'Nicht autorisiert' });
@@ -22,6 +22,13 @@ module.exports = async (req, res, next) => {
   try {
     const user = await User.findById(userId).select('+passwordHash +adminSecretHash');
     if (!user) {
+      res.clearCookie('auth_token');
+      return res.status(401).json({ error: 'Nicht autorisiert' });
+    }
+    // Session versioning: a password change bumps user.sessionVersion, which
+    // invalidates every token issued before it (tokens without an sv claim
+    // predate the feature and count as version 0).
+    if ((sv || 0) !== (user.sessionVersion || 0)) {
       res.clearCookie('auth_token');
       return res.status(401).json({ error: 'Nicht autorisiert' });
     }

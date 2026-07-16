@@ -25,11 +25,19 @@ router.get('/', auth, async (req, res) => {
 router.post('/', auth, async (req, res) => {
   try {
     const { date, weight, unit } = req.body;
+    const d = new Date(date);
+    if (isNaN(d.getTime())) {
+      return res.status(400).json({ error: 'Ungültiges Datum.' });
+    }
+    const w = +weight;
+    if (!Number.isFinite(w) || w <= 0 || w > 1000) {
+      return res.status(400).json({ error: 'Ungültiges Gewicht.' });
+    }
     const log = await WeightLog.create({
       userId: req.user._id,
-      date: new Date(date),
-      weight,
-      unit: unit || req.user.weightUnit || 'kg'
+      date: d,
+      weight: w,
+      unit: ['kg', 'lbs'].includes(unit) ? unit : (req.user.weightUnit || 'kg')
     });
     res.status(201).json(log);
   } catch (err) {
