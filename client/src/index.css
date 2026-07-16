@@ -568,6 +568,70 @@
     animation: float-slow 7s ease-in-out infinite;
   }
 
+  /* ── App-wide motion ─────────────────────────────────────────────────── */
+  /* Restraint rules: entrances ≤ 350ms, one accent per interaction, and
+     everything is disabled under prefers-reduced-motion (see below). */
+
+  /* Route content entrance — Layout re-applies this on every navigation */
+  .page-enter {
+    animation: page-in 0.32s cubic-bezier(0.22, 1, 0.36, 1) both;
+  }
+
+  /* Modal: backdrop fades; the panel rises as a sheet on mobile and
+     pops gently as a dialog from `sm` upwards. */
+  .anim-overlay {
+    animation: overlay-in 0.2s ease-out both;
+  }
+  .anim-modal {
+    animation: sheet-up 0.34s cubic-bezier(0.22, 1, 0.36, 1) both;
+  }
+  @media (min-width: 640px) {
+    .anim-modal { animation: dialog-pop 0.24s cubic-bezier(0.22, 1, 0.36, 1) both; }
+  }
+
+  /* Completion feedback: a small pop when a check icon appears */
+  .anim-check {
+    animation: check-pop 0.32s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+  }
+
+  /* Progress bars grow from the left on first paint */
+  .anim-bar {
+    transform-origin: left;
+    animation: bar-grow 0.6s cubic-bezier(0.22, 1, 0.36, 1) both;
+  }
+
+  /* Full-page loader: fades in late so fast loads never flash a spinner */
+  .loader-delayed {
+    opacity: 0;
+    animation: overlay-in 0.3s ease-out 0.15s forwards;
+  }
+
+  /* Skeleton placeholder with a soft shimmer sheen */
+  .skeleton {
+    @apply rounded-xl bg-paper-100 relative overflow-hidden pointer-events-none;
+  }
+  .skeleton::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    transform: translateX(-100%);
+    background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.55), transparent);
+    animation: shimmer 1.8s ease-in-out infinite;
+  }
+  .dark .skeleton::after {
+    background: linear-gradient(90deg, transparent, rgba(255, 233, 205, 0.06), transparent);
+  }
+
+  /* Tactile press feedback on secondary controls (primary has its own) */
+  .btn-secondary:active:not(:disabled),
+  .btn-ghost:active:not(:disabled),
+  .btn-danger:active:not(:disabled) {
+    transform: scale(0.98);
+  }
+  .chip-press:active {
+    transform: scale(0.95);
+  }
+
   /* Confetti rain (init wizard finale). Colour, delay, duration, drift and
      spin are set per piece via inline style custom properties. */
   .confetti-piece {
@@ -599,7 +663,42 @@
   100% { opacity: 0; transform: translate3d(var(--confetti-drift, 0px), 105vh, 0) rotateZ(var(--confetti-spin, 540deg)); }
 }
 
+@keyframes page-in {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes overlay-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+@keyframes sheet-up {
+  from { opacity: 0; transform: translateY(48px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes dialog-pop {
+  from { opacity: 0; transform: scale(0.96) translateY(8px); }
+  to   { opacity: 1; transform: scale(1) translateY(0); }
+}
+@keyframes check-pop {
+  0%   { transform: scale(0.4); }
+  60%  { transform: scale(1.22); }
+  100% { transform: scale(1); }
+}
+@keyframes bar-grow {
+  from { transform: scaleX(0); }
+}
+@keyframes shimmer {
+  100% { transform: translateX(100%); }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .anim-fade-up, .anim-pop, .anim-float { animation: none; }
   .confetti-piece { animation: none; opacity: 0; }
+  .page-enter, .anim-overlay, .anim-modal, .anim-check, .anim-bar { animation: none; }
+  .loader-delayed { animation: none; opacity: 1; }
+  .skeleton::after { animation: none; }
+  .btn-secondary:active:not(:disabled),
+  .btn-ghost:active:not(:disabled),
+  .btn-danger:active:not(:disabled),
+  .chip-press:active { transform: none; }
 }

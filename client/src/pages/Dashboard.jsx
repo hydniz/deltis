@@ -11,7 +11,7 @@ import {
   Check, Circle,
 } from 'lucide-react';
 import {
-  Stat, Chip, chipColorFor, Input, Button, PageLoader, TONE_BUBBLE,
+  Stat, Chip, chipColorFor, Input, Button, Skeleton, TONE_BUBBLE,
 } from '../components/ui';
 import { isDueOn, formatScheduleBadge } from '../utils/habitSchedule';
 import { meetsTarget, formatTarget } from '../utils/habitTarget';
@@ -91,7 +91,7 @@ function TodayHabitRow({ habit, log, onLog }) {
   return (
     <div className="flex items-center gap-3 px-4 py-3">
       <div className={`w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0 ${TONE_BUBBLE[tone]}`}>
-        {fulfilled ? <Check size={15} strokeWidth={3} /> : <Sparkles size={14} />}
+        {fulfilled ? <Check size={15} strokeWidth={3} className="anim-check" /> : <Sparkles size={14} />}
       </div>
       <div className="flex-1 min-w-0">
         <p className="text-sm font-semibold text-ink-800 truncate">{habit.name}</p>
@@ -146,7 +146,7 @@ function PlanRow({ label, meta, completed, color }) {
   return (
     <div className="flex items-center gap-3 px-4 py-3">
       <span className={completed ? 'text-emerald-500' : 'text-ink-300'}>
-        {completed ? <Check size={16} strokeWidth={3} /> : <Circle size={14} />}
+        {completed ? <Check size={16} strokeWidth={3} className="anim-check" /> : <Circle size={14} />}
       </span>
       <Chip color={color}>{label}</Chip>
       <span className="text-xs text-ink-400 truncate flex-1">{meta}</span>
@@ -205,7 +205,31 @@ export default function Dashboard() {
 
   const { before, after } = greeting;
 
-  if (loading) return <PageLoader />;
+  // Skeleton mirroring the page layout — calmer than a spinner and the
+  // greeting header can already render while the data loads.
+  if (loading) {
+    return (
+      <div className="space-y-6">
+        <header>
+          <p className="text-[11px] text-ink-400 uppercase tracking-[0.14em] font-semibold mb-1.5">
+            {format(now, 'EEEE, d. MMMM yyyy', { locale: de })}
+          </p>
+          <h1 className="display text-3xl sm:text-[2.5rem] sm:leading-tight">
+            {before}
+            <span className="italic font-normal text-brand-600">
+              {user?.name?.split(' ')[0]}
+            </span>
+            {after}
+          </h1>
+        </header>
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+          {[0, 1, 2, 3].map(i => <Skeleton key={i} className="h-28 sm:h-32 rounded-2xl" />)}
+        </div>
+        <Skeleton className="h-40 rounded-2xl" />
+        <Skeleton className="h-40 rounded-2xl" />
+      </div>
+    );
+  }
 
   const getLog = (habitId) =>
     data.habitLogs.find(l => l.habitId?._id === habitId || l.habitId === habitId);
@@ -234,40 +258,48 @@ export default function Dashboard() {
         </h1>
       </header>
 
-      {/* Stats */}
+      {/* Stats — cascade in with a slight stagger */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-        <Stat
-          icon={Sparkles}
-          label="Gewohnheiten"
-          value={dueHabits.length > 0 ? `${loggedCount}/${dueHabits.length}` : '–'}
-          sub={dueHabits.length > 0 ? 'für heute erfüllt' : 'heute keine geplant'}
-          tone="sage"
-          to="/habits"
-        />
-        <Stat
-          icon={Dumbbell}
-          label="Diese Woche"
-          value={data.activities.length}
-          sub="Aktivitäten"
-          tone="clay"
-          to="/activities"
-        />
-        <Stat
-          icon={CalendarDays}
-          label="Geplant heute"
-          value={totalPlans > 0 ? `${donePlans}/${totalPlans}` : '–'}
-          sub={totalPlans > 0 ? 'erledigt' : 'nichts geplant'}
-          tone="amber"
-          to="/planner"
-        />
-        <Stat
-          icon={Scale}
-          label="Gewicht"
-          value={data.weight ? `${data.weight.weight} ${data.weight.unit}` : '–'}
-          sub={data.weight ? format(parseISO(data.weight.date), 'd. MMM', { locale: de }) : 'Nicht eingetragen'}
-          tone="rose"
-          to="/weight"
-        />
+        <div className="anim-fade-up h-full">
+          <Stat
+            icon={Sparkles}
+            label="Gewohnheiten"
+            value={dueHabits.length > 0 ? `${loggedCount}/${dueHabits.length}` : '–'}
+            sub={dueHabits.length > 0 ? 'für heute erfüllt' : 'heute keine geplant'}
+            tone="sage"
+            to="/habits"
+          />
+        </div>
+        <div className="anim-fade-up h-full" style={{ animationDelay: '60ms' }}>
+          <Stat
+            icon={Dumbbell}
+            label="Diese Woche"
+            value={data.activities.length}
+            sub="Aktivitäten"
+            tone="clay"
+            to="/activities"
+          />
+        </div>
+        <div className="anim-fade-up h-full" style={{ animationDelay: '120ms' }}>
+          <Stat
+            icon={CalendarDays}
+            label="Geplant heute"
+            value={totalPlans > 0 ? `${donePlans}/${totalPlans}` : '–'}
+            sub={totalPlans > 0 ? 'erledigt' : 'nichts geplant'}
+            tone="amber"
+            to="/planner"
+          />
+        </div>
+        <div className="anim-fade-up h-full" style={{ animationDelay: '180ms' }}>
+          <Stat
+            icon={Scale}
+            label="Gewicht"
+            value={data.weight ? `${data.weight.weight} ${data.weight.unit}` : '–'}
+            sub={data.weight ? format(parseISO(data.weight.date), 'd. MMM', { locale: de }) : 'Nicht eingetragen'}
+            tone="rose"
+            to="/weight"
+          />
+        </div>
       </div>
 
       {/* Feed: habits due today, with quick logging */}

@@ -39,13 +39,13 @@ function MoreSheet({ onClose }) {
   return (
     <>
       <div
-        className="lg:hidden fixed inset-0 z-40 bg-scrim/30"
+        className="lg:hidden fixed inset-0 z-40 bg-scrim/30 anim-overlay"
         onClick={onClose}
         aria-hidden="true"
       />
       <div
         className="lg:hidden fixed left-3 right-3 z-50 card rounded-2xl p-1.5 shadow-pop
-          bottom-[calc(4.8rem+env(safe-area-inset-bottom))]"
+          bottom-[calc(4.8rem+env(safe-area-inset-bottom))] anim-modal"
         role="menu"
       >
         {mobileMore.map(({ to, icon: Icon, label }) => (
@@ -86,7 +86,8 @@ export default function Layout({ children }) {
       </header>
 
       <main className="lg:pl-64 pb-24 lg:pb-0 min-h-screen">
-        <div className="max-w-4xl mx-auto px-4 py-6 sm:px-6 lg:px-10 lg:py-10">
+        {/* Keyed on the path so the entrance replays on every navigation */}
+        <div key={location.pathname} className="max-w-4xl mx-auto px-4 py-6 sm:px-6 lg:px-10 lg:py-10 page-enter">
           {children ?? <Outlet />}
         </div>
       </main>

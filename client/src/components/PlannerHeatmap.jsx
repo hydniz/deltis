@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo } from 'react';
 import { format, startOfWeek, addDays, subWeeks, isAfter } from 'date-fns';
 import { de } from 'date-fns/locale';
 import api from '../utils/api';
-import { Spinner, Segmented } from './ui';
+import { Skeleton, Segmented } from './ui';
 import { levelFor, EMPTY_CELL } from '../utils/heatmap';
 
 // GitHub-style heatmap of the weekly-plan completion: columns = weeks (oldest
@@ -74,9 +74,7 @@ export default function PlannerHeatmap() {
       </div>
 
       {plans === null ? (
-        <div className="flex items-center justify-center py-6">
-          <Spinner size="sm" />
-        </div>
+        <Skeleton className="h-32 max-w-lg" />
       ) : (
         <div className="max-w-lg">
           <div className="flex gap-1 justify-between" aria-label={`Planungsverlauf der letzten ${WEEKS} Wochen`}>

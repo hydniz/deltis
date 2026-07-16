@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { format, parseISO, startOfWeek, addDays, subWeeks, isAfter } from 'date-fns';
 import { de } from 'date-fns/locale';
 import api from '../utils/api';
-import { Spinner, chipColorFor } from './ui';
+import { Skeleton, chipColorFor } from './ui';
 import { progressRatio, formatTarget } from '../utils/habitTarget';
 import { levelFor, EMPTY_CELL } from '../utils/heatmap';
 
@@ -45,11 +45,7 @@ export default function HabitHeatmap({ habit }) {
   }, [habit._id]);
 
   if (logsByDay === null) {
-    return (
-      <div className="flex items-center justify-center py-6">
-        <Spinner size="sm" />
-      </div>
-    );
+    return <Skeleton className="h-24 mt-4" />;
   }
 
   const levels = TONE_LEVELS[chipColorFor(habit._id)] ?? TONE_LEVELS.clay;

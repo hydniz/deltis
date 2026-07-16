@@ -3,7 +3,7 @@ import { TONE_BUBBLE } from './tones';
 // Friendly empty state with serif headline and tinted icon bubble.
 export default function EmptyState({ icon: Icon, title, text, action, tone = 'clay', className = '' }) {
   return (
-    <div className={`card p-10 sm:p-14 text-center ${className}`}>
+    <div className={`card p-10 sm:p-14 text-center anim-fade-up ${className}`}>
       {Icon && (
         <div className={`w-14 h-14 rounded-full flex items-center justify-center mx-auto mb-4 ${TONE_BUBBLE[tone]}`}>
           <Icon size={22} />
