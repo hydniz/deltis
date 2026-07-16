@@ -29,6 +29,7 @@ const GROUPS = {
   SERVER: 'Server',
   SECURITY: 'Sicherheit',
   ACCESS: 'Registrierung & Zugang',
+  INTEGRATIONS: 'Integrationen',
 };
 
 const DEFINITIONS = {
@@ -148,6 +149,54 @@ const DEFINITIONS = {
     editable: true,
     expose: 'plain',
     default: 'off',
+  },
+  // Integrationen – third-party API credentials. All keys follow the standard
+  // precedence: .env / docker-compose wins, otherwise the admin UI writes a
+  // DB override. Secrets stay hidden via expose:'never'.
+  PUBLIC_BASE_URL: {
+    label: 'Öffentliche Basis-URL',
+    group: GROUPS.INTEGRATIONS,
+    description: 'Öffentliche URL dieser Instanz (z. B. https://deltis.jlno.de). Benötigt für OAuth-Redirects und Webhooks (Strava). Ohne Wert wird die Host-Adresse der Anfrage verwendet (nur für lokale Entwicklung geeignet).',
+    type: 'url',
+    editable: true,
+    expose: 'plain',
+    default: '',
+  },
+  STRAVA_CLIENT_ID: {
+    label: 'Strava Client-ID',
+    group: GROUPS.INTEGRATIONS,
+    description: 'Client-ID der Strava-API-Anwendung (strava.com/settings/api). Erst wenn Client-ID und Client-Secret gesetzt sind, können Nutzer ihr Strava-Konto verbinden.',
+    type: 'text',
+    editable: true,
+    expose: 'plain',
+    default: '',
+  },
+  STRAVA_CLIENT_SECRET: {
+    label: 'Strava Client-Secret',
+    group: GROUPS.INTEGRATIONS,
+    description: 'Client-Secret der Strava-API-Anwendung. Wird niemals im Klartext angezeigt.',
+    type: 'password',
+    editable: true,
+    expose: 'never',
+    default: '',
+  },
+  STRAVA_WEBHOOK_VERIFY_TOKEN: {
+    label: 'Strava Webhook Verify-Token',
+    group: GROUPS.INTEGRATIONS,
+    description: 'Token zur Validierung des Strava-Webhook-Abonnements. Leer lassen – wird beim Anlegen des Abonnements automatisch generiert.',
+    type: 'password',
+    editable: true,
+    expose: 'never',
+    default: '',
+  },
+  STRAVA_POLL_INTERVAL_MINUTES: {
+    label: 'Strava Polling-Intervall (Minuten)',
+    group: GROUPS.INTEGRATIONS,
+    description: 'Wie oft neue Strava-Aktivitäten per Abfrage synchronisiert werden (Fallback ohne Webhook). 0 = Polling deaktiviert. Mit aktivem Webhook genügt ein großes Intervall (z. B. 360).',
+    type: 'number',
+    editable: true,
+    expose: 'plain',
+    default: '15',
   },
   REGISTRATION_USER_LIMIT: {
     label: 'Max. Nutzeranzahl',

@@ -12,6 +12,7 @@ Goals track whether a user meets a measurable target over a time interval or a l
 |---|---|
 | `periodic-activity` | Repeating interval (daily/weekly/monthly), tracking an activity |
 | `periodic-habit` | Repeating interval, tracking a habit |
+| `periodic-strava` | Repeating interval, counting synced Strava activities that match the goal's criteria (see [Strava goals](#strava-goals)) |
 | `long-term-activity` | Fixed start/end date with optional milestones, tracking an activity |
 | `long-term-habit` | Fixed start/end date with optional milestones, tracking a habit |
 
@@ -188,3 +189,19 @@ Updates an existing goal.
 Deletes a goal.
 
 **Response `200`** `{ "success": true }`
+
+---
+
+## Strava goals
+
+Goals with `targetRefModel: "StravaActivity"` (type `periodic-strava`) count
+synced Strava activities instead of manual logs. `targetRef` holds the fixed
+string `"strava"` — the matching set is defined by the `stravaCriteria` rule
+tree, which is validated by the criteria engine on create/update (`400
+Ungültige Strava-Kriterien: …` on invalid trees). `stravaCriteria: null`
+means every synced activity counts.
+
+Supported metrics: `count`, `duration` (sum of moving time in minutes),
+`distance` (sum in km) — each over the set of matching activities.
+
+Full rule reference and examples: [strava.md](strava.md#strava-goals).

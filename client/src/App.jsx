@@ -17,6 +17,7 @@ import Goals from './pages/Goals';
 import Settings from './pages/Settings';
 import AdminUsers from './pages/AdminUsers';
 import AdminConfig from './pages/AdminConfig';
+import AdminIntegrations from './pages/AdminIntegrations';
 import AdminUpdates from './pages/AdminUpdates';
 import Init from './pages/Init';
 import api from './utils/api';
@@ -340,9 +341,10 @@ function AdminArea() {
   return (
     <AdminLayout>
       <Routes>
-        <Route path="users"   element={<AdminUsers />} />
-        <Route path="config"  element={<AdminConfig />} />
-        <Route path="updates" element={<AdminUpdates />} />
+        <Route path="users"        element={<AdminUsers />} />
+        <Route path="config"       element={<AdminConfig />} />
+        <Route path="integrations" element={<AdminIntegrations />} />
+        <Route path="updates"      element={<AdminUpdates />} />
         <Route path="*"       element={<Navigate to="users" replace />} />
       </Routes>
     </AdminLayout>

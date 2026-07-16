@@ -41,7 +41,8 @@ const goalSchema = new mongoose.Schema({
     type: String,
     // periodic-* = freely configurable interval
     // weekly-*   = legacy, treated as periodic with intervalValue=1, intervalUnit='week'
-    enum: ['periodic-activity', 'periodic-habit', 'weekly-activity', 'weekly-habit', 'long-term-activity', 'long-term-habit'],
+    // periodic-strava = counts synced Strava activities matching stravaCriteria
+    enum: ['periodic-activity', 'periodic-habit', 'periodic-strava', 'weekly-activity', 'weekly-habit', 'long-term-activity', 'long-term-habit'],
     required: true
   },
 
@@ -55,13 +56,20 @@ const goalSchema = new mongoose.Schema({
   targetRef: { type: mongoose.Schema.Types.Mixed, required: true },
 
   // Determines which model targetRef points to.
-  // Current values: 'ActivityType' | 'HabitDefinition'
+  // Current values: 'ActivityType' | 'HabitDefinition' | 'StravaActivity'
   // Legacy values: 'activity' | 'habit' (still supported)
+  // For 'StravaActivity' targetRef holds the fixed string 'strava' — the
+  // matching set is defined by stravaCriteria, not by a referenced document.
   targetRefModel: {
     type: String,
-    enum: ['ActivityType', 'HabitDefinition', 'activity', 'habit'],
+    enum: ['ActivityType', 'HabitDefinition', 'StravaActivity', 'activity', 'habit'],
     required: true
   },
+
+  // Criteria tree for Strava goals (see services/stravaCriteria.js for the
+  // rule schema). Mixed on purpose: the rule set is designed to grow without
+  // schema migrations; writes are validated by the criteria engine.
+  stravaCriteria: { type: mongoose.Schema.Types.Mixed, default: null },
 
   // Legacy single-condition fields (backward compat)
   condition: { type: String, enum: ['min', 'max', 'exact'], required: true },

@@ -49,6 +49,7 @@ function buildApp() {
   app.use('/api/weight', require('../../routes/weight'));
   app.use('/api/goals', require('../../routes/goals'));
   app.use('/api/activity-types', require('../../routes/activityTypes'));
+  app.use('/api/strava', require('../../routes/strava'));
 
   return app;
 }

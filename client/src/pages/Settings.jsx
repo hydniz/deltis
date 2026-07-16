@@ -10,6 +10,7 @@ import {
 import {
   PageHeader, Button, Field, Input, Select, PasswordInput, Alert, TONE_BUBBLE,
 } from '../components/ui';
+import StravaCard from '../components/StravaCard';
 
 // VersionBadge
 
@@ -454,6 +455,9 @@ export default function Settings() {
           {user?.username && user?.hasPassword && (
             <UserPasswordForm changePassword={changePassword} />
           )}
+
+          {/* Strava integration */}
+          <StravaCard />
 
           {/* Export / Import */}
           <ExportImport />

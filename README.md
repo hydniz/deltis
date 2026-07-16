@@ -11,6 +11,7 @@ Deltis keeps your training log, habits, weight and goals in one place — on you
 - **Habit tracking** – daily habits (sleep, water intake, screen time, …) with charts
 - **Weight log** – weight trend visualization over time
 - **Goals** – weekly and long-term goals with milestones
+- **Strava integration** – automatic activity sync (webhook + polling) and criteria-based goals, e.g. "3× Zone-2 cardio per week" ([details](docs/STRAVA.md))
 - **Multi-user** – an admin creates accounts; users sign in with username + password
 - **Admin panel** – user management, runtime configuration, in-app updates
 - **Over-the-air updates** – update to new releases from the admin UI, with automatic backup and rollback ([details](docs/UPDATES.md))
@@ -96,6 +97,7 @@ If you want to contribute, please read **[CONTRIBUTING.md](CONTRIBUTING.md)** fi
 | Security, auth model, pepper, admin reset | [SECURITY.md](SECURITY.md) |
 | In-app (OTA) updates & rollback | [docs/UPDATES.md](docs/UPDATES.md) |
 | CI/CD deployment pipeline | [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) |
+| Strava integration setup | [docs/STRAVA.md](docs/STRAVA.md) |
 | REST API reference | [docs/api/README.md](docs/api/README.md) |
 | Database migrations | [server/migrations/README.md](server/migrations/README.md) |
 

@@ -9,9 +9,10 @@ import {
 import {
   PageHeader, Button, Field, Input, Select, Textarea, Chip,
   chipColorFor, Modal, IconButton, EmptyState, PageLoader, Spinner, useChart,
-  TONE_ACCENT_BORDER,
+  TONE_ACCENT_BORDER, Segmented,
 } from '../components/ui';
 import ActivityTypeWizard from '../components/ActivityTypeWizard';
+import StravaActivityList from '../components/StravaActivityList';
 
 // ActivityTypeCard
 
@@ -542,6 +543,14 @@ export default function Activities() {
   const [page, setPage] = useState(0);
   const limit = 20;
 
+  // Strava source toggle — only offered when the integration is in use.
+  const [source, setSource] = useState('manual'); // 'manual' | 'strava'
+  const [stravaStatus, setStravaStatus] = useState(null);
+  useEffect(() => {
+    api.get('/strava/status').then(res => setStravaStatus(res.data)).catch(() => {});
+  }, []);
+  const showStravaTab = Boolean(stravaStatus?.connected || stravaStatus?.activityCount > 0);
+
   const loadTypes = useCallback(async () => {
     const res = await api.get('/activity-types');
     setActivityTypes(res.data);
@@ -603,14 +612,32 @@ export default function Activities() {
         title="Aktivitäten"
         icon={Dumbbell}
         tone="clay"
-        subtitle={`${total} Einheiten insgesamt`}
-        action={
+        subtitle={source === 'strava'
+          ? `${stravaStatus?.activityCount ?? 0} Strava-Aktivitäten`
+          : `${total} Einheiten insgesamt`}
+        action={source === 'manual' && (
           <Button icon={Plus} onClick={handleOpenForm}>
             <span className="hidden sm:inline">Eintragen</span>
           </Button>
-        }
+        )}
       />
 
+      {/* Source toggle — only when the Strava integration is in use */}
+      {showStravaTab && (
+        <Segmented
+          className="max-w-xs"
+          value={source}
+          onChange={setSource}
+          options={[
+            { value: 'manual', label: 'Manuell' },
+            { value: 'strava', label: 'Strava' },
+          ]}
+        />
+      )}
+
+      {source === 'strava' ? (
+        <StravaActivityList connected={Boolean(stravaStatus?.connected)} />
+      ) : (<>
       {/* Filter chips (horizontally scrollable when many types) + management */}
       <div className="flex items-center gap-2">
         <div className="flex-1 min-w-0 flex flex-nowrap items-center gap-2 overflow-x-auto no-scrollbar -my-1 py-1">
@@ -706,6 +733,7 @@ export default function Activities() {
           </Button>
         </div>
       )}
+      </>)}
 
       {showForm && activityTypes.length > 0 && (
         <ActivityForm

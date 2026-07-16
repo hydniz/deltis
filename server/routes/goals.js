@@ -9,6 +9,8 @@ const ActivityLog = require('../models/ActivityLog');
 const HabitLog = require('../models/HabitLog');
 const ActivityType = require('../models/ActivityType');
 const HabitDefinition = require('../models/HabitDefinition');
+const StravaActivity = require('../models/StravaActivity');
+const stravaCriteria = require('../services/stravaCriteria');
 
 // ─Hilfsfunktionen
 
@@ -80,7 +82,40 @@ function buildActivityFilterMatch(activityFilters, isMax) {
   return match;
 }
 
+// Progress value for Strava goals: activities in the window are filtered by
+// the goal's criteria tree, then the metric aggregates over the matching set.
+// Evaluation happens in JS — HR-stream rules cannot run as a Mongo query.
+async function getStravaValueForMetric(metric, goal, userId, start, end, valueScope = 'total', aggregation = 'sum') {
+  const activities = await StravaActivity.find({
+    userId,
+    startDate: { $gte: start, $lte: end },
+  }).select('-detail').lean();
+
+  const criteria = goal.stravaCriteria;
+  const matching = criteria
+    ? activities.filter(a => stravaCriteria.evaluateActivity(a, criteria))
+    : activities;
+
+  if (!metric || metric === 'count') return matching.length;
+
+  const values = matching.map(a => {
+    if (metric === 'duration') return (a.movingTime || 0) / 60; // minutes
+    if (metric === 'distance') return (a.distance || 0) / 1000; // km
+    return 0;
+  });
+  if (values.length === 0) return 0;
+
+  const round = v => Math.round(v * 100) / 100;
+  if (aggregation === 'max') return round(Math.max(...values));
+  const total = values.reduce((sum, v) => sum + v, 0);
+  return round(valueScope === 'perActivity' ? total / values.length : total);
+}
+
 async function getValueForMetric(metric, goal, userId, start, end, valueScope = 'total', aggregation = 'sum', activityFilters = []) {
+  if (goal.targetRefModel === 'StravaActivity') {
+    return getStravaValueForMetric(metric, goal, userId, start, end, valueScope, aggregation);
+  }
+
   const isActivity = goal.targetRefModel === 'ActivityType' || goal.targetRefModel === 'activity';
   const uid = new mongoose.Types.ObjectId(String(userId));
   const isMax = aggregation === 'max';
@@ -185,6 +220,14 @@ function checkMetricValid(metric, customFields = []) {
 
 async function enrichGoal(goal, userId) {
   const obj = goal.toObject ? goal.toObject() : { ...goal };
+
+  // Strava goals reference no document — the criteria tree defines the target.
+  if (obj.targetRefModel === 'StravaActivity') {
+    obj.targetName = 'Strava';
+    obj.customFields = [];
+    return obj;
+  }
+
   const isActivity = obj.targetRefModel === 'ActivityType' || obj.targetRefModel === 'activity';
 
   if (isActivity && mongoose.Types.ObjectId.isValid(obj.targetRef)) {
@@ -351,10 +394,23 @@ async function assertOwnTargetRef(body, userId) {
   }
 }
 
+// Criteria trees for Strava goals are Mixed in the schema — the criteria
+// engine validates their shape before anything reaches the database.
+function assertValidStravaCriteria(body) {
+  if (body.stravaCriteria == null) return;
+  const { valid, errors } = stravaCriteria.validateCriteria(body.stravaCriteria);
+  if (!valid) {
+    const err = new Error(`Ungültige Strava-Kriterien: ${errors.join('; ')}`);
+    err.status = 400;
+    throw err;
+  }
+}
+
 router.post('/', auth, async (req, res) => {
   try {
     const body = safeGoalBody(req.body);
     await assertOwnTargetRef(body, req.user._id);
+    assertValidStravaCriteria(body);
     const goal = await Goal.create({ ...body, userId: req.user._id });
     res.status(201).json(await enrichGoal(goal, req.user._id));
   } catch (err) {
@@ -366,6 +422,7 @@ router.put('/:id', auth, async (req, res) => {
   try {
     const body = safeGoalBody(req.body);
     await assertOwnTargetRef(body, req.user._id);
+    assertValidStravaCriteria(body);
     const goal = await Goal.findOneAndUpdate(
       { _id: req.params.id, userId: req.user._id },
       { $set: body },
