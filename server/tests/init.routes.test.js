@@ -30,7 +30,15 @@ describe('GET /api/init/status', () => {
     expect(res.body.setupMode).toBe(false);
     expect(typeof res.body.pepperConfigured).toBe('boolean');
     expect(typeof res.body.jwtConfigured).toBe('boolean');
+    expect(typeof res.body.inDocker).toBe('boolean');
     expect(Array.isArray(res.body.settings)).toBe(true);
+  });
+
+  it('carries the runtime context so the wizard can hide unrelated settings', async () => {
+    const res = await request(app).get('/api/init/status');
+    const dockerImage = res.body.settings.find(s => s.key === 'UPDATE_DOCKER_IMAGE');
+    // The value stays context-tagged; the frontend hides it outside Docker.
+    expect(dockerImage.context).toBe('docker');
   });
 
   it('lists configurable settings but never bootstrap keys', async () => {

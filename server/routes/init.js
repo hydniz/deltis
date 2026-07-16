@@ -15,6 +15,8 @@ const pw = require('../utils/password');
 const config = require('../utils/config');
 const bootstrapConfig = require('../utils/bootstrapConfig');
 const serverState = require('../utils/serverState');
+const updateEnv = require('../utils/updateEnv');
+const { authCookieOptions } = require('../utils/cookieOptions');
 const { createRateLimiter } = require('../utils/rateLimit');
 
 // The wizard is public until the first admin exists — throttle it so the
@@ -24,13 +26,6 @@ const initLimiter = createRateLimiter({
   max: 30,
   message: 'Zu viele Versuche. Bitte versuche es später erneut.',
 });
-
-const COOKIE_OPTIONS = {
-  httpOnly: true,
-  secure: process.env.NODE_ENV === 'production',
-  sameSite: 'lax',
-  maxAge: 30 * 24 * 60 * 60 * 1000, // 30 days
-};
 
 // First installation = no admin account with credentials exists yet.
 // Same semantics as /api/admin/setup-status.
@@ -101,16 +96,21 @@ router.get('/status', async (_req, res) => {
   try {
     const security = securityStatus();
 
+    // inDocker lets the wizard hide runtime-specific settings (context) the
+    // same way the Updates admin page does – the update image is meaningless
+    // on a host install and vice versa.
+    const inDocker = updateEnv.isRunningInDocker();
+
     // Setup mode = MongoDB not reachable yet → the wizard is needed by
     // definition, but the DB cannot be queried.
     if (serverState.setupMode) {
-      return res.json({ initNeeded: true, setupMode: true, ...security, settings: wizardSettings() });
+      return res.json({ initNeeded: true, setupMode: true, inDocker, ...security, settings: wizardSettings() });
     }
 
     const needed = await initNeeded();
     if (!needed) return res.json({ initNeeded: false, setupMode: false });
 
-    res.json({ initNeeded: true, setupMode: false, ...security, settings: wizardSettings() });
+    res.json({ initNeeded: true, setupMode: false, inDocker, ...security, settings: wizardSettings() });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -211,7 +211,7 @@ router.post('/', initLimiter, async (req, res) => {
       JWT_SECRET,
       { expiresIn: '30d' }
     );
-    res.cookie('auth_token', token, COOKIE_OPTIONS);
+    res.cookie('auth_token', token, authCookieOptions(req));
 
     const data = admin.toJSON();
     data.hasPassword = true;

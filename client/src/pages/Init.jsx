@@ -566,6 +566,18 @@ export default function Init() {
     ];
   }, [status]);
 
+  // OTA settings are runtime-specific: a Docker-only setting (the update image)
+  // is meaningless on a host install and vice versa. Hide the ones that do not
+  // apply to this environment — same rule the Updates admin page uses. Until the
+  // status has loaded, context-bound entries stay hidden.
+  const visibleSettings = useMemo(() => {
+    const list = status?.settings || [];
+    return list.filter(s => {
+      if (!s.context) return true;
+      return s.context === 'docker' ? status.inDocker : !status.inDocker;
+    });
+  }, [status]);
+
   if (!status) {
     return (
       <div className="min-h-screen flex items-center justify-center">
@@ -591,7 +603,7 @@ export default function Init() {
     setSubmitError('');
     try {
       const settings = {};
-      for (const s of status.settings || []) {
+      for (const s of visibleSettings) {
         if (!s.locked && values[s.key] !== undefined && String(values[s.key]).trim() !== '') {
           settings[s.key] = String(values[s.key]).trim();
         }
@@ -645,7 +657,7 @@ export default function Init() {
             )}
             {step.id === 'settings' && (
               <StepSettings
-                settings={status.settings || []}
+                settings={visibleSettings}
                 values={values}
                 setValues={setValues}
                 onSubmit={handleFinish}

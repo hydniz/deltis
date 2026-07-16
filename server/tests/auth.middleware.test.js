@@ -102,6 +102,9 @@ describe('POST /api/auth/login', () => {
     const cookie = res.headers['set-cookie']?.[0] ?? '';
     expect(cookie).toMatch(/auth_token=/);
     expect(cookie).toMatch(/HttpOnly/i);
+    // Over plain HTTP the cookie must NOT be Secure, otherwise the browser
+    // drops it and a self-hosted HTTP instance can never stay logged in.
+    expect(cookie).not.toMatch(/Secure/i);
   });
 
   it('allows login for a migration user (UUID only, no password set)', async () => {

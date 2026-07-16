@@ -1,6 +1,7 @@
 const jwt = require('jsonwebtoken');
 const JWT_SECRET = require('../utils/jwtSecret');
 const User = require('../models/User');
+const { clearCookieOptions } = require('../utils/cookieOptions');
 
 module.exports = async (req, res, next) => {
   const token = req.cookies?.auth_token;
@@ -12,7 +13,7 @@ module.exports = async (req, res, next) => {
   try {
     ({ userId, sv } = jwt.verify(token, JWT_SECRET));
   } catch {
-    res.clearCookie('auth_token');
+    res.clearCookie('auth_token', clearCookieOptions(req));
     return res.status(401).json({ error: 'Nicht autorisiert' });
   }
 
@@ -22,14 +23,14 @@ module.exports = async (req, res, next) => {
   try {
     const user = await User.findById(userId).select('+passwordHash +adminSecretHash');
     if (!user) {
-      res.clearCookie('auth_token');
+      res.clearCookie('auth_token', clearCookieOptions(req));
       return res.status(401).json({ error: 'Nicht autorisiert' });
     }
     // Session versioning: a password change bumps user.sessionVersion, which
     // invalidates every token issued before it (tokens without an sv claim
     // predate the feature and count as version 0).
     if ((sv || 0) !== (user.sessionVersion || 0)) {
-      res.clearCookie('auth_token');
+      res.clearCookie('auth_token', clearCookieOptions(req));
       return res.status(401).json({ error: 'Nicht autorisiert' });
     }
     req.user = user;

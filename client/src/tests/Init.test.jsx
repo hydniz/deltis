@@ -17,12 +17,18 @@ const freshStatus = {
   setupMode: false,
   pepperConfigured: true,
   jwtConfigured: true,
+  inDocker: false,
   settings: [
     {
       key: 'UPDATE_REPO_URL', label: 'GitHub Repository URL', group: 'OTA Update',
       description: 'Repository für Updates.', type: 'url',
       default: 'https://github.com/hydniz/deltis', locked: false,
       value: 'https://github.com/hydniz/deltis',
+    },
+    {
+      key: 'UPDATE_DOCKER_IMAGE', label: 'Docker-Image', group: 'OTA Update',
+      description: 'Update-Image.', type: 'text', default: 'hydniz/deltis',
+      context: 'docker', locked: false, value: 'hydniz/deltis',
     },
     {
       key: 'UPDATE_RELEASE_CHANNEL', label: 'Release-Kanal', group: 'OTA Update',
@@ -177,6 +183,33 @@ describe('Init wizard', () => {
     expect(captured.password).toBe('supersecret1');
     expect(captured.settings.UPDATE_RELEASE_CHANNEL).toBe('beta');
     expect(captured.settings.UPDATE_BRANCH).toBeUndefined();
+  });
+
+  it('hides Docker-only settings on a host installation', async () => {
+    useFreshStatus(); // inDocker: false
+    const user = userEvent.setup();
+    renderInit();
+
+    await user.click(await screen.findByRole('button', { name: /los geht/i }));
+    await completeAccountStep(user);
+
+    await screen.findByRole('heading', { name: 'Einstellungen' });
+    // Host install → the update image (context: 'docker') must not appear.
+    expect(screen.queryByText('Docker-Image')).not.toBeInTheDocument();
+    // Non-context settings stay visible.
+    expect(screen.getByText('GitHub Repository URL')).toBeInTheDocument();
+  });
+
+  it('shows Docker-only settings inside a Docker container', async () => {
+    useFreshStatus({ inDocker: true });
+    const user = userEvent.setup();
+    renderInit();
+
+    await user.click(await screen.findByRole('button', { name: /los geht/i }));
+    await completeAccountStep(user);
+
+    await screen.findByRole('heading', { name: 'Einstellungen' });
+    expect(screen.getByText('Docker-Image')).toBeInTheDocument();
   });
 
   it('shows a server error on the settings step and allows going back', async () => {

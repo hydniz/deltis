@@ -10,24 +10,19 @@ const auth = require('../middleware/auth');
 const User = require('../models/User');
 const pw = require('../utils/password');
 const config = require('../utils/config');
+const { authCookieOptions, clearCookieOptions } = require('../utils/cookieOptions');
 const { createRateLimiter } = require('../utils/rateLimit');
-
-const COOKIE_OPTIONS = {
-  httpOnly: true,
-  secure: process.env.NODE_ENV === 'production',
-  sameSite: 'lax',
-  maxAge: 30 * 24 * 60 * 60 * 1000, // 30 days
-};
 
 // Signs a session JWT bound to the user's current sessionVersion and sets the
 // httpOnly cookie. Bumping sessionVersion (password change) kills the token.
-function issueSession(res, user) {
+// `req` drives the cookie's Secure flag (see utils/cookieOptions).
+function issueSession(req, res, user) {
   const token = jwt.sign(
     { userId: user._id, sv: user.sessionVersion || 0 },
     JWT_SECRET,
     { expiresIn: '30d' }
   );
-  res.cookie('auth_token', token, COOKIE_OPTIONS);
+  res.cookie('auth_token', token, authCookieOptions(req));
 }
 
 // Abuse protection: registration is strictly limited, login gets a generous
@@ -100,7 +95,7 @@ router.post('/register', registerLimiter, async (req, res) => {
       onboardingPending: true, // self-registered users get the setup wizard
     });
 
-    issueSession(res, user);
+    issueSession(req, res, user);
 
     const data = user.toJSON();
     data.hasPassword = true;
@@ -154,7 +149,7 @@ router.post('/login', loginLimiter, async (req, res) => {
     }
     // else: UUID-only migration mode — no credentials set yet, allow through
 
-    issueSession(res, user);
+    issueSession(req, res, user);
 
     const data = user.toJSON();
     data.hasPassword = !!(user.passwordHash || user.adminSecretHash);
@@ -166,12 +161,8 @@ router.post('/login', loginLimiter, async (req, res) => {
 
 // Logout
 
-router.post('/logout', (_req, res) => {
-  res.clearCookie('auth_token', {
-    httpOnly: true,
-    secure: process.env.NODE_ENV === 'production',
-    sameSite: 'lax',
-  });
+router.post('/logout', (req, res) => {
+  res.clearCookie('auth_token', clearCookieOptions(req));
   res.json({ ok: true });
 });
 
@@ -308,7 +299,7 @@ router.put('/me/password', auth, async (req, res) => {
     // only this one alive with a freshly issued token.
     user.sessionVersion = (user.sessionVersion || 0) + 1;
     await user.save();
-    issueSession(res, user);
+    issueSession(req, res, user);
     res.json({ ok: true });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -330,7 +321,7 @@ router.put('/me/password/forced', auth, async (req, res) => {
     user.mustChangePassword = false;
     user.sessionVersion = (user.sessionVersion || 0) + 1;
     await user.save();
-    issueSession(res, user);
+    issueSession(req, res, user);
     res.json({ ok: true });
   } catch (err) {
     res.status(500).json({ error: err.message });
