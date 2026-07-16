@@ -24,7 +24,7 @@ export const handlers = [
   http.get('/api', () => {
     return HttpResponse.json({
       version: '1.0.0+test123',
-      apiVersion: 4,
+      apiVersion: 5,
       emergencyMode: false,
       updateFailed: false,
     });

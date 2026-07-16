@@ -1,14 +1,16 @@
 import { useState, useEffect, useCallback } from 'react';
 import api from '../utils/api';
-import { format, startOfWeek, addDays, addWeeks, subWeeks, isSameDay } from 'date-fns';
+import {
+  format, startOfWeek, startOfDay, addDays, addWeeks, subWeeks, isSameDay, isBefore,
+} from 'date-fns';
 import { de } from 'date-fns/locale';
 import {
   ChevronLeft, ChevronRight, Plus, CheckCircle2, Circle, Trash2,
-  Dumbbell, Sparkles, CalendarDays,
+  Dumbbell, Sparkles, CalendarDays, Pencil, Copy,
 } from 'lucide-react';
 import {
   PageHeader, Button, Field, Input, Select, Textarea, Chip, chipColorFor,
-  Modal, PageLoader,
+  Modal, PageLoader, ProgressBar,
 } from '../components/ui';
 
 // Card tints per activity type — light pastel surfaces matching the chip palette
@@ -70,8 +72,16 @@ function CustomFieldInput({ field, value, onChange }) {
 
 // Add plan (activity or habit)
 
-function AddPlanModal({ date, activityTypes, habits, onSave, onClose }) {
+function AddPlanModal({ date, days, activityTypes, habits, onSave, onClose }) {
   const [mode, setMode] = useState(activityTypes.length > 0 ? 'activity' : 'habit');
+
+  // Days of the week the plan is created for (multi-select, clicked day preselected)
+  const [selectedDates, setSelectedDates] = useState([format(date, 'yyyy-MM-dd')]);
+  const toggleDate = (d) => {
+    setSelectedDates(prev =>
+      prev.includes(d) ? prev.filter(v => v !== d) : [...prev, d]
+    );
+  };
 
   // Activity form
   const [actForm, setActForm] = useState({
@@ -91,17 +101,16 @@ function AddPlanModal({ date, activityTypes, habits, onSave, onClose }) {
   const selectedHabit = habits.find(h => h._id === habitForm.habitId);
 
   const [saving, setSaving] = useState(false);
-  const scheduledDate = format(date, 'yyyy-MM-dd');
 
   const setAct = (k, v) => setActForm(f => ({ ...f, [k]: v }));
   const setHab = (k, v) => setHabitForm(f => ({ ...f, [k]: v }));
 
   const handleSubmitActivity = async (e) => {
     e.preventDefault();
-    if (!selectedType) return;
+    if (!selectedType || selectedDates.length === 0) return;
     setSaving(true);
     try {
-      await api.post('/planner', {
+      await Promise.all(selectedDates.map(scheduledDate => api.post('/planner', {
         activityType: selectedType.label,
         activityTypeRef: selectedType._id,
         scheduledDate,
@@ -109,7 +118,7 @@ function AddPlanModal({ date, activityTypes, habits, onSave, onClose }) {
         distance: actForm.distance ? +actForm.distance : undefined,
         notes: actForm.notes || undefined,
         customValues,
-      });
+      })));
       onSave();
     } catch (err) {
       alert('Fehler: ' + err.message);
@@ -120,14 +129,14 @@ function AddPlanModal({ date, activityTypes, habits, onSave, onClose }) {
 
   const handleSubmitHabit = async (e) => {
     e.preventDefault();
-    if (!selectedHabit) return;
+    if (!selectedHabit || selectedDates.length === 0) return;
     setSaving(true);
     try {
-      await api.post('/planner/habits', {
+      await Promise.all(selectedDates.map(scheduledDate => api.post('/planner/habits', {
         habitId: selectedHabit._id,
         scheduledDate,
         notes: habitForm.notes || undefined,
-      });
+      })));
       onSave();
     } catch (err) {
       alert('Fehler: ' + err.message);
@@ -135,6 +144,29 @@ function AddPlanModal({ date, activityTypes, habits, onSave, onClose }) {
       setSaving(false);
     }
   };
+
+  const dayChips = (
+    <Field
+      label="Tage"
+      hint={selectedDates.length > 1 ? `Wird für ${selectedDates.length} Tage geplant.` : undefined}
+    >
+      <div className="flex flex-wrap gap-1.5">
+        {days.map(d => {
+          const key = format(d, 'yyyy-MM-dd');
+          return (
+            <Chip
+              key={key}
+              color="clay"
+              active={selectedDates.includes(key)}
+              onClick={() => toggleDate(key)}
+            >
+              {format(d, 'EEE d.', { locale: de })}
+            </Chip>
+          );
+        })}
+      </div>
+    </Field>
+  );
 
   return (
     <Modal
@@ -145,7 +177,7 @@ function AddPlanModal({ date, activityTypes, habits, onSave, onClose }) {
       footer={
         <>
           <Button variant="secondary" className="flex-1" onClick={onClose}>Abbrechen</Button>
-          <Button type="submit" form="add-form" className="flex-1" loading={saving}>
+          <Button type="submit" form="add-form" className="flex-1" loading={saving} disabled={selectedDates.length === 0}>
             Speichern
           </Button>
         </>
@@ -191,6 +223,7 @@ function AddPlanModal({ date, activityTypes, habits, onSave, onClose }) {
               {activityTypes.map(t => <option key={t._id} value={t._id}>{t.label}</option>)}
             </Select>
           </Field>
+          {dayChips}
           {selectedType?.showDuration !== false && (
             <Field label="Dauer (min)">
               <Input type="number" value={actForm.duration} onChange={e => setAct('duration', e.target.value)} min="1" placeholder="z.B. 60" />
@@ -229,6 +262,7 @@ function AddPlanModal({ date, activityTypes, habits, onSave, onClose }) {
               {habits.map(h => <option key={h._id} value={h._id}>{h.name}{h.unitSymbol ? ` (${h.unitSymbol})` : ''}</option>)}
             </Select>
           </Field>
+          {dayChips}
           <Field label="Notizen" optional>
             <Textarea rows={2} value={habitForm.notes} onChange={e => setHab('notes', e.target.value)} placeholder="Erinnerung, Kontext…" />
           </Field>
@@ -394,6 +428,97 @@ function CompleteHabitModal({ plan, onSave, onClose }) {
   );
 }
 
+// Edit plan (activity or habit) — move to another day, adjust planned values and notes
+
+function EditPlanModal({ plan, kind, onSave, onClose }) {
+  const isActivity = kind === 'activity';
+  const typeConfig = isActivity ? (plan.activityTypeRef || {}) : {};
+  const [form, setForm] = useState({
+    scheduledDate: (plan.scheduledDate || '').slice(0, 10),
+    duration: plan.duration || '',
+    distance: plan.distance || '',
+    notes: plan.notes || '',
+  });
+  const [customValues, setCustomValues] = useState(plan.customValues || {});
+  const [saving, setSaving] = useState(false);
+  const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setSaving(true);
+    try {
+      if (isActivity) {
+        await api.put(`/planner/${plan._id}`, {
+          scheduledDate: form.scheduledDate,
+          duration: form.duration ? +form.duration : null,
+          distance: form.distance ? +form.distance : null,
+          notes: form.notes || null,
+          customValues,
+        });
+      } else {
+        await api.put(`/planner/habits/${plan._id}`, {
+          scheduledDate: form.scheduledDate,
+          notes: form.notes || null,
+        });
+      }
+      onSave();
+    } catch (err) {
+      alert('Fehler: ' + err.message);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <Modal
+      onClose={onClose}
+      title="Plan bearbeiten"
+      subtitle={isActivity ? (typeConfig.label || plan.activityType) : (plan.habitId?.name || plan.habitName)}
+      icon={Pencil}
+      footer={
+        <>
+          <Button variant="secondary" className="flex-1" onClick={onClose}>Abbrechen</Button>
+          <Button type="submit" form="edit-plan-form" className="flex-1" loading={saving}>
+            Speichern
+          </Button>
+        </>
+      }
+    >
+      <form id="edit-plan-form" onSubmit={handleSubmit} className="space-y-4">
+        <Field label="Geplant für" hint="Datum ändern verschiebt den Plan auf einen anderen Tag.">
+          <Input
+            type="date"
+            value={form.scheduledDate}
+            onChange={e => set('scheduledDate', e.target.value)}
+            required
+          />
+        </Field>
+        {isActivity && typeConfig.showDuration !== false && (
+          <Field label="Dauer (min)">
+            <Input type="number" value={form.duration} onChange={e => set('duration', e.target.value)} min="1" placeholder="z.B. 60" />
+          </Field>
+        )}
+        {isActivity && typeConfig.showDistance && (
+          <Field label="Distanz (km)">
+            <Input type="number" value={form.distance} onChange={e => set('distance', e.target.value)} min="0" step="0.1" placeholder="z.B. 5.5" />
+          </Field>
+        )}
+        {isActivity && (typeConfig.customFields || []).map(field => (
+          <Field
+            key={field.key}
+            label={<>{field.label}{field.unit && <span className="text-ink-300 ml-1 normal-case">({field.unit})</span>}</>}
+          >
+            <CustomFieldInput field={field} value={customValues[field.key]} onChange={v => setCustomValues(cv => ({ ...cv, [field.key]: v }))} />
+          </Field>
+        ))}
+        <Field label="Notizen">
+          <Textarea rows={2} value={form.notes} onChange={e => set('notes', e.target.value)} placeholder="Optional…" />
+        </Field>
+      </form>
+    </Modal>
+  );
+}
+
 // Main page
 
 export default function Planner() {
@@ -406,6 +531,9 @@ export default function Planner() {
   const [addFor, setAddFor] = useState(null);
   const [completingPlan, setCompletingPlan] = useState(null);
   const [completingHabitPlan, setCompletingHabitPlan] = useState(null);
+  const [editing, setEditing] = useState(null);
+  const [copying, setCopying] = useState(false);
+  const [copyInfo, setCopyInfo] = useState(null);
 
   const weekEnd = addDays(weekStart, 6);
   const days = Array.from({ length: 7 }, (_, i) => addDays(weekStart, i));
@@ -432,6 +560,27 @@ export default function Planner() {
   }, [weekStart]);
 
   useEffect(() => { load(); }, [load]);
+  useEffect(() => { setCopyInfo(null); }, [weekStart]);
+
+  const handleCopyWeek = async () => {
+    setCopying(true);
+    setCopyInfo(null);
+    try {
+      const res = await api.post('/planner/copy-week', {
+        sourceStart: format(subWeeks(weekStart, 1), 'yyyy-MM-dd'),
+        targetStart: format(weekStart, 'yyyy-MM-dd'),
+      });
+      const copied = (res.data.copiedActivities || 0) + (res.data.copiedHabits || 0);
+      setCopyInfo(copied > 0
+        ? `${copied} ${copied === 1 ? 'Plan' : 'Pläne'} aus der Vorwoche übernommen.`
+        : 'Nichts übernommen – die Vorwoche war leer oder alles ist bereits geplant.');
+      await load();
+    } catch (err) {
+      alert('Fehler: ' + err.message);
+    } finally {
+      setCopying(false);
+    }
+  };
 
   const handleCompleteActivity = (plan) => {
     if (plan.completed) {
@@ -458,6 +607,9 @@ export default function Planner() {
   };
 
   const today = new Date();
+  const allPlans = [...plans, ...habitPlans];
+  const doneCount = allPlans.filter(p => p.completed).length;
+  const totalCount = allPlans.length;
 
   return (
     <div className="space-y-6">
@@ -484,6 +636,35 @@ export default function Planner() {
       {loading ? (
         <PageLoader />
       ) : (
+        <>
+        {/* Week overview: completion progress + copy action */}
+        <div className="card p-4">
+          <div className="flex flex-col sm:flex-row sm:items-center gap-3">
+            <div className="flex-1 min-w-0">
+              <div className="flex items-baseline justify-between mb-1.5 gap-2">
+                <p className="text-[10px] font-semibold uppercase tracking-[0.09em] text-ink-400">
+                  Wochenfortschritt
+                </p>
+                <p className="text-xs font-semibold text-ink-500">
+                  {totalCount > 0 ? `${doneCount} von ${totalCount} erledigt` : 'Noch nichts geplant'}
+                </p>
+              </div>
+              <ProgressBar pct={totalCount > 0 ? (doneCount / totalCount) * 100 : 0} tone="brand" />
+            </div>
+            <Button
+              variant="secondary"
+              size="sm"
+              icon={Copy}
+              loading={copying}
+              onClick={handleCopyWeek}
+              className="flex-shrink-0"
+            >
+              Vorwoche kopieren
+            </Button>
+          </div>
+          {copyInfo && <p className="text-xs text-ink-400 mt-2">{copyInfo}</p>}
+        </div>
+
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-7 gap-3">
           {days.map(day => {
             const dayDate = format(day, 'yyyy-MM-dd');
@@ -491,6 +672,8 @@ export default function Planner() {
             const dayHabitPlans = habitPlans.filter(p => (p.scheduledDate || '').slice(0, 10) === dayDate);
             const isToday_ = isSameDay(day, today);
             const totalItems = dayPlans.length + dayHabitPlans.length;
+            const doneItems = [...dayPlans, ...dayHabitPlans].filter(p => p.completed).length;
+            const isPast = isBefore(day, startOfDay(today));
 
             return (
               <div
@@ -503,9 +686,22 @@ export default function Planner() {
                     <p className={`text-[10px] font-semibold uppercase tracking-[0.09em] ${isToday_ ? 'text-brand-600' : 'text-ink-400'}`}>
                       {format(day, 'EEE', { locale: de })}
                     </p>
-                    <p className={`display text-xl ${isToday_ ? 'text-brand-600' : ''}`}>
-                      {format(day, 'd')}
-                    </p>
+                    <div className="flex items-center gap-1.5">
+                      <p className={`display text-xl ${isToday_ ? 'text-brand-600' : ''}`}>
+                        {format(day, 'd')}
+                      </p>
+                      {totalItems > 0 && (
+                        <span
+                          className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-full ${
+                            doneItems === totalItems
+                              ? 'bg-emerald-100 text-emerald-700'
+                              : 'bg-paper-100 text-ink-400'
+                          }`}
+                        >
+                          {doneItems}/{totalItems}
+                        </span>
+                      )}
+                    </div>
                   </div>
                   <button
                     onClick={() => setAddFor(day)}
@@ -545,7 +741,17 @@ export default function Planner() {
                               {plan.distance ? `${plan.distance} km` : ''}
                             </p>
                           )}
+                          {isPast && !plan.completed && (
+                            <p className="text-[10px] font-semibold text-ocher-600 mt-0.5">Überfällig</p>
+                          )}
                         </div>
+                        <button
+                          onClick={() => setEditing({ plan, kind: 'activity' })}
+                          aria-label="Plan bearbeiten"
+                          className="flex-shrink-0 text-ink-300 hover:text-brand-600 transition-colors p-1"
+                        >
+                          <Pencil size={12} />
+                        </button>
                         <button
                           onClick={() => api.delete(`/planner/${plan._id}`).then(load)}
                           aria-label="Plan löschen"
@@ -589,7 +795,17 @@ export default function Planner() {
                           {plan.notes && !plan.completed && (
                             <p className="text-xs text-ink-400 mt-0.5 truncate">{plan.notes}</p>
                           )}
+                          {isPast && !plan.completed && (
+                            <p className="text-[10px] font-semibold text-ocher-600 mt-0.5">Überfällig</p>
+                          )}
                         </div>
+                        <button
+                          onClick={() => setEditing({ plan, kind: 'habit' })}
+                          aria-label="Plan bearbeiten"
+                          className="flex-shrink-0 text-ink-300 hover:text-brand-600 transition-colors p-1"
+                        >
+                          <Pencil size={12} />
+                        </button>
                         <button
                           onClick={() => api.delete(`/planner/habits/${plan._id}`).then(load)}
                           aria-label="Plan löschen"
@@ -609,15 +825,26 @@ export default function Planner() {
             );
           })}
         </div>
+        </>
       )}
 
       {addFor && (
         <AddPlanModal
           date={addFor}
+          days={days}
           activityTypes={activityTypes}
           habits={habits}
           onSave={() => { setAddFor(null); load(); }}
           onClose={() => setAddFor(null)}
+        />
+      )}
+
+      {editing && (
+        <EditPlanModal
+          plan={editing.plan}
+          kind={editing.kind}
+          onSave={() => { setEditing(null); load(); }}
+          onClose={() => setEditing(null)}
         />
       )}
 

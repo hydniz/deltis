@@ -2,7 +2,7 @@
   "name": "deltis-backend",
   "version": "0.5.0",
   "stage": "",
-  "apiVersion": 4,
+  "apiVersion": 5,
   "scripts": {
     "dev": "concurrently \"nodemon server/index.js\" \"npm run dev --prefix client\"",
     "server:dev": "nodemon server/index.js",
