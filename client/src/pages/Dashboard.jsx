@@ -243,7 +243,7 @@ export default function Dashboard() {
   const donePlans = [...data.activityPlans, ...data.habitPlans].filter(p => p.completed).length;
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 anim-list">
       {/* Time-aware greeting — phrases rotate daily per time slot */}
       <header>
         <p className="text-[11px] text-ink-400 uppercase tracking-[0.14em] font-semibold mb-1.5">
@@ -258,8 +258,8 @@ export default function Dashboard() {
         </h1>
       </header>
 
-      {/* Stats — cascade in with a slight stagger */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+      {/* Stats — the grid opts out of the page cascade; its tiles stagger themselves */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 anim-skip">
         <div className="anim-fade-up h-full">
           <Stat
             icon={Sparkles}
@@ -307,7 +307,7 @@ export default function Dashboard() {
         {dueHabits.length === 0 ? (
           <EmptyHint>Für heute sind keine Gewohnheiten geplant. Lehn dich zurück!</EmptyHint>
         ) : (
-          <div className="divide-hairline">
+          <div className="divide-hairline anim-list">
             {dueHabits.map(habit => (
               <TodayHabitRow
                 key={habit._id}
@@ -325,7 +325,7 @@ export default function Dashboard() {
         {totalPlans === 0 ? (
           <EmptyHint>Heute steht nichts im Planer.</EmptyHint>
         ) : (
-          <div className="divide-hairline">
+          <div className="divide-hairline anim-list">
             {data.activityPlans.map(plan => (
               <PlanRow
                 key={plan._id}
@@ -360,7 +360,7 @@ export default function Dashboard() {
           {data.activities.length === 0 ? (
             <EmptyHint>Keine Aktivitäten diese Woche – auf geht's!</EmptyHint>
           ) : (
-            <div className="divide-hairline">
+            <div className="divide-hairline anim-list">
               {data.activities.slice(0, 5).map(a => (
                 <div key={a._id} className="flex items-center justify-between gap-3 px-4 py-3">
                   <div className="min-w-0">
@@ -392,7 +392,7 @@ export default function Dashboard() {
               </Link>
             </div>
           ) : (
-            <div className="divide-hairline">
+            <div className="divide-hairline anim-list">
               {data.goals.slice(0, 4).map(g => (
                 <div key={g._id} className="px-4 py-3">
                   <div className="flex items-center justify-between gap-2">

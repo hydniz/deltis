@@ -307,8 +307,9 @@ export default function Habits() {
   const [loading, setLoading] = useState(true);
   const [showManage, setShowManage] = useState(false);
 
+  // Quick-log refreshes call load() directly and swap data in place —
+  // only the initial mount shows the loader (loading starts true).
   const load = useCallback(async () => {
-    setLoading(true);
     try {
       const todayStart = startOfDay(new Date());
       const [defsRes, logsRes] = await Promise.all([
@@ -388,7 +389,7 @@ export default function Habits() {
           }
         />
       ) : (
-        <div className="grid sm:grid-cols-2 gap-4">
+        <div className="grid sm:grid-cols-2 gap-4 anim-list">
           {sortedHabits.map(habit => (
             <HabitCard
               key={habit._id}

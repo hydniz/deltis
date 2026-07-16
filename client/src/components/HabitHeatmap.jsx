@@ -59,7 +59,7 @@ export default function HabitHeatmap({ habit }) {
     <div className="mt-4">
       <div className="flex gap-1 justify-between" aria-label={`Verlauf der letzten ${WEEKS} Wochen`}>
         {weeks.map((days, wi) => (
-          <div key={wi} className="flex flex-col gap-1 flex-1">
+          <div key={wi} className="flex flex-col gap-1 flex-1 anim-item" style={{ animationDelay: `${wi * 20}ms` }}>
             {days.map(day => {
               const future = isAfter(day, today);
               const key = format(day, 'yyyy-MM-dd');
