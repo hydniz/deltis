@@ -67,6 +67,16 @@ describe('Planner – Wochenübersicht', () => {
     expect(screen.getByText('1 von 3 erledigt')).toBeInTheDocument();
   });
 
+  it('zeigt die Fortschritts-Heatmap unterhalb des Wochen-Rasters', async () => {
+    usePlannerHandlers();
+    render(<Planner />);
+    await screen.findByText('Wasser trinken');
+
+    expect(await screen.findByLabelText('Planungsverlauf der letzten 12 Wochen')).toBeInTheDocument();
+    // Week data feeds the heatmap too: Wednesday 15.07. has its completed plan
+    expect(screen.getByTitle('15. Juli: 1 von 1 erledigt')).toBeInTheDocument();
+  });
+
   it('zeigt pro Tag ein Erledigt-Badge', async () => {
     usePlannerHandlers();
     render(<Planner />);
