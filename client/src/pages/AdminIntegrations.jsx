@@ -25,11 +25,13 @@ function StatusDot({ ok, label }) {
   );
 }
 
+// One label/value line inside the section card, following the row pattern of
+// the other admin pages (px-4 py-3, hairline separators).
 function InfoRow({ label, children }) {
   return (
-    <div className="py-2.5 border-b hairline last:border-b-0">
-      <p className="text-xs text-ink-400 mb-0.5">{label}</p>
-      <div className="text-sm text-ink-800">{children}</div>
+    <div className="px-4 py-3 border-b hairline flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1 sm:gap-4">
+      <span className="text-sm text-ink-500 flex-shrink-0">{label}</span>
+      <div className="text-sm text-ink-800 min-w-0 sm:text-right">{children}</div>
     </div>
   );
 }
@@ -107,105 +109,113 @@ export default function AdminIntegrations() {
       ) : overview && (
         <div className="space-y-6">
           <SectionCard icon={Activity} title="Strava">
-            <div className="space-y-4">
-              {/* Setup checklist */}
-              <div className="flex flex-wrap gap-x-5 gap-y-1.5">
-                <StatusDot ok={overview.clientIdSet} label="Client-ID gesetzt" />
-                <StatusDot ok={overview.clientSecretSet} label="Client-Secret gesetzt" />
-                <StatusDot ok={Boolean(overview.publicBaseUrl)} label="Öffentliche Basis-URL gesetzt" />
-              </div>
 
-              {!overview.configured && (
+            {/* Setup checklist */}
+            <div className="px-4 py-3 border-b hairline flex flex-wrap gap-x-5 gap-y-1.5">
+              <StatusDot ok={overview.clientIdSet} label="Client-ID" />
+              <StatusDot ok={overview.clientSecretSet} label="Client-Secret" />
+              <StatusDot ok={Boolean(overview.publicBaseUrl)} label="Öffentliche Basis-URL" />
+            </div>
+
+            {!overview.configured && (
+              <div className="px-4 py-3 border-b hairline">
                 <Alert tone="warning">
                   Hinterlege Client-ID und Client-Secret deiner Strava-API-Anwendung unter{' '}
                   <Link to="/admin/config" className="underline font-semibold">System → Integrationen</Link>.
                   Eine API-Anwendung erstellst du auf strava.com/settings/api.
                 </Alert>
-              )}
-
-              <div>
-                <InfoRow label='"Authorization Callback Domain" (bei Strava unter „My API Application" eintragen)'>
-                  {overview.callbackDomain
-                    ? <code className="font-mono text-brand-700">{overview.callbackDomain}</code>
-                    : <span className="text-ink-400">Erst verfügbar, wenn die öffentliche Basis-URL gesetzt ist.</span>}
-                </InfoRow>
-                <InfoRow label="Webhook-Callback-URL">
-                  {overview.webhookCallbackUrl
-                    ? <code className="font-mono text-xs break-all">{overview.webhookCallbackUrl}</code>
-                    : <span className="text-ink-400">–</span>}
-                </InfoRow>
-                <InfoRow label="Nutzung">
-                  {overview.connectedUsers} verbundene{overview.connectedUsers === 1 ? 'r' : ''} Nutzer
-                  {' · '}{overview.activityCount} synchronisierte Aktivitäten
-                  {' · '}Polling: {overview.pollIntervalMinutes > 0 ? `alle ${overview.pollIntervalMinutes} Min.` : 'deaktiviert'}
-                </InfoRow>
               </div>
+            )}
 
-              {/* Webhook subscription */}
-              {overview.configured && (
-                <div className="panel p-4 space-y-3">
-                  <div className="flex items-center gap-2">
-                    <Webhook size={14} className="text-ink-500" />
-                    <span className="text-sm font-semibold text-ink-800">Webhook-Abonnement</span>
-                  </div>
-                  <p className="text-xs text-ink-400">
-                    Mit aktivem Webhook meldet Strava neue, geänderte und gelöschte Aktivitäten
-                    sofort. Die Instanz muss dafür unter der öffentlichen Basis-URL per HTTPS
-                    erreichbar sein — Strava prüft das beim Anlegen.
-                  </p>
+            <InfoRow label="Authorization Callback Domain">
+              {overview.callbackDomain ? (
+                <code className="font-mono text-brand-700 break-all">{overview.callbackDomain}</code>
+              ) : (
+                <span className="text-ink-400">Öffentliche Basis-URL setzen, um sie zu ermitteln</span>
+              )}
+            </InfoRow>
+            <InfoRow label="Webhook-Callback-URL">
+              {overview.webhookCallbackUrl ? (
+                <code className="font-mono text-xs break-all">{overview.webhookCallbackUrl}</code>
+              ) : (
+                <span className="text-ink-400">–</span>
+              )}
+            </InfoRow>
+            <InfoRow label="Verbundene Nutzer">{overview.connectedUsers}</InfoRow>
+            <InfoRow label="Synchronisierte Aktivitäten">{overview.activityCount}</InfoRow>
+            <InfoRow label="Polling">
+              {overview.pollIntervalMinutes > 0 ? `alle ${overview.pollIntervalMinutes} Minuten` : 'deaktiviert'}
+            </InfoRow>
 
-                  {subError && <Alert tone="error">{subError}</Alert>}
+            {/* Webhook subscription */}
+            {overview.configured && (
+              <div className="px-4 py-4 border-b hairline space-y-3">
+                <div className="flex items-center gap-2">
+                  <Webhook size={14} className="text-ink-500" />
+                  <span className="text-sm font-semibold text-ink-800">Webhook-Abonnement</span>
+                </div>
+                <p className="text-xs text-ink-400">
+                  Mit aktivem Webhook meldet Strava neue, geänderte und gelöschte Aktivitäten
+                  sofort. Die Instanz muss dafür unter der öffentlichen Basis-URL per HTTPS
+                  erreichbar sein — Strava prüft das beim Anlegen.
+                </p>
 
-                  {Array.isArray(subscriptions) && subscriptions.length > 0 ? (
-                    subscriptions.map(sub => (
-                      <div key={sub.id} className="flex items-center justify-between gap-3 bg-surface border hairline rounded-xl px-3.5 py-2.5">
-                        <div className="min-w-0">
-                          <p className="text-sm font-medium text-ink-800 flex items-center gap-1.5">
-                            <Check size={13} className="text-emerald-600" /> Aktiv (ID {sub.id})
-                          </p>
-                          <p className="text-xs text-ink-400 font-mono truncate">{sub.callback_url}</p>
-                        </div>
-                        <Button
-                          variant="danger" size="sm" icon={Trash2} loading={busy}
-                          onClick={() => deleteSubscription(sub.id)}
-                        >
-                          Löschen
-                        </Button>
+                {subError && <Alert tone="error">{subError}</Alert>}
+
+                {Array.isArray(subscriptions) && subscriptions.length > 0 ? (
+                  subscriptions.map(sub => (
+                    <div key={sub.id} className="flex items-center justify-between gap-3 panel px-3.5 py-2.5">
+                      <div className="min-w-0">
+                        <p className="text-sm font-medium text-ink-800 flex items-center gap-1.5">
+                          <Check size={13} className="text-emerald-600" /> Aktiv (ID {sub.id})
+                        </p>
+                        <p className="text-xs text-ink-400 font-mono truncate">{sub.callback_url}</p>
                       </div>
-                    ))
-                  ) : (
-                    <div className="flex flex-wrap items-center gap-3">
                       <Button
-                        icon={Webhook} loading={busy}
-                        disabled={!overview.webhookCallbackUrl}
-                        onClick={createSubscription}
+                        variant="danger" size="sm" icon={Trash2} loading={busy}
+                        onClick={() => deleteSubscription(sub.id)}
                       >
-                        Webhook-Abo anlegen
-                      </Button>
-                      <Button variant="ghost" size="sm" icon={RefreshCw} onClick={load}>
-                        Aktualisieren
+                        <span className="hidden sm:inline">Löschen</span>
                       </Button>
                     </div>
-                  )}
-                </div>
-              )}
+                  ))
+                ) : (
+                  <div className="flex flex-wrap items-center gap-2.5">
+                    <Button
+                      icon={Webhook} loading={busy}
+                      disabled={!overview.webhookCallbackUrl}
+                      onClick={createSubscription}
+                    >
+                      Webhook-Abo anlegen
+                    </Button>
+                    <Button variant="ghost" size="sm" icon={RefreshCw} onClick={load}>
+                      Aktualisieren
+                    </Button>
+                  </div>
+                )}
+              </div>
+            )}
 
-              <Alert tone="info" title="Hinweise zur Strava-API">
-                <ul className="text-xs space-y-1 mt-1 list-disc pl-4">
-                  <li>
-                    Neue Strava-Anwendungen dürfen standardmäßig nur <strong>einen Athleten</strong> (dich selbst)
-                    verbinden. Für weitere Nutzer musst du bei Strava eine Kapazitätserhöhung beantragen.
-                  </li>
-                  <li>
-                    Es gelten Rate-Limits pro Anwendung (Standard: 100 Anfragen/15 Min., 1.000/Tag).
-                    Pro synchronisierter Aktivität fallen ca. 3 Anfragen an.
-                  </li>
-                  <li>
-                    Für kommerzielle Nutzung gelten zusätzliche Bedingungen des Strava-API-Agreements —
-                    Details in <code>docs/STRAVA.md</code>.
-                  </li>
-                </ul>
-              </Alert>
+            {/* API constraints */}
+            <div className="px-4 py-4">
+              <p className="text-xs font-semibold text-ink-500 uppercase tracking-[0.09em] mb-2">
+                Hinweise zur Strava-API
+              </p>
+              <ul className="text-xs text-ink-500 space-y-1.5 list-disc pl-4">
+                <li>
+                  Neue Strava-Anwendungen dürfen standardmäßig nur <strong>einen Athleten</strong> (dich
+                  selbst) verbinden. Für weitere Nutzer musst du bei Strava eine Kapazitätserhöhung
+                  beantragen.
+                </li>
+                <li>
+                  Es gelten Rate-Limits pro Anwendung (Standard: 100 Anfragen/15 Min., 1.000/Tag).
+                  Pro synchronisierter Aktivität fallen ca. 3 Anfragen an.
+                </li>
+                <li>
+                  Für kommerzielle Nutzung gelten zusätzliche Bedingungen des Strava-API-Agreements —
+                  Details in <code className="font-mono">docs/STRAVA.md</code>.
+                </li>
+              </ul>
             </div>
           </SectionCard>
         </div>

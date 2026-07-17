@@ -16,6 +16,11 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      # A tag that does not match package.json would build a release that
+      # reports the previous version everywhere (UI, update checker).
+      - name: Verify tag matches package.json versions
+        run: node scripts/verify-release-version.js "${{ github.ref_name }}"
+
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:

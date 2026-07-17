@@ -111,7 +111,7 @@ function StepRail({ steps, current }) {
 
 // Steps
 
-function StepWelcome({ onNext }) {
+function StepWelcome({ onNext, backupsPresent }) {
   return (
     <div className="card rounded-3xl p-8 text-center space-y-6">
       <div className="anim-pop inline-flex">
@@ -126,6 +126,15 @@ function StepWelcome({ onNext }) {
           Admin-Konto ein und passt die Grundeinstellungen an.
         </p>
       </div>
+      {backupsPresent && (
+        <Alert tone="warning" title="Backups gefunden – lief hier schon eine Instanz?" className="text-left anim-fade-up">
+          Die Datenbank ist leer, aber im Backup-Verzeichnis dieses Servers liegen
+          Datenbank-Backups. Wenn hier bereits eine {APP_NAME}-Instanz lief, brich die
+          Einrichtung ab und stelle zuerst ein Backup wieder her
+          (<code className="font-mono">./restore.sh</code>) — durch eine Neueinrichtung
+          werden die alten Daten nicht übernommen.
+        </Alert>
+      )}
       <div className="grid grid-cols-3 gap-3 text-left anim-fade-up" style={{ animationDelay: '180ms' }}>
         {[
           { icon: ShieldCheck, label: 'Sicherheit' },
@@ -649,7 +658,7 @@ export default function Init() {
 
           {/* key={step.id} re-triggers the entrance animation on every step change */}
           <div key={step.id} className="anim-fade-up">
-            {step.id === 'welcome' && <StepWelcome onNext={next} />}
+            {step.id === 'welcome' && <StepWelcome onNext={next} backupsPresent={!!status.backupsPresent} />}
             {step.id === 'database' && <StepDatabase onDone={handleDatabaseDone} />}
             {step.id === 'security' && <StepSecurity status={status} onDone={next} onBack={back} />}
             {step.id === 'account' && (
