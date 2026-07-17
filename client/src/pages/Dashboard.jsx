@@ -28,7 +28,10 @@ const ACTIVITY_LABELS = {
 
 function SectionCard({ icon: Icon, tone = 'clay', title, linkTo, linkLabel = 'Alle', children }) {
   return (
-    <div className="card">
+    // min-w-0: as a grid/flex child the card must be allowed to shrink below
+    // its content width, otherwise long entries push the page past the phone
+    // screen edge.
+    <div className="card min-w-0">
       <div className="flex items-center justify-between px-4 pt-4 pb-2">
         <h2 className="display text-lg flex items-center gap-2.5">
           <span className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 ${TONE_BUBBLE[tone]}`}>
@@ -144,11 +147,14 @@ function TodayHabitRow({ habit, log, onLog }) {
 // One planned item (activity or habit plan) with completion state.
 function PlanRow({ label, meta, completed, color }) {
   return (
-    <div className="flex items-center gap-3 px-4 py-3">
-      <span className={completed ? 'text-emerald-500' : 'text-ink-300'}>
+    <div className="flex items-center gap-3 px-4 py-3 min-w-0">
+      <span className={`flex-shrink-0 ${completed ? 'text-emerald-500' : 'text-ink-300'}`}>
         {completed ? <Check size={16} strokeWidth={3} className="anim-check" /> : <Circle size={14} />}
       </span>
-      <Chip color={color}>{label}</Chip>
+      {/* Long plan names must shrink inside the pill instead of pushing the row wide */}
+      <Chip color={color} className="max-w-[55%] overflow-hidden">
+        <span className="truncate">{label}</span>
+      </Chip>
       <span className="text-xs text-ink-400 truncate flex-1">{meta}</span>
       {completed && <span className="text-xs font-medium text-emerald-600 flex-shrink-0">Erledigt</span>}
     </div>
@@ -416,7 +422,7 @@ export default function Dashboard() {
               {data.goals.slice(0, 4).map(g => (
                 <div key={g._id} className="px-4 py-3">
                   <div className="flex items-center justify-between gap-2">
-                    <p className="text-sm font-medium text-ink-800 truncate">{g.name}</p>
+                    <p className="text-sm font-medium text-ink-800 truncate min-w-0">{g.name}</p>
                     <Chip variant="soft" color={g.type.startsWith('long-term') ? 'amber' : 'olive'} className="flex-shrink-0">
                       {g.type.startsWith('long-term') ? 'Langfristig' : 'Periodisch'}
                     </Chip>
