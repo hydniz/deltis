@@ -12,8 +12,18 @@ const trainingPlanSchema = new mongoose.Schema({
   // Ad-hoc criteria map keyed by integration (same shape as TrainingType.criteria)
   criteria: { type: mongoose.Schema.Types.Mixed, default: null },
 
+  // Optional display name — lets ad-hoc criteria plans read like "Intervalle"
+  // instead of the generic "Training (eigene Kriterien)".
+  name: { type: String, default: '', trim: true, maxlength: 60 },
+
   scheduledDate: { type: Date, required: true },
   notes: { type: String, default: '' },
+
+  // Manual completion on top of the derived fulfilment: the user can always
+  // tick a training off themselves (e.g. the watch failed to sync). A plan
+  // counts as completed when EITHER a synced activity matches OR this is set.
+  manualCompleted: { type: Boolean, default: false },
+
   createdAt: { type: Date, default: Date.now },
 });
 

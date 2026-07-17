@@ -14,6 +14,7 @@ import Planner from './pages/Planner';
 import Habits from './pages/Habits';
 import Weight from './pages/Weight';
 import Goals from './pages/Goals';
+import ShareView from './pages/ShareView';
 import Settings from './pages/Settings';
 import AdminUsers from './pages/AdminUsers';
 import AdminConfig from './pages/AdminConfig';
@@ -387,6 +388,7 @@ function AppInner() {
             <Route path="habits"     element={<Habits />} />
             <Route path="weight"     element={<Weight />} />
             <Route path="goals"      element={<Goals />} />
+            <Route path="share"      element={<ShareView />} />
             <Route path="settings/*" element={<Settings />} />
           </Route>
 

@@ -5,7 +5,7 @@ import { format, parseISO } from 'date-fns';
 import { de } from 'date-fns/locale';
 import {
   Plus, Target, Trash2, X, Dumbbell, Sparkles, AlertTriangle, Check, Clock, Pencil, Activity,
-  Layers, ChevronDown, ChevronUp, CornerDownRight,
+  Layers, ChevronDown, ChevronUp, CornerDownRight, Share2,
 } from 'lucide-react';
 import {
   ResponsiveContainer, LineChart, Line, XAxis, YAxis,
@@ -20,6 +20,7 @@ import ManageHabitsModal from '../components/ManageHabitsModal';
 import StravaCriteriaBuilder, {
   normalizeCriteria, criteriaSummary, emptyGroup,
 } from '../components/StravaCriteriaBuilder';
+import GoalHeatmap from '../components/GoalHeatmap';
 
 // Interval helpers
 
@@ -444,6 +445,9 @@ function GoalProgress({ goal, actions }) {
           )}
         </>
       )}
+
+      {/* Daily contribution heatmap — meta goals have no daily contribution */}
+      {!isMeta && <GoalHeatmap goal={goal} />}
 
       {/* Contribution breakdown — why does this goal have this progress? */}
       <GoalItemsBreakdown goalId={goal._id} />
@@ -2133,9 +2137,16 @@ export default function Goals() {
         icon={Target}
         tone="amber"
         action={
-          <Button icon={Plus} onClick={() => setShowCreate(true)}>
-            <span className="hidden sm:inline">Neues Ziel</span>
-          </Button>
+          <div className="flex items-center gap-1.5">
+            <Link to="/share">
+              <Button variant="secondary" icon={Share2}>
+                <span className="hidden sm:inline">Share-Ansicht</span>
+              </Button>
+            </Link>
+            <Button icon={Plus} onClick={() => setShowCreate(true)}>
+              <span className="hidden sm:inline">Neues Ziel</span>
+            </Button>
+          </div>
         }
       />
 

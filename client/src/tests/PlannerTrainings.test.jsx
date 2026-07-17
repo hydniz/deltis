@@ -74,6 +74,77 @@ describe('Planner – planned trainings', () => {
     expect(screen.getByText('0 von 1 erledigt')).toBeInTheDocument();
   });
 
+  it('renders the custom name and nests matched activities in the card', async () => {
+    useHandlers({
+      trainings: [{
+        ...fulfilledPlan,
+        trainingTypeId: null,
+        trainingTypeName: null,
+        name: 'Intervalle',
+        criteria: { strava: { operator: 'AND', rules: [{ kind: 'sportType', values: ['Run'] }] } },
+        autoCompleted: true,
+        manualCompleted: false,
+        matchedActivities: [
+          fulfilledPlan.fulfilledBy,
+          { integration: 'strava', id: 'a2', name: 'Abendlauf', sportType: 'Run', date: '2026-07-15T18:00:00.000Z', movingTime: 2400, distance: 8000 },
+        ],
+      }],
+    });
+    render(<Planner />);
+
+    await waitFor(() => expect(screen.getByText('Intervalle')).toBeInTheDocument());
+    expect(screen.getByText('Morgenlauf am Fluss')).toBeInTheDocument();
+    expect(screen.getByText('Abendlauf')).toBeInTheDocument();
+  });
+
+  it('opens the detail modal on card click with all matches listed', async () => {
+    useHandlers({
+      trainings: [{
+        ...fulfilledPlan,
+        autoCompleted: true,
+        manualCompleted: false,
+        matchedActivities: [fulfilledPlan.fulfilledBy],
+      }],
+    });
+    const user = userEvent.setup();
+    render(<Planner />);
+
+    await waitFor(() => expect(screen.getByText('Zone 2')).toBeInTheDocument());
+    await user.click(screen.getByText('Zone 2'));
+
+    expect(await screen.findByText('Erfüllt durch Aktivität')).toBeInTheDocument();
+    expect(screen.getByText('Passende Aktivität')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Als absolviert markieren' })).toBeInTheDocument();
+  });
+
+  it('toggles manual completion via the check circle', async () => {
+    useHandlers({
+      trainings: [{
+        ...fulfilledPlan,
+        completed: false,
+        autoCompleted: false,
+        manualCompleted: false,
+        fulfilledBy: null,
+        matchedActivities: [],
+      }],
+    });
+    let putBody = null;
+    server.use(
+      http.put('/api/planner/trainings/tp1', async ({ request }) => {
+        putBody = await request.json();
+        return HttpResponse.json({ _id: 'tp1' });
+      })
+    );
+    const user = userEvent.setup();
+    render(<Planner />);
+
+    await waitFor(() => expect(screen.getByText('Zone 2')).toBeInTheDocument());
+    await user.click(screen.getByTitle('Als absolviert markieren'));
+
+    await waitFor(() => expect(putBody).not.toBeNull());
+    expect(putBody.completed).toBe(true);
+  });
+
   it('plans a training via the add modal using a saved type', async () => {
     useHandlers({ trainings: [] });
     let posted = null;

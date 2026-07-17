@@ -47,8 +47,9 @@ describe('Planner – Strava activities', () => {
     render(<Planner />);
 
     await waitFor(() => expect(screen.getByText('Morgenlauf am Fluss')).toBeInTheDocument());
-    expect(screen.getByText('Strava')).toBeInTheDocument();
-    expect(screen.getByTitle('Von Strava synchronisiert')).toBeInTheDocument();
+    // "Strava" shows up on the card badge (and as heatmap filter tab)
+    expect(screen.getAllByText('Strava').length).toBeGreaterThan(0);
+    expect(screen.getByTitle('Von Strava synchronisiert – Details anzeigen')).toBeInTheDocument();
     expect(screen.getByText('Run · 30 min · 5.2 km')).toBeInTheDocument();
   });
 
@@ -62,7 +63,9 @@ describe('Planner – Strava activities', () => {
   });
 
   it('requests the visible week with a buffer and keeps working without Strava', async () => {
-    let requestedParams = null;
+    // The planner heatmap requests /strava/activities for its own (longer)
+    // range too — collect every request and look for the week view's one.
+    const requestedParams = [];
     server.use(
       http.get('/api/planner', () => HttpResponse.json([])),
       http.get('/api/planner/habits', () => HttpResponse.json([])),
@@ -70,16 +73,17 @@ describe('Planner – Strava activities', () => {
       http.get('/api/habits/definitions', () => HttpResponse.json([])),
       http.get('/api/strava/activities', ({ request }) => {
         const url = new URL(request.url);
-        requestedParams = Object.fromEntries(url.searchParams);
+        requestedParams.push(Object.fromEntries(url.searchParams));
         return HttpResponse.json({ error: 'nicht verbunden' }, { status: 500 });
       }),
     );
     render(<Planner />);
 
     // Week 2026-07-13 (Mon) – 2026-07-19 (Sun); buffer of one day either side
-    await waitFor(() => expect(requestedParams).not.toBeNull());
-    expect(requestedParams.startDate).toBe('2026-07-12');
-    expect(requestedParams.endDate).toBe('2026-07-21');
+    await waitFor(() => expect(requestedParams.length).toBeGreaterThan(0));
+    await waitFor(() => expect(
+      requestedParams.some(p => p.startDate === '2026-07-12' && p.endDate === '2026-07-21')
+    ).toBe(true));
 
     // The failed Strava fetch must not break the planner itself.
     await waitFor(() => expect(screen.getAllByText('Frei').length).toBeGreaterThan(0));

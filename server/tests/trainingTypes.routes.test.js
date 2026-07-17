@@ -254,6 +254,137 @@ describe('planned trainings (/api/planner/trainings)', () => {
   });
 });
 
+describe('training plan names, manual completion and multi-match', () => {
+  const RIDE_CRITERIA = { strava: { operator: 'AND', rules: [{ kind: 'sportType', values: ['Ride'] }] } };
+  const listWeek = (token) => request(app)
+    .get('/api/planner/trainings?startDate=2026-07-13&endDate=2026-07-19')
+    .set(authHeader(token));
+
+  it('stores a custom name for ad-hoc plans and returns it', async () => {
+    const { token } = await createUser();
+    const created = await request(app).post('/api/planner/trainings').set(authHeader(token)).send({
+      scheduledDate: '2026-07-15',
+      criteria: RIDE_CRITERIA,
+      name: 'Intervalle',
+    });
+    expect(created.status).toBe(201);
+    expect(created.body.name).toBe('Intervalle');
+
+    const listed = await listWeek(token);
+    expect(listed.body[0].name).toBe('Intervalle');
+
+    const renamed = await request(app)
+      .put(`/api/planner/trainings/${created.body._id}`)
+      .set(authHeader(token))
+      .send({ name: 'Longrun' });
+    expect(renamed.body.name).toBe('Longrun');
+  });
+
+  it('toggles manual completion independent of synced activities', async () => {
+    const { token } = await createUser();
+    const type = await createType(token);
+    const created = await request(app).post('/api/planner/trainings').set(authHeader(token)).send({
+      scheduledDate: '2026-07-15', trainingTypeId: type.body._id,
+    });
+
+    let listed = await listWeek(token);
+    expect(listed.body[0].completed).toBe(false);
+
+    await request(app)
+      .put(`/api/planner/trainings/${created.body._id}`)
+      .set(authHeader(token))
+      .send({ completed: true });
+    listed = await listWeek(token);
+    expect(listed.body[0].completed).toBe(true);
+    expect(listed.body[0].manualCompleted).toBe(true);
+    expect(listed.body[0].autoCompleted).toBe(false);
+    expect(listed.body[0].fulfilledBy).toBeNull();
+
+    await request(app)
+      .put(`/api/planner/trainings/${created.body._id}`)
+      .set(authHeader(token))
+      .send({ completed: false });
+    listed = await listWeek(token);
+    expect(listed.body[0].completed).toBe(false);
+  });
+
+  it('assigns matching activities disjointly across plans of the same day', async () => {
+    const { token, user } = await createUser();
+    const type = await createType(token);
+    await request(app).post('/api/planner/trainings').set(authHeader(token)).send({
+      scheduledDate: '2026-07-15', trainingTypeId: type.body._id,
+    });
+    await request(app).post('/api/planner/trainings').set(authHeader(token)).send({
+      scheduledDate: '2026-07-15', trainingTypeId: type.body._id,
+    });
+
+    // One matching run → only the first plan is fulfilled
+    await seedActivity(user._id);
+    let listed = await listWeek(token);
+    expect(listed.body).toHaveLength(2);
+    expect(listed.body.filter(p => p.completed)).toHaveLength(1);
+
+    // A second matching run → both plans fulfilled, each by its own activity
+    await seedActivity(user._id, {
+      startDate: new Date('2026-07-15T16:00:00Z'),
+      startDateLocal: new Date('2026-07-15T18:00:00Z'),
+    });
+    listed = await listWeek(token);
+    expect(listed.body.filter(p => p.completed)).toHaveLength(2);
+    const ids = listed.body.map(p => p.fulfilledBy.id);
+    expect(new Set(ids).size).toBe(2);
+  });
+
+  it('attaches every matching activity of the day to the plan', async () => {
+    const { token, user } = await createUser();
+    const type = await createType(token);
+    await request(app).post('/api/planner/trainings').set(authHeader(token)).send({
+      scheduledDate: '2026-07-15', trainingTypeId: type.body._id,
+    });
+
+    await seedActivity(user._id);
+    await seedActivity(user._id, {
+      startDate: new Date('2026-07-15T16:00:00Z'),
+      startDateLocal: new Date('2026-07-15T18:00:00Z'),
+    });
+
+    const listed = await listWeek(token);
+    expect(listed.body[0].matchedActivities).toHaveLength(2);
+    expect(listed.body[0].autoCompleted).toBe(true);
+    // Sorted by date — the primary fulfiller is the earliest one
+    expect(listed.body[0].fulfilledBy.id).toBe(listed.body[0].matchedActivities[0].id);
+  });
+
+  it('copies trainings with copy-week idempotently', async () => {
+    const { token } = await createUser();
+    await request(app).post('/api/planner/trainings').set(authHeader(token)).send({
+      scheduledDate: '2026-07-15',
+      criteria: RIDE_CRITERIA,
+      name: 'Intervalle',
+      notes: 'kurz und knackig',
+    });
+
+    const first = await request(app).post('/api/planner/copy-week').set(authHeader(token)).send({
+      sourceStart: '2026-07-13', targetStart: '2026-07-20',
+    });
+    expect(first.status).toBe(201);
+    expect(first.body.copiedTrainings).toBe(1);
+
+    const second = await request(app).post('/api/planner/copy-week').set(authHeader(token)).send({
+      sourceStart: '2026-07-13', targetStart: '2026-07-20',
+    });
+    expect(second.body.copiedTrainings).toBe(0);
+    expect(second.body.skipped).toBeGreaterThan(0);
+
+    const copied = await request(app)
+      .get('/api/planner/trainings?startDate=2026-07-20&endDate=2026-07-26')
+      .set(authHeader(token));
+    expect(copied.body).toHaveLength(1);
+    expect(copied.body[0].name).toBe('Intervalle');
+    expect(copied.body[0].scheduledDate.slice(0, 10)).toBe('2026-07-22');
+  });
+});
+
 describe('goals with training types', () => {
   it('uses the referenced type for progress and enriches the target name', async () => {
     const { token, user } = await createUser();
