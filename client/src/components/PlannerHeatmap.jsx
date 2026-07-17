@@ -124,12 +124,12 @@ export default function PlannerHeatmap() {
       {plans === null ? (
         <Skeleton className="h-28 w-60" />
       ) : (
-        // Fixed small cells keep the grid compact instead of stretching the
-        // squares across the full card width
-        <div className="inline-flex flex-col">
-          <div className="flex gap-[3px] sm:gap-1" aria-label={`Planungsverlauf der letzten ${WEEKS} Wochen`}>
+        // The grid stretches across the card (like the habit heatmaps) so
+        // the cells stay comfortably readable instead of tiny fixed squares.
+        <div className="flex flex-col">
+          <div className="flex gap-[3px] sm:gap-1 justify-between" aria-label={`Planungsverlauf der letzten ${WEEKS} Wochen`}>
             {Array.from({ length: WEEKS }, (_, w) => (
-              <div key={w} className="flex flex-col gap-[3px] sm:gap-1">
+              <div key={w} className="flex flex-col gap-[3px] sm:gap-1 flex-1">
                 {Array.from({ length: 7 }, (_, d) => {
                   const day = addDays(gridStart, w * 7 + d);
                   const key = format(day, 'yyyy-MM-dd');
@@ -166,7 +166,7 @@ export default function PlannerHeatmap() {
                     <div
                       key={key}
                       title={label}
-                      className={`w-3.5 h-3.5 sm:w-4 sm:h-4 ${shape} ${cls}`}
+                      className={`aspect-square w-full ${shape} ${cls}`}
                     />
                   );
                 })}

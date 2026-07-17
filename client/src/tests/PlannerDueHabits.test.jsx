@@ -93,6 +93,23 @@ describe('Planner – due habits', () => {
     expect(posted.date.startsWith('2026-07-16')).toBe(true);
   });
 
+  it('keeps a logged-but-unfulfilled habit open (Kreatin 0/5 g)', async () => {
+    useHandlers({
+      due: [{
+        date: '2026-07-15', habitId: 'hK', name: 'Kreatin', unitSymbol: 'g', type: 'amount',
+        targetCondition: 'min', targetValue: 5, logged: true, loggedValue: 0, fulfilled: false,
+        reason: { kind: 'daily' },
+      }],
+    });
+    render(<MemoryRouter><Planner /></MemoryRouter>);
+
+    await screen.findByText('Kreatin');
+    // Not struck through, shows the target gap, circle stays open
+    expect(screen.getByText('0 / Ziel 5 g')).toBeInTheDocument();
+    expect(screen.queryByTitle('Ziel erreicht')).not.toBeInTheDocument();
+    expect(screen.getByTitle('Erledigt')).toBeInTheDocument();
+  });
+
   it('sorts completed entries to the end of the day', async () => {
     useHandlers({
       due: [

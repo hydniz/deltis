@@ -66,6 +66,15 @@ function daysInRange(startStr, endStr) {
   return days;
 }
 
+// Does a logged value satisfy the habit's daily completion target?
+// 'none' = any log counts (boolean habits and habits without a target).
+function meetsDailyTarget(condition, target, value) {
+  if (condition === 'min') return value >= target;
+  if (condition === 'max') return value <= target;
+  if (condition === 'exact') return value === target;
+  return true;
+}
+
 // Groups documents into sets of day keys, applying `pick` to get the date.
 function daySetBy(docs, pick, match) {
   const map = new Map();
@@ -237,16 +246,21 @@ async function dueHabitsForRange(userId, startStr, endStr) {
       if (!reason) continue;
       const log = logsByHabitDay.get(`${def._id}|${dayStr}`);
       const s = habitSettings[String(def._id)] || {};
+      const targetCondition = ['min', 'max', 'exact'].includes(s.targetCondition) ? s.targetCondition : 'none';
+      const targetValue = Number.isFinite(s.targetValue) ? s.targetValue : 0;
       results.push({
         date: dayStr,
         habitId: String(def._id),
         name: def.name,
         unitSymbol: def.unitSymbol,
         type: def.type,
-        targetCondition: ['min', 'max', 'exact'].includes(s.targetCondition) ? s.targetCondition : 'none',
-        targetValue: Number.isFinite(s.targetValue) ? s.targetValue : 0,
+        targetCondition,
+        targetValue,
         logged: !!log,
         loggedValue: log ? log.value : null,
+        // A day only counts as DONE when the logged value satisfies the
+        // completion target — 0 g logged against a 5 g minimum stays open.
+        fulfilled: log ? meetsDailyTarget(targetCondition, targetValue, log.value) : false,
         reason,
       });
     }

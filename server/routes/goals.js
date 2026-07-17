@@ -537,6 +537,52 @@ router.get('/:id/heatmap', auth, async (req, res) => {
       return res.json({ start, end, weeks, metric: 'subgoals', unitSymbol: 'Ziele', days });
     }
 
+    // Periodic goals: one tile per INTERVAL — did the goal succeed in that
+    // interval (with gradations for near misses)? Long-term goals keep the
+    // daily contribution grid below.
+    if (!goal.type.startsWith('long-term')) {
+      const iv = goal.intervalValue || 1;
+      const iu = goal.intervalUnit || 'week';
+      const count = Math.min(Math.max(parseInt(req.query.intervals, 10) || 16, 1), 26);
+
+      // Start of the k-th interval before the current one.
+      const startOfIntervalAgo = (k) => {
+        const { start: cur } = getIntervalBounds(iv, iu);
+        const s = new Date(cur);
+        if (iu === 'day') s.setDate(s.getDate() - k * iv);
+        else if (iu === 'week') s.setDate(s.getDate() - k * iv * 7);
+        else s.setMonth(s.getMonth() - k * iv);
+        return s;
+      };
+
+      const intervals = [];
+      for (let k = count - 1; k >= 0; k--) {
+        const s = startOfIntervalAgo(k);
+        const e = k === 0 ? end : new Date(startOfIntervalAgo(k - 1).getTime() - 1);
+        const value = await getValueForMetric(
+          metric, goal, req.user._id, s, e,
+          firstCond.valueScope, firstCond.aggregation, firstCond.activityFilters
+        );
+        intervals.push({
+          start: s,
+          end: e,
+          value,
+          targetValue: firstCond.targetValue ?? 0,
+          condition: firstCond.condition || 'min',
+          met: checkConditionMet(firstCond.condition || 'min', value, firstCond.targetValue),
+          current: k === 0,
+        });
+      }
+      return res.json({
+        kind: 'intervals',
+        intervalValue: iv,
+        intervalUnit: iu,
+        metric,
+        unitSymbol: firstCond.unitSymbol,
+        intervals,
+      });
+    }
+
     if (goal.targetRefModel === 'StravaActivity') {
       const matches = await getStravaMatches(goal, req.user._id, start, end);
       for (const m of matches) {
