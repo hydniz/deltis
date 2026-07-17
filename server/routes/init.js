@@ -7,6 +7,8 @@
 // with credentials exists; afterwards they reveal nothing and reject writes.
 const express = require('express');
 const crypto = require('crypto');
+const fs = require('fs');
+const path = require('path');
 const router = express.Router();
 const jwt = require('jsonwebtoken');
 const JWT_SECRET = require('../utils/jwtSecret');
@@ -32,6 +34,25 @@ const initLimiter = createRateLimiter({
 async function initNeeded() {
   const admin = await User.findOne({ isAdmin: true }).select('+adminSecretHash +passwordHash');
   return !admin || (!admin.passwordHash && !admin.adminSecretHash);
+}
+
+// An init wizard on a server whose backups/ directory already holds database
+// backups usually means the database was lost or switched (renamed volume,
+// wrong MONGODB_URI, …) rather than never initialized. The wizard surfaces
+// this so the operator restores a backup instead of re-initializing blindly.
+const BACKUPS_DIR = path.join(__dirname, '..', '..', 'backups');
+
+function backupsPresent(dir = BACKUPS_DIR) {
+  const hasBackupFiles = (p) => {
+    try {
+      return fs.readdirSync(p).some(f => f.endsWith('.archive.gz') || f.endsWith('.ejson.gz'));
+    } catch {
+      return false; // directory missing/unreadable = no backups
+    }
+  };
+  return hasBackupFiles(dir) ||
+    hasBackupFiles(path.join(dir, 'pre-migration')) ||
+    hasBackupFiles(path.join(dir, 'pre-update'));
 }
 
 function securityStatus() {
@@ -104,13 +125,13 @@ router.get('/status', async (_req, res) => {
     // Setup mode = MongoDB not reachable yet → the wizard is needed by
     // definition, but the DB cannot be queried.
     if (serverState.setupMode) {
-      return res.json({ initNeeded: true, setupMode: true, inDocker, ...security, settings: wizardSettings() });
+      return res.json({ initNeeded: true, setupMode: true, inDocker, backupsPresent: backupsPresent(), ...security, settings: wizardSettings() });
     }
 
     const needed = await initNeeded();
     if (!needed) return res.json({ initNeeded: false, setupMode: false });
 
-    res.json({ initNeeded: true, setupMode: false, inDocker, ...security, settings: wizardSettings() });
+    res.json({ initNeeded: true, setupMode: false, inDocker, backupsPresent: backupsPresent(), ...security, settings: wizardSettings() });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -230,3 +251,5 @@ router.post('/', initLimiter, async (req, res) => {
 module.exports = router;
 // Test hook: rate-limiter state is per-process and would bleed between tests.
 module.exports.resetRateLimits = () => initLimiter.reset();
+// Exported for direct unit testing (dir injectable).
+module.exports.backupsPresent = backupsPresent;

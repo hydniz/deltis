@@ -41,6 +41,43 @@ APP_CONTAINER="${INSTANCE}-app"
 
 echo "=== Deltis deploy: $NEW_IMAGE → instance '$INSTANCE' ==="
 
+# 0. Fresh-instance guard
+#
+# When the target mongo container does not exist, this deploy would start the
+# app against an EMPTY database. That is only correct for a genuinely new
+# instance — if the host still carries data under the pre-rename names
+# (habit-tracker-*) or previous backups, it is almost certainly a renamed or
+# misconfigured instance, and continuing silently loses the user's data
+# (exactly what a missing DELTIS_INSTANCE pin caused after the
+# habit-tracker → deltis rename). Abort before touching anything;
+# DELTIS_ALLOW_FRESH=1 overrides for intentional fresh installs.
+
+if ! docker container inspect "$MONGO_CONTAINER" >/dev/null 2>&1; then
+  EXISTING_TRACES=""
+  if [ "$INSTANCE" != "habit-tracker" ]; then
+    if docker container inspect habit-tracker-mongo >/dev/null 2>&1; then
+      EXISTING_TRACES="${EXISTING_TRACES}  - container 'habit-tracker-mongo' exists (pre-rename instance)\n"
+    fi
+    if docker volume inspect habit-tracker-mongo-data >/dev/null 2>&1; then
+      EXISTING_TRACES="${EXISTING_TRACES}  - volume 'habit-tracker-mongo-data' exists (old data!)\n"
+    fi
+  fi
+  if ls backups/*.archive.gz >/dev/null 2>&1; then
+    EXISTING_TRACES="${EXISTING_TRACES}  - backups/ contains database backups from a previous instance\n"
+  fi
+
+  if [ -n "$EXISTING_TRACES" ] && [ "${DELTIS_ALLOW_FRESH:-0}" != "1" ]; then
+    echo "✗ Aborting: mongo container '$MONGO_CONTAINER' does not exist (first deploy?)," >&2
+    echo "  but this host carries traces of an existing instance:" >&2
+    printf "%b" "$EXISTING_TRACES" >&2
+    echo "  Deploying now would start against an empty database." >&2
+    echo "  → Migration guide: docs/DEPLOYMENT.md, section 'Migrating an instance" >&2
+    echo "    created before the rename to Deltis' (pin DELTIS_INSTANCE or clone the volume)." >&2
+    echo "  → To intentionally start fresh, set DELTIS_ALLOW_FRESH=1 and redeploy." >&2
+    exit 1
+  fi
+fi
+
 # 1. Pre-deploy database backup
 
 BACKUP_FILE=""

@@ -3,7 +3,7 @@
 // metric definitions mirror the backend registry.
 import { useState } from 'react';
 import { Plus, X } from 'lucide-react';
-import { Field, Input, Select, Chip, Segmented, IconButton } from './ui';
+import { Field, Input, Select, Chip, Segmented, IconButton, HelpTip } from './ui';
 
 export const STRAVA_METRICS = [
   { value: 'movingTime', label: 'Dauer (in Bewegung)', unit: 'min' },
@@ -117,10 +117,17 @@ const RULE_LABELS = {
   group: 'Untergruppe',
 };
 
+// How many sport-type quick picks are visible before "show all". Selected
+// values and the user's own synced sports come first, so an active selection
+// is never hidden behind the toggle.
+const SPORT_PICKS_COLLAPSED = 12;
+
 function SportTypeRuleEditor({ rule, sportTypes, onChange }) {
   const [custom, setCustom] = useState('');
+  const [showAll, setShowAll] = useState(false);
   const values = rule.values || [];
-  const options = [...new Set([...COMMON_SPORT_TYPES, ...sportTypes, ...values])];
+  const options = [...new Set([...values, ...sportTypes, ...COMMON_SPORT_TYPES])];
+  const visible = showAll ? options : options.slice(0, SPORT_PICKS_COLLAPSED);
 
   const toggle = (type) => {
     onChange({
@@ -138,29 +145,45 @@ function SportTypeRuleEditor({ rule, sportTypes, onChange }) {
 
   return (
     <div className="space-y-2">
-      <p className="text-xs text-ink-400">Aktivität muss eine dieser Sportarten sein:</p>
-      <div className="flex flex-wrap gap-1.5 max-h-28 overflow-y-auto">
-        {options.map(type => (
+      <p className="text-xs text-ink-400">Die Aktivität zählt, wenn sie eine dieser Sportarten ist:</p>
+      <div className="flex flex-wrap gap-1.5">
+        {visible.map(type => (
           <Chip key={type} color="clay" active={values.includes(type)} onClick={() => toggle(type)}>
             {type}
           </Chip>
         ))}
       </div>
-      <div className="flex gap-2">
-        <Input
-          className="flex-1 !text-xs !py-1.5"
-          value={custom}
-          onChange={e => setCustom(e.target.value)}
-          onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); addCustom(); } }}
-          placeholder="Andere Sportart (Strava-Name)"
-        />
+      {options.length > SPORT_PICKS_COLLAPSED && (
         <button
           type="button"
-          onClick={addCustom}
-          className="text-xs font-semibold text-brand-600 hover:text-brand-700 flex items-center gap-1 flex-shrink-0"
+          onClick={() => setShowAll(v => !v)}
+          className="text-xs font-semibold text-brand-600 hover:text-brand-700"
         >
-          <Plus size={11} /> Hinzufügen
+          {showAll ? 'Weniger anzeigen' : `Alle ${options.length} Sportarten anzeigen`}
         </button>
+      )}
+      <div>
+        <div className="flex gap-2">
+          <Input
+            className="flex-1 !text-xs !py-1.5"
+            value={custom}
+            onChange={e => setCustom(e.target.value)}
+            onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); addCustom(); } }}
+            placeholder="Weitere Sportart, z. B. EBikeRide"
+            aria-label="Weitere Sportart hinzufügen"
+          />
+          <button
+            type="button"
+            onClick={addCustom}
+            className="text-xs font-semibold text-brand-600 hover:text-brand-700 flex items-center gap-1 flex-shrink-0"
+          >
+            <Plus size={11} /> Hinzufügen
+          </button>
+        </div>
+        <p className="text-xs text-ink-400 mt-1.5">
+          Fehlt eine Sportart in der Liste? Trage sie genau so ein, wie Strava sie
+          bezeichnet (englischer Name, z. B. „EBikeRide“ oder „Badminton“).
+        </p>
       </div>
     </div>
   );
@@ -358,13 +381,41 @@ export default function StravaCriteriaBuilder({ criteria, onChange, sportTypes =
   const group = criteria || emptyGroup();
   return (
     <div className="panel p-3.5 space-y-2.5">
-      <div>
-        <span className="text-xs font-semibold text-ink-700">Welche Aktivitäten zählen?</span>
-        <p className="text-xs text-ink-400 mt-0.5">
-          {group.rules?.length
-            ? 'Nur Aktivitäten, die diese Kriterien erfüllen, zählen für das Ziel.'
-            : 'Ohne Kriterien zählt jede synchronisierte Strava-Aktivität.'}
-        </p>
+      <div className="flex items-start justify-between gap-2">
+        <div>
+          <span className="text-xs font-semibold text-ink-700">Welche Aktivitäten zählen?</span>
+          <p className="text-xs text-ink-400 mt-0.5">
+            {group.rules?.length
+              ? 'Nur Aktivitäten, die diese Kriterien erfüllen, zählen für das Ziel.'
+              : 'Ohne Kriterien zählt jede synchronisierte Strava-Aktivität.'}
+          </p>
+        </div>
+        <HelpTip
+          title="Strava-Kriterien"
+          short="Regeln legen fest, welche synchronisierten Aktivitäten für dieses Ziel zählen."
+        >
+          <p>
+            Jede synchronisierte Strava-Aktivität wird gegen deine Regeln geprüft — nur
+            Aktivitäten, die sie erfüllen, zählen für das Ziel.
+          </p>
+          <p className="mt-2">
+            <strong>Sportart</strong>: die Aktivität muss eine der gewählten Sportarten sein
+            (Strava-Bezeichnungen, z.&nbsp;B. „Run“ oder „GravelRide“).<br />
+            <strong>Messwert</strong>: ein Wert der Aktivität (Dauer, Distanz, Ø-Puls, …)
+            muss im angegebenen Bereich liegen.<br />
+            <strong>Puls-Anteil in Bereich</strong>: mindestens X&nbsp;% der Trainingszeit
+            muss der Puls in deinem Bereich gelegen haben (braucht Herzfrequenz-Aufzeichnung).<br />
+            <strong>Strava-Herzzone</strong>: mindestens X&nbsp;% der Zeit in einer deiner
+            Strava-Herzfrequenzzonen (1–5).<br />
+            <strong>Untergruppe</strong>: verschachtelt mehrere Regeln, z.&nbsp;B.
+            „(Zone&nbsp;2 per Puls ODER per Strava-Zone)“.
+          </p>
+          <p className="mt-2">
+            Mehrere Regeln verknüpfst du mit UND (alle müssen zutreffen) oder ODER
+            (eine genügt). Beispiel „Zone-2-Cardio“: Sportart Run/Swim/Ride UND eine
+            Untergruppe mit „85&nbsp;% Puls 120–145“ ODER „85&nbsp;% in Zone&nbsp;2“.
+          </p>
+        </HelpTip>
       </div>
       <GroupEditor
         group={group}

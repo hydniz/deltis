@@ -127,6 +127,44 @@ docker run --rm -v habit-tracker-mongo-data:/from -v deltis-mongo-data:/to \
 Old backups (`habit_tracker_*.archive.gz`) remain restorable — `restore.sh`
 remaps the legacy namespaces to `deltis` automatically.
 
+> **Guard:** `deploy-remote.sh` refuses a deploy that would start against an
+> empty database while the host still carries a pre-rename container/volume
+> or existing backups — exactly the situation above. The workflow fails with
+> a pointer to this section. For an intentionally fresh install on such a
+> host, set `DELTIS_ALLOW_FRESH=1` (in the instance `.env` or the shell) and
+> redeploy. The `/init` wizard additionally warns when it finds backups on a
+> server whose database is empty.
+
+### Recovering after an accidental fresh start
+
+If a renamed/misconfigured deploy already happened and the app was
+re-initialized against an empty database, the old data is still on the host —
+Docker never deletes volumes on its own:
+
+```sh
+docker volume ls | grep mongo-data     # old volume, e.g. habit-tracker-mongo-data
+
+# 1. Dump the old database from the old volume (read-only, temporary container)
+docker run --rm -d --name deltis-recovery \
+  -v habit-tracker-mongo-data:/data/db mongo:7
+sleep 5   # let mongod start
+docker exec deltis-recovery mongodump --db habit_tracker \
+  --archive=/tmp/recovery.archive --gzip --quiet
+mkdir -p backups
+docker cp deltis-recovery:/tmp/recovery.archive \
+  backups/habit_tracker_recovery.archive.gz
+docker stop deltis-recovery
+
+# 2. Restore into the running instance — restore.sh stops the app, remaps
+#    habit_tracker.* → deltis.* and restarts (drops what was re-initialized!)
+./restore.sh backups/habit_tracker_recovery.archive.gz
+```
+
+Anything entered after the accidental re-initialization is replaced by the
+restore — export it first (Einstellungen → Daten exportieren) if it must be
+kept. Once the instance is verified, remove the old volume with
+`docker volume rm habit-tracker-mongo-data`.
+
 ## Releasing
 
 ```sh

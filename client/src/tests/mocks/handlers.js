@@ -38,6 +38,9 @@ export const handlers = [
   http.get('/api/strava/sport-types', () => {
     return HttpResponse.json([]);
   }),
+  http.get('/api/strava/activities', () => {
+    return HttpResponse.json({ activities: [], total: 0 });
+  }),
 
   // Cached update check (drives the sidebar badge).
   http.get('/api/admin/update/check', () => {
