@@ -3,6 +3,7 @@ import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { server } from './mocks/server';
 import { http, HttpResponse } from 'msw';
+import { MemoryRouter } from 'react-router-dom';
 import Planner from '../pages/Planner';
 
 const FIXED_NOW = new Date('2026-07-15T10:00:00');
@@ -51,7 +52,7 @@ function useHandlers({ due = dueEntries } = {}) {
 describe('Planner – due habits', () => {
   it('shows due habits as implicit entries on their day', async () => {
     useHandlers();
-    render(<Planner />);
+    render(<MemoryRouter><Planner /></MemoryRouter>);
 
     await waitFor(() => expect(screen.getByText('Blackroll')).toBeInTheDocument());
     expect(screen.getByText('Vitamine')).toBeInTheDocument();
@@ -64,7 +65,7 @@ describe('Planner – due habits', () => {
   it('explains WHY a habit is due when clicked', async () => {
     useHandlers();
     const user = userEvent.setup();
-    render(<Planner />);
+    render(<MemoryRouter><Planner /></MemoryRouter>);
 
     await user.click(await screen.findByText('Blackroll'));
     expect(await screen.findByText('Warum steht das hier?')).toBeInTheDocument();
@@ -81,7 +82,7 @@ describe('Planner – due habits', () => {
       })
     );
     const user = userEvent.setup();
-    render(<Planner />);
+    render(<MemoryRouter><Planner /></MemoryRouter>);
 
     await screen.findByText('Vitamine');
     const card = screen.getByText('Vitamine').closest('[role="button"]');
@@ -92,10 +93,26 @@ describe('Planner – due habits', () => {
     expect(posted.date.startsWith('2026-07-16')).toBe(true);
   });
 
+  it('sorts completed entries to the end of the day', async () => {
+    useHandlers({
+      due: [
+        // Listed done-first on purpose — the view must reorder them.
+        { ...dueEntries[0], date: '2026-07-15', habitId: 'hDone', name: 'Schon erledigt', logged: true, loggedValue: 10 },
+        { ...dueEntries[0], date: '2026-07-15', habitId: 'hOpen', name: 'Noch offen', logged: false },
+      ],
+    });
+    render(<MemoryRouter><Planner /></MemoryRouter>);
+
+    const open = await screen.findByText('Noch offen');
+    const done = screen.getByText('Schon erledigt');
+    // "Noch offen" must precede "Schon erledigt" in document order
+    expect(open.compareDocumentPosition(done) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
   it('hides due habits when their filter is off and persists the choice', async () => {
     useHandlers();
     const user = userEvent.setup();
-    render(<Planner />);
+    render(<MemoryRouter><Planner /></MemoryRouter>);
 
     await screen.findByText('Blackroll');
     await user.click(screen.getByRole('button', { name: 'Fällige Gewohnheiten' }));

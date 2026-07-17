@@ -1,6 +1,6 @@
 {
   "name": "deltis-client",
-  "version": "0.5.16",
+  "version": "0.5.17",
   "stage": "",
   "type": "module",
   "scripts": {

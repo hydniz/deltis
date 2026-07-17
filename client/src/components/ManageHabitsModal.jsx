@@ -37,12 +37,15 @@ const TRIGGER_KINDS = [
   { value: 'trainingType', label: 'Trainingstyp' },
 ];
 
-// Initial settings state derived from a definition (or defaults for creation)
+// Initial settings state derived from a definition (or defaults for creation).
+// Legacy one-off-date schedules map to daily: a habit is recurring by nature —
+// a single-day thing is a task and belongs into the planner instead.
 function settingsStateFrom(def = {}) {
   const trigger = def.scheduleTrigger || {};
+  const storedMode = def.scheduleMode
+    || (def.scheduleDate ? 'date' : def.scheduleDays?.length ? 'weekly' : 'daily');
   return {
-    scheduleMode: def.scheduleMode
-      || (def.scheduleDate ? 'date' : def.scheduleDays?.length ? 'weekly' : 'daily'),
+    scheduleMode: storedMode === 'date' ? 'daily' : storedMode,
     days: new Set(def.scheduleDays || []),
     date: def.scheduleDate || '',
     intervalDays: def.scheduleIntervalDays ?? 3,
@@ -132,9 +135,12 @@ function HabitSettingsFields({ type, unitSymbol, value, onChange, triggerSources
             { value: 'weekly', label: 'Wochentage' },
             { value: 'interval', label: 'Intervall' },
             { value: 'trigger', label: 'Nach Ereignis' },
-            { value: 'date', label: 'Nur ein Datum' },
           ]}
         />
+        <p className="text-[11px] text-ink-400 mt-1.5">
+          Einmalige Dinge sind Aufgaben, keine Gewohnheiten – plane sie im
+          Planer für einen bestimmten Tag.
+        </p>
         {value.scheduleMode === 'weekly' && (
           <>
             <div className="flex gap-1 mt-2">
@@ -155,19 +161,6 @@ function HabitSettingsFields({ type, unitSymbol, value, onChange, triggerSources
               ))}
             </div>
             <p className="text-[11px] text-ink-400 mt-1.5">Keine Auswahl = täglich.</p>
-          </>
-        )}
-        {value.scheduleMode === 'date' && (
-          <>
-            <Input
-              type="date"
-              className="mt-2 !text-sm"
-              value={value.date}
-              onChange={e => set({ date: e.target.value })}
-            />
-            <p className="text-[11px] text-ink-400 mt-1.5">
-              Die Gewohnheit ist nur an diesem Tag fällig.
-            </p>
           </>
         )}
         {value.scheduleMode === 'interval' && (
@@ -325,8 +318,8 @@ function HabitSettingsFields({ type, unitSymbol, value, onChange, triggerSources
   );
 }
 
-function HabitRow({ def, selected, onToggle, onDelete, onUpdate, triggerSources }) {
-  const [open, setOpen] = useState(false);
+function HabitRow({ def, selected, onToggle, onDelete, onUpdate, triggerSources, initialOpen = false }) {
+  const [open, setOpen] = useState(initialOpen);
   const [saving, setSaving] = useState(false);
 
   const [form, setForm] = useState({ name: def.name, unitSymbol: def.unitSymbol, type: def.type });
@@ -435,7 +428,7 @@ function HabitRow({ def, selected, onToggle, onDelete, onUpdate, triggerSources 
   );
 }
 
-export default function ManageHabitsModal({ onSave, onClose, initialShowAdd = false, zIndex }) {
+export default function ManageHabitsModal({ onSave, onClose, initialShowAdd = false, initialOpenId = null, zIndex }) {
   const [defs, setDefs] = useState(null);
   const [selected, setSelected] = useState(new Set());
   const [newHabit, setNewHabit] = useState({ name: '', unitSymbol: '', type: 'amount' });
@@ -579,6 +572,7 @@ export default function ManageHabitsModal({ onSave, onClose, initialShowAdd = fa
                     onDelete={() => handleDelete(d)}
                     onUpdate={handleUpdate}
                     triggerSources={triggerSources}
+                    initialOpen={initialOpenId === d._id}
                   />
                 ))}
               </div>

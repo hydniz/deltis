@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
+import { Link } from 'react-router-dom';
 import api from '../utils/api';
 import {
   format, parseISO, startOfWeek, startOfDay, addDays, addWeeks, subWeeks, isSameDay, isBefore,
@@ -6,7 +7,7 @@ import {
 import { de } from 'date-fns/locale';
 import {
   ChevronLeft, ChevronRight, Plus, CheckCircle2, Circle, Trash2,
-  Dumbbell, Sparkles, CalendarDays, Pencil, Copy, Activity,
+  Dumbbell, Sparkles, CalendarDays, Pencil, Copy, Activity, ArrowRight,
 } from 'lucide-react';
 import {
   PageHeader, Button, Field, Input, Select, Textarea, Chip, chipColorFor,
@@ -85,6 +86,12 @@ function DueHabitModal({ entry, onSave, onClose }) {
             Warum steht das hier?
           </p>
           <p className="text-sm text-ink-600">{formatDueReason(entry.reason)}</p>
+          <Link
+            to={`/habits?manage=${entry.habitId}`}
+            className="inline-flex items-center gap-1 text-xs font-semibold text-brand-600 hover:text-brand-700 transition-colors mt-2"
+          >
+            Zeitplan anpassen <ArrowRight size={12} />
+          </Link>
         </div>
         {!isBoolean && (
           <Field label={`Wert${entry.unitSymbol ? ` (${entry.unitSymbol})` : ''}`}>
@@ -110,15 +117,6 @@ function DueHabitModal({ entry, onSave, onClose }) {
 
 // Strava brand colour — marks synced activities so their origin is obvious
 const STRAVA_ORANGE = '#FC4C02';
-
-// Card tints per activity type — light pastel surfaces matching the chip palette
-const CARD_COLORS = [
-  'border-brand-200 bg-brand-50',
-  'border-sage-200 bg-sage-100/60',
-  'border-ocher-200 bg-ocher-100/60',
-  'border-rose-200 bg-rose-50',
-  'border-lime-200 bg-lime-50',
-];
 
 // Custom field input
 
@@ -776,6 +774,46 @@ function EditPlanModal({ plan, kind, trainingTypes = [], onSave, onClose }) {
   );
 }
 
+// One planner entry as a calm, uniform row: status toggle, kind icon, title
+// and meta on a single line, actions on the right. `completed` strikes the
+// title, `dim` fades the whole row; nested children (e.g. the fulfilling
+// Strava activities of a training) render indented below.
+function DayRow({
+  onOpen, titleAttr, toggle, icon: KindIcon, iconClass = '', iconStyle,
+  title, titleClass = '', meta, badge, overdue, completed, dim, actions, children,
+}) {
+  const clickable = typeof onOpen === 'function';
+  return (
+    <div
+      className={`rounded-lg transition-colors ${clickable ? 'cursor-pointer hover:bg-paper-100/70' : ''} ${dim ? 'opacity-55' : ''}`}
+      title={titleAttr}
+      {...(clickable ? {
+        role: 'button',
+        tabIndex: 0,
+        onClick: onOpen,
+        onKeyDown: (e) => { if (e.key === 'Enter') onOpen(); },
+      } : {})}
+    >
+      <div className="flex items-center gap-2 px-1.5 py-1.5">
+        {toggle}
+        <KindIcon size={13} className={`flex-shrink-0 ${iconClass}`} style={iconStyle} />
+        <p className={`text-sm font-medium truncate ${completed ? 'line-through text-ink-400' : 'text-ink-800'} ${titleClass}`}>
+          {title}
+        </p>
+        <p className="text-xs text-ink-400 truncate flex-1 min-w-0">{meta || ''}</p>
+        {overdue && <span className="text-[10px] font-semibold text-ocher-600 flex-shrink-0">Überfällig</span>}
+        {badge}
+        {actions}
+      </div>
+      {children && (
+        <div className="pl-9 pr-1.5 pb-2 space-y-1.5" onClick={e => e.stopPropagation()}>
+          {children}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // Main page
 
 export default function Planner() {
@@ -913,12 +951,6 @@ export default function Planner() {
     } else {
       setCompletingHabitPlan(plan);
     }
-  };
-
-  const getCardColor = (plan) => {
-    const ref = plan.activityTypeRef?._id || plan.activityTypeRef || plan.activityType || '';
-    const hash = [...ref.toString()].reduce((h, c) => h + c.charCodeAt(0), 0);
-    return CARD_COLORS[hash % CARD_COLORS.length];
   };
 
   const today = new Date();
@@ -1062,287 +1094,224 @@ export default function Planner() {
                   )}
                 </div>
 
-                {/* Entries flow into a responsive grid: full width on phones,
-                    side by side on wider screens */}
-                <div className="flex-1 min-w-0 self-center grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-2 content-start">
-                  {/* Activity plans */}
-                  {dayPlans.map(plan => (
-                    <div key={plan._id} className={`rounded-xl border p-2 ${getCardColor(plan)} ${plan.completed ? 'opacity-55' : ''}`}>
-                      <div className="flex items-start justify-between gap-1">
+                {/* Entries: one calm row per item — open things first,
+                    completed ones sink to the end of the day. */}
+                <div className="flex-1 min-w-0 self-center">
+                  {(() => {
+                    const entries = [
+                      ...dayPlans.map(p => ({ key: `a-${p._id}`, kind: 'activity', done: !!p.completed, data: p })),
+                      ...dayHabitPlans.map(p => ({ key: `h-${p._id}`, kind: 'habit', done: !!p.completed, data: p })),
+                      ...dayDue.map(d => ({ key: `d-${d.habitId}-${d.date}`, kind: 'due', done: !!d.logged, data: d })),
+                      ...dayTrainings.map(t => ({ key: `t-${t._id}`, kind: 'training', done: !!t.completed, data: t })),
+                      ...dayStrava.map(a => ({ key: `s-${a._id}`, kind: 'strava', done: true, data: a })),
+                    ];
+                    const sorted = [...entries.filter(e => !e.done), ...entries.filter(e => e.done)];
+                    if (sorted.length === 0) {
+                      return <p className="text-xs text-ink-200 py-1">Frei</p>;
+                    }
+
+                    const editDeleteActions = (onEdit, onDelete) => (
+                      <>
                         <button
-                          onClick={() => handleCompleteActivity(plan)}
-                          className="flex-shrink-0 mt-0.5"
-                          title={plan.completed ? 'Als offen markieren' : 'Als erledigt loggen'}
-                        >
-                          {plan.completed
-                            ? <CheckCircle2 size={14} className="text-emerald-600 anim-check" />
-                            : <Circle size={14} className="text-ink-300 hover:text-emerald-600 transition-colors" />
-                          }
-                        </button>
-                        <div className="flex-1 min-w-0">
-                          <p className={`text-xs font-semibold leading-tight truncate ${plan.completed ? 'line-through text-ink-400' : 'text-ink-800'}`}>
-                            {(() => {
-                              const current = plan.activityTypeRef?.label || plan.activityType;
-                              return plan.historicalLabel ? `${current} (${plan.historicalLabel})` : current;
-                            })()}
-                          </p>
-                          {(plan.duration || plan.distance) && (
-                            <p className="text-xs text-ink-500 mt-0.5">
-                              {plan.duration ? `${plan.duration} min` : ''}
-                              {plan.duration && plan.distance ? ' · ' : ''}
-                              {plan.distance ? `${plan.distance} km` : ''}
-                            </p>
-                          )}
-                          {isPast && !plan.completed && (
-                            <p className="text-[10px] font-semibold text-ocher-600 mt-0.5">Überfällig</p>
-                          )}
-                        </div>
-                        <button
-                          onClick={() => setEditing({ plan, kind: 'activity' })}
+                          onClick={e => { e.stopPropagation(); onEdit(); }}
                           aria-label="Plan bearbeiten"
                           className="flex-shrink-0 text-ink-300 hover:text-brand-600 transition-colors p-1"
                         >
                           <Pencil size={12} />
                         </button>
                         <button
-                          onClick={() => api.delete(`/planner/${plan._id}`).then(load)}
+                          onClick={e => { e.stopPropagation(); onDelete(); }}
                           aria-label="Plan löschen"
                           className="flex-shrink-0 text-ink-300 hover:text-red-600 transition-colors p-1 -mr-1"
                         >
                           <Trash2 size={12} />
                         </button>
-                      </div>
-                    </div>
-                  ))}
+                      </>
+                    );
 
-                  {/* Habit plans */}
-                  {dayHabitPlans.map(plan => (
-                    <div
-                      key={plan._id}
-                      className={`rounded-xl border p-2 border-sage-200 bg-sage-100/60 ${plan.completed ? 'opacity-55' : ''}`}
-                    >
-                      <div className="flex items-start justify-between gap-1">
-                        <button
-                          onClick={() => handleCompleteHabit(plan)}
-                          className="flex-shrink-0 mt-0.5"
-                          title={plan.completed ? 'Als offen markieren' : 'Als erledigt markieren'}
-                        >
-                          {plan.completed
-                            ? <CheckCircle2 size={14} className="text-emerald-600 anim-check" />
-                            : <Circle size={14} className="text-sage-400 hover:text-emerald-600 transition-colors" />
-                          }
-                        </button>
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-1">
-                            <Sparkles size={10} className="text-sage-500 flex-shrink-0" />
-                            <p className={`text-xs font-semibold leading-tight truncate ${plan.completed ? 'line-through text-ink-400' : 'text-sage-700'}`}>
-                              {plan.habitId?.name || plan.habitName}
-                            </p>
-                          </div>
-                          {plan.completed && plan.loggedValue != null && plan.habitType !== 'boolean' && (
-                            <p className="text-xs text-ink-500 mt-0.5">
-                              {plan.loggedValue} {plan.unitSymbol}
-                            </p>
-                          )}
-                          {plan.notes && !plan.completed && (
-                            <p className="text-xs text-ink-400 mt-0.5 truncate">{plan.notes}</p>
-                          )}
-                          {isPast && !plan.completed && (
-                            <p className="text-[10px] font-semibold text-ocher-600 mt-0.5">Überfällig</p>
-                          )}
-                        </div>
-                        <button
-                          onClick={() => setEditing({ plan, kind: 'habit' })}
-                          aria-label="Plan bearbeiten"
-                          className="flex-shrink-0 text-ink-300 hover:text-brand-600 transition-colors p-1"
-                        >
-                          <Pencil size={12} />
-                        </button>
-                        <button
-                          onClick={() => api.delete(`/planner/habits/${plan._id}`).then(load)}
-                          aria-label="Plan löschen"
-                          className="flex-shrink-0 text-ink-300 hover:text-red-600 transition-colors p-1 -mr-1"
-                        >
-                          <Trash2 size={12} />
-                        </button>
-                      </div>
-                    </div>
-                  ))}
-
-                  {/* Habits DUE by schedule — implicit entries (dashed), not
-                      explicitly planned. Click shows WHY it is due + quick
-                      logging; the circle ticks boolean habits directly. */}
-                  {dayDue.map(entry => (
-                    <div
-                      key={`due-${entry.habitId}-${entry.date}`}
-                      role="button"
-                      tabIndex={0}
-                      onClick={() => setDueDetail(entry)}
-                      onKeyDown={e => { if (e.key === 'Enter') setDueDetail(entry); }}
-                      className={`rounded-xl border border-dashed p-2 border-sage-300 bg-sage-100/40 cursor-pointer hover:border-sage-400 transition-colors ${entry.logged ? 'opacity-55' : ''}`}
-                      title="Fällig laut Zeitplan – antippen für Details"
-                    >
-                      <div className="flex items-start justify-between gap-1">
-                        <button
-                          onClick={e => {
-                            e.stopPropagation();
-                            if (entry.logged) return;
-                            if (entry.type === 'boolean') {
-                              api.post('/habits/logs', {
-                                habitId: entry.habitId,
-                                date: `${entry.date}T12:00:00`,
-                                value: 1,
-                              }).then(load).catch(() => {});
-                            } else {
-                              setDueDetail(entry);
+                    return sorted.map(entry => {
+                      if (entry.kind === 'activity') {
+                        const plan = entry.data;
+                        const label = plan.activityTypeRef?.label || plan.activityType;
+                        return (
+                          <DayRow
+                            key={entry.key}
+                            icon={Dumbbell}
+                            iconClass="text-brand-500"
+                            completed={plan.completed}
+                            dim={plan.completed}
+                            overdue={isPast && !plan.completed}
+                            title={plan.historicalLabel ? `${label} (${plan.historicalLabel})` : label}
+                            meta={[
+                              plan.duration ? `${plan.duration} min` : null,
+                              plan.distance ? `${plan.distance} km` : null,
+                            ].filter(Boolean).join(' · ')}
+                            toggle={
+                              <button
+                                onClick={e => { e.stopPropagation(); handleCompleteActivity(plan); }}
+                                className="flex-shrink-0"
+                                title={plan.completed ? 'Als offen markieren' : 'Als erledigt loggen'}
+                              >
+                                {plan.completed
+                                  ? <CheckCircle2 size={15} className="text-emerald-600 anim-check" />
+                                  : <Circle size={15} className="text-ink-300 hover:text-emerald-600 transition-colors" />}
+                              </button>
                             }
-                          }}
-                          className="flex-shrink-0 mt-0.5"
-                          title={entry.logged ? 'Bereits eingetragen' : 'Erledigt'}
-                        >
-                          {entry.logged
-                            ? <CheckCircle2 size={14} className="text-emerald-600 anim-check" />
-                            : <Circle size={14} className="text-sage-400 hover:text-emerald-600 transition-colors" />
-                          }
-                        </button>
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-1">
-                            <Sparkles size={10} className="text-sage-500 flex-shrink-0" />
-                            <p className={`text-xs font-semibold leading-tight truncate ${entry.logged ? 'line-through text-ink-400' : 'text-sage-700'}`}>
-                              {entry.name}
-                            </p>
-                          </div>
-                          <p className="text-[10px] text-ink-400 mt-0.5 truncate">
-                            {entry.reason?.kind === 'trigger' ? 'Fällig durch Ereignis' : 'Fällig laut Zeitplan'}
-                          </p>
-                        </div>
-                      </div>
-                    </div>
-                  ))}
+                            actions={editDeleteActions(
+                              () => setEditing({ plan, kind: 'activity' }),
+                              () => api.delete(`/planner/${plan._id}`).then(load)
+                            )}
+                          />
+                        );
+                      }
 
-                  {/* Planned trainings — auto-fulfilled by matching synced
-                      activities or ticked off manually. The card opens the
-                      detail view; fulfilled plans wrap their matching
-                      activities so the plan and its proof read as one unit. */}
-                  {dayTrainings.map(plan => {
-                    // Older payloads only carry fulfilledBy — treat it as the
-                    // single matched activity.
-                    const nested = plan.matchedActivities || (plan.fulfilledBy ? [plan.fulfilledBy] : []);
-                    const showNested = plan.completed && nested.length > 0;
-                    const autoCompleted = plan.autoCompleted ?? nested.length > 0;
-                    return (
-                      <div
-                        key={plan._id}
-                        role="button"
-                        tabIndex={0}
-                        onClick={() => setTrainingDetailId(plan._id)}
-                        onKeyDown={e => { if (e.key === 'Enter') setTrainingDetailId(plan._id); }}
-                        className={`rounded-xl border p-2 border-ocher-200 bg-ocher-100/60 cursor-pointer hover:border-ocher-400 transition-colors ${plan.completed && !showNested ? 'opacity-55' : ''}`}
-                      >
-                        <div className="flex items-start justify-between gap-1">
-                          <button
-                            onClick={e => { e.stopPropagation(); if (!autoCompleted) handleToggleTrainingManual(plan); }}
-                            className="flex-shrink-0 mt-0.5"
-                            title={autoCompleted
-                              ? 'Durch Aktivität erfüllt'
-                              : plan.manualCompleted
-                                ? 'Als offen markieren'
-                                : 'Als absolviert markieren'}
-                          >
-                            {plan.completed
-                              ? <CheckCircle2 size={14} className="text-emerald-600 anim-check" />
-                              : <Circle size={14} className="text-ocher-400 hover:text-emerald-600 transition-colors" />
+                      if (entry.kind === 'habit') {
+                        const plan = entry.data;
+                        return (
+                          <DayRow
+                            key={entry.key}
+                            icon={Sparkles}
+                            iconClass="text-sage-500"
+                            completed={plan.completed}
+                            dim={plan.completed}
+                            overdue={isPast && !plan.completed}
+                            title={plan.habitId?.name || plan.habitName}
+                            meta={plan.completed && plan.loggedValue != null && plan.habitType !== 'boolean'
+                              ? `${plan.loggedValue} ${plan.unitSymbol || ''}`.trim()
+                              : (!plan.completed && plan.notes) || ''}
+                            toggle={
+                              <button
+                                onClick={e => { e.stopPropagation(); handleCompleteHabit(plan); }}
+                                className="flex-shrink-0"
+                                title={plan.completed ? 'Als offen markieren' : 'Als erledigt markieren'}
+                              >
+                                {plan.completed
+                                  ? <CheckCircle2 size={15} className="text-emerald-600 anim-check" />
+                                  : <Circle size={15} className="text-sage-400 hover:text-emerald-600 transition-colors" />}
+                              </button>
                             }
-                          </button>
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-center gap-1">
-                              <Activity size={10} className="text-ocher-600 flex-shrink-0" />
-                              <p className={`text-xs font-semibold leading-tight truncate ${plan.completed ? (showNested ? 'text-ocher-700' : 'line-through text-ink-400') : 'text-ocher-700'}`}>
-                                {trainingLabel(plan)}
-                              </p>
-                            </div>
-                            {plan.completed && !autoCompleted && (
-                              <p className="text-[10px] font-semibold text-emerald-600 mt-0.5">Manuell absolviert</p>
+                            actions={editDeleteActions(
+                              () => setEditing({ plan, kind: 'habit' }),
+                              () => api.delete(`/planner/habits/${plan._id}`).then(load)
                             )}
-                            {plan.notes && !plan.completed && (
-                              <p className="text-xs text-ink-400 mt-0.5 truncate">{plan.notes}</p>
+                          />
+                        );
+                      }
+
+                      if (entry.kind === 'due') {
+                        const d = entry.data;
+                        return (
+                          <DayRow
+                            key={entry.key}
+                            onOpen={() => setDueDetail(d)}
+                            icon={Sparkles}
+                            iconClass="text-sage-300"
+                            completed={d.logged}
+                            dim={d.logged}
+                            title={d.name}
+                            titleClass={d.logged ? '' : '!text-sage-700'}
+                            meta={d.reason?.kind === 'trigger' ? 'Fällig durch Ereignis' : 'Fällig laut Zeitplan'}
+                            toggle={
+                              <button
+                                onClick={e => {
+                                  e.stopPropagation();
+                                  if (d.logged) return;
+                                  if (d.type === 'boolean') {
+                                    api.post('/habits/logs', {
+                                      habitId: d.habitId,
+                                      date: `${d.date}T12:00:00`,
+                                      value: 1,
+                                    }).then(load).catch(() => {});
+                                  } else {
+                                    setDueDetail(d);
+                                  }
+                                }}
+                                className="flex-shrink-0"
+                                title={d.logged ? 'Bereits eingetragen' : 'Erledigt'}
+                              >
+                                {d.logged
+                                  ? <CheckCircle2 size={15} className="text-emerald-600 anim-check" />
+                                  : <Circle size={15} className="text-sage-400 hover:text-emerald-600 transition-colors" />}
+                              </button>
+                            }
+                          />
+                        );
+                      }
+
+                      if (entry.kind === 'training') {
+                        const plan = entry.data;
+                        const nested = plan.matchedActivities || (plan.fulfilledBy ? [plan.fulfilledBy] : []);
+                        const showNested = plan.completed && nested.length > 0;
+                        const autoCompleted = plan.autoCompleted ?? nested.length > 0;
+                        return (
+                          <DayRow
+                            key={entry.key}
+                            onOpen={() => setTrainingDetailId(plan._id)}
+                            icon={Activity}
+                            iconClass="text-ocher-600"
+                            completed={plan.completed}
+                            dim={plan.completed && !showNested}
+                            overdue={isPast && !plan.completed}
+                            title={trainingLabel(plan)}
+                            titleClass={plan.completed && showNested ? '!no-underline !text-ocher-700' : ''}
+                            meta={plan.completed && !autoCompleted ? 'Manuell absolviert'
+                              : (!plan.completed && plan.notes) || ''}
+                            toggle={
+                              <button
+                                onClick={e => { e.stopPropagation(); if (!autoCompleted) handleToggleTrainingManual(plan); }}
+                                className="flex-shrink-0"
+                                title={autoCompleted
+                                  ? 'Durch Aktivität erfüllt'
+                                  : plan.manualCompleted
+                                    ? 'Als offen markieren'
+                                    : 'Als absolviert markieren'}
+                              >
+                                {plan.completed
+                                  ? <CheckCircle2 size={15} className="text-emerald-600 anim-check" />
+                                  : <Circle size={15} className="text-ocher-400 hover:text-emerald-600 transition-colors" />}
+                              </button>
+                            }
+                            actions={editDeleteActions(
+                              () => setEditing({ plan, kind: 'training' }),
+                              () => api.delete(`/planner/trainings/${plan._id}`).then(load)
                             )}
-                            {isPast && !plan.completed && (
-                              <p className="text-[10px] font-semibold text-ocher-600 mt-0.5">Überfällig</p>
-                            )}
-                          </div>
-                          <button
-                            onClick={e => { e.stopPropagation(); setEditing({ plan, kind: 'training' }); }}
-                            aria-label="Plan bearbeiten"
-                            className="flex-shrink-0 text-ink-300 hover:text-brand-600 transition-colors p-1"
                           >
-                            <Pencil size={12} />
-                          </button>
-                          <button
-                            onClick={e => { e.stopPropagation(); api.delete(`/planner/trainings/${plan._id}`).then(load); }}
-                            aria-label="Plan löschen"
-                            className="flex-shrink-0 text-ink-300 hover:text-red-600 transition-colors p-1 -mr-1"
-                          >
-                            <Trash2 size={12} />
-                          </button>
-                        </div>
-                        {showNested && (
-                          <div className="mt-1.5 space-y-1.5" onClick={e => e.stopPropagation()}>
-                            {nested.map(activity => (
+                            {showNested ? nested.map(activity => (
                               <MatchedActivityRow
                                 key={activity.id}
                                 activity={activity}
                                 onOpen={id => setStravaDetailId(id)}
                               />
-                            ))}
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })}
+                            )) : null}
+                          </DayRow>
+                        );
+                      }
 
-                  {/* Synced Strava activities — read-only, clearly marked as
-                      external data (not part of the plan progress) */}
-                  {dayStrava.map(activity => (
-                    <div
-                      key={activity._id}
-                      role="button"
-                      tabIndex={0}
-                      onClick={() => setStravaDetailId(activity._id)}
-                      onKeyDown={e => { if (e.key === 'Enter') setStravaDetailId(activity._id); }}
-                      className="rounded-xl border hairline bg-paper-50 p-2 border-l-4 cursor-pointer hover:bg-paper-100 transition-colors"
-                      style={{ borderLeftColor: STRAVA_ORANGE }}
-                      title="Von Strava synchronisiert – Details anzeigen"
-                    >
-                      <div className="flex items-start gap-1.5">
-                        <Activity size={12} style={{ color: STRAVA_ORANGE }} className="flex-shrink-0 mt-0.5" />
-                        <div className="flex-1 min-w-0">
-                          <p
-                            className="text-xs font-semibold leading-tight text-ink-800 truncate"
-                            title={activity.name || undefined}
-                          >
-                            {activity.name || activity.sportType || 'Aktivität'}
-                          </p>
-                          <div className="flex items-center justify-between gap-2 mt-0.5">
-                            <p className="text-xs text-ink-500 truncate">
-                              {[
-                                activity.sportType,
-                                activity.movingTime ? `${Math.round(activity.movingTime / 60)} min` : null,
-                                activity.distance ? `${(activity.distance / 1000).toFixed(1)} km` : null,
-                              ].filter(Boolean).join(' · ')}
-                            </p>
-                            <p className="text-[10px] font-semibold flex-shrink-0" style={{ color: STRAVA_ORANGE }}>
+                      // Synced Strava activity — read-only, clearly external
+                      const activity = entry.data;
+                      return (
+                        <DayRow
+                          key={entry.key}
+                          onOpen={() => setStravaDetailId(activity._id)}
+                          titleAttr="Von Strava synchronisiert – Details anzeigen"
+                          icon={Activity}
+                          iconStyle={{ color: STRAVA_ORANGE }}
+                          title={activity.name || activity.sportType || 'Aktivität'}
+                          meta={[
+                            activity.sportType,
+                            activity.movingTime ? `${Math.round(activity.movingTime / 60)} min` : null,
+                            activity.distance ? `${(activity.distance / 1000).toFixed(1)} km` : null,
+                          ].filter(Boolean).join(' · ')}
+                          badge={
+                            <span className="text-[10px] font-semibold flex-shrink-0" style={{ color: STRAVA_ORANGE }}>
                               Strava
-                            </p>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-
-                  {totalItems === 0 && dayStrava.length === 0 && dayDue.length === 0 && (
-                    <p className="text-xs text-ink-200 py-1">Frei</p>
-                  )}
+                            </span>
+                          }
+                          toggle={<span className="w-[15px] flex-shrink-0" aria-hidden="true" />}
+                        />
+                      );
+                    });
+                  })()}
                 </div>
 
                 <button
