@@ -192,7 +192,10 @@ function ExportImport() {
   return (
     <SettingsCard icon={Download} tone="sage" title="Daten exportieren & importieren">
       <p className="text-xs text-ink-400 -mt-2 mb-4">
-        Exportiert Gewicht, Gewohnheiten und Aktivitäten als ZIP mit CSV-Dateien.
+        Exportiert alle persönlichen Daten – Gewicht, Gewohnheiten, Aktivitäten,
+        Planer, Ziele, Trainingsarten und Strava-Aktivitäten – als ZIP-Archiv.
+        Das Archiv kann vollständig in eine andere Deltis-Instanz importiert
+        werden; nur die Strava-Verbindung muss dort neu hergestellt werden.
       </p>
 
       <div className="flex flex-wrap gap-3">
@@ -217,6 +220,10 @@ function ExportImport() {
             <li>• {result.activities} Aktivitäten</li>
             <li>• {result.plans} Planereinträge</li>
             <li>• {result.goals} Ziele</li>
+            {result.habitDefinitions > 0 && <li>• {result.habitDefinitions} Gewohnheits-Definitionen</li>}
+            {result.activityTypes > 0 && <li>• {result.activityTypes} Aktivitätstypen</li>}
+            {result.trainingTypes > 0 && <li>• {result.trainingTypes} Trainingsarten</li>}
+            {result.stravaActivities > 0 && <li>• {result.stravaActivities} Strava-Aktivitäten</li>}
             {result.settings && <li>• Einstellungen wiederhergestellt</li>}
           </ul>
           {result.errors?.length > 0 && (
