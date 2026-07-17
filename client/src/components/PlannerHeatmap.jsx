@@ -74,12 +74,14 @@ export default function PlannerHeatmap() {
       </div>
 
       {plans === null ? (
-        <Skeleton className="h-32 max-w-lg" />
+        <Skeleton className="h-28 w-60" />
       ) : (
-        <div className="max-w-lg">
-          <div className="flex gap-1 justify-between" aria-label={`Planungsverlauf der letzten ${WEEKS} Wochen`}>
+        // Fixed small cells keep the grid compact instead of stretching the
+        // squares across the full card width
+        <div className="inline-flex flex-col">
+          <div className="flex gap-[3px] sm:gap-1" aria-label={`Planungsverlauf der letzten ${WEEKS} Wochen`}>
             {Array.from({ length: WEEKS }, (_, w) => (
-              <div key={w} className="flex flex-col gap-1 flex-1">
+              <div key={w} className="flex flex-col gap-[3px] sm:gap-1">
                 {Array.from({ length: 7 }, (_, d) => {
                   const day = addDays(gridStart, w * 7 + d);
                   const key = format(day, 'yyyy-MM-dd');
@@ -97,7 +99,7 @@ export default function PlannerHeatmap() {
                     <div
                       key={key}
                       title={label}
-                      className={`aspect-square w-full rounded-[3px] ${cls}`}
+                      className={`w-3.5 h-3.5 sm:w-4 sm:h-4 rounded-[3px] ${cls}`}
                     />
                   );
                 })}

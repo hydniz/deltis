@@ -788,7 +788,10 @@ export default function Planner() {
           {copyInfo && <p className="text-xs text-ink-400 mt-2">{copyInfo}</p>}
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-7 gap-3 anim-list">
+        {/* Week agenda: one row per day — stays readable on mobile and inside
+            the narrow desktop content column, where seven side-by-side day
+            columns get too cramped. */}
+        <div className="card overflow-hidden divide-y divide-[color:var(--surface-border)] anim-list">
           {days.map(day => {
             const dayDate = format(day, 'yyyy-MM-dd');
             const dayPlans = plans.filter(p => (p.scheduledDate || '').slice(0, 10) === dayDate);
@@ -807,41 +810,32 @@ export default function Planner() {
             return (
               <div
                 key={day.toISOString()}
-                className={`card p-3 ${isToday_ ? '!border-brand-300 shadow-card-hover' : ''}`}
+                className={`flex gap-3 p-3 sm:p-4 ${isToday_ ? 'bg-brand-50/60' : ''}`}
               >
-                {/* Day header */}
-                <div className="flex items-center justify-between mb-3">
-                  <div>
-                    <p className={`text-[10px] font-semibold uppercase tracking-[0.09em] ${isToday_ ? 'text-brand-600' : 'text-ink-400'}`}>
-                      {format(day, 'EEE', { locale: de })}
-                    </p>
-                    <div className="flex items-center gap-1.5">
-                      <p className={`display text-xl ${isToday_ ? 'text-brand-600' : ''}`}>
-                        {format(day, 'd')}
-                      </p>
-                      {totalItems > 0 && (
-                        <span
-                          className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-full ${
-                            doneItems === totalItems
-                              ? 'bg-emerald-100 text-emerald-700'
-                              : 'bg-paper-100 text-ink-400'
-                          }`}
-                        >
-                          {doneItems}/{totalItems}
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                  <button
-                    onClick={() => setAddFor(day)}
-                    aria-label="Plan hinzufügen"
-                    className="w-8 h-8 flex items-center justify-center rounded-full bg-brand-50 hover:bg-brand-500 text-brand-500 hover:text-white transition-colors"
-                  >
-                    <Plus size={14} />
-                  </button>
+                {/* Day rail: weekday, date and completion badge */}
+                <div className="w-11 flex-shrink-0 flex flex-col items-center pt-0.5">
+                  <p className={`text-[10px] font-semibold uppercase tracking-[0.09em] ${isToday_ ? 'text-brand-600' : 'text-ink-400'}`}>
+                    {format(day, 'EEE', { locale: de })}
+                  </p>
+                  <p className={`display text-xl leading-none mt-0.5 ${isToday_ ? 'text-brand-600' : ''}`}>
+                    {format(day, 'd')}
+                  </p>
+                  {totalItems > 0 && (
+                    <span
+                      className={`mt-1.5 text-[10px] font-semibold px-1.5 py-0.5 rounded-full ${
+                        doneItems === totalItems
+                          ? 'bg-emerald-100 text-emerald-700'
+                          : 'bg-paper-100 text-ink-400'
+                      }`}
+                    >
+                      {doneItems}/{totalItems}
+                    </span>
+                  )}
                 </div>
 
-                <div className="space-y-2">
+                {/* Entries flow into a responsive grid: full width on phones,
+                    side by side on wider screens */}
+                <div className="flex-1 min-w-0 self-center grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-2 content-start">
                   {/* Activity plans */}
                   {dayPlans.map(plan => (
                     <div key={plan._id} className={`rounded-xl border p-2 ${getCardColor(plan)} ${plan.completed ? 'opacity-55' : ''}`}>
@@ -857,7 +851,7 @@ export default function Planner() {
                           }
                         </button>
                         <div className="flex-1 min-w-0">
-                          <p className={`text-xs font-semibold leading-tight ${plan.completed ? 'line-through text-ink-400' : 'text-ink-800'}`}>
+                          <p className={`text-xs font-semibold leading-tight truncate ${plan.completed ? 'line-through text-ink-400' : 'text-ink-800'}`}>
                             {(() => {
                               const current = plan.activityTypeRef?.label || plan.activityType;
                               return plan.historicalLabel ? `${current} (${plan.historicalLabel})` : current;
@@ -1012,28 +1006,41 @@ export default function Planner() {
                       <div className="flex items-start gap-1.5">
                         <Activity size={12} style={{ color: STRAVA_ORANGE }} className="flex-shrink-0 mt-0.5" />
                         <div className="flex-1 min-w-0">
-                          <p className="text-xs font-semibold leading-tight text-ink-800 truncate">
+                          <p
+                            className="text-xs font-semibold leading-tight text-ink-800 truncate"
+                            title={activity.name || undefined}
+                          >
                             {activity.name || activity.sportType || 'Aktivität'}
                           </p>
-                          <p className="text-xs text-ink-500 mt-0.5">
-                            {[
-                              activity.sportType,
-                              activity.movingTime ? `${Math.round(activity.movingTime / 60)} min` : null,
-                              activity.distance ? `${(activity.distance / 1000).toFixed(1)} km` : null,
-                            ].filter(Boolean).join(' · ')}
-                          </p>
-                          <p className="text-[10px] font-semibold mt-0.5" style={{ color: STRAVA_ORANGE }}>
-                            Strava
-                          </p>
+                          <div className="flex items-center justify-between gap-2 mt-0.5">
+                            <p className="text-xs text-ink-500 truncate">
+                              {[
+                                activity.sportType,
+                                activity.movingTime ? `${Math.round(activity.movingTime / 60)} min` : null,
+                                activity.distance ? `${(activity.distance / 1000).toFixed(1)} km` : null,
+                              ].filter(Boolean).join(' · ')}
+                            </p>
+                            <p className="text-[10px] font-semibold flex-shrink-0" style={{ color: STRAVA_ORANGE }}>
+                              Strava
+                            </p>
+                          </div>
                         </div>
                       </div>
                     </div>
                   ))}
 
                   {totalItems === 0 && dayStrava.length === 0 && (
-                    <p className="text-xs text-ink-200 text-center py-2">Frei</p>
+                    <p className="text-xs text-ink-200 py-1">Frei</p>
                   )}
                 </div>
+
+                <button
+                  onClick={() => setAddFor(day)}
+                  aria-label="Plan hinzufügen"
+                  className="w-8 h-8 flex-shrink-0 self-start flex items-center justify-center rounded-full bg-brand-50 hover:bg-brand-500 text-brand-500 hover:text-white transition-colors"
+                >
+                  <Plus size={14} />
+                </button>
               </div>
             );
           })}
