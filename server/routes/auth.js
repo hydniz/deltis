@@ -191,6 +191,16 @@ router.put('/me', auth, async (req, res) => {
       }
       update.weightUnit = weightUnit;
     }
+    if (req.body.checkinTimes !== undefined) {
+      const times = req.body.checkinTimes;
+      const valid = Array.isArray(times)
+        && times.length <= 6
+        && times.every(t => typeof t === 'string' && /^([01]\d|2[0-3]):[0-5]\d$/.test(t));
+      if (!valid) {
+        return res.status(400).json({ error: 'Ungültige Check-in-Zeiten (HH:MM, max. 6).' });
+      }
+      update.checkinTimes = [...new Set(times)].sort();
+    }
     if (weightGoal !== undefined) {
       // null clears the goal; otherwise weight is required, date optional.
       if (weightGoal === null) {

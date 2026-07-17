@@ -3,6 +3,7 @@ import { Outlet, NavLink, useLocation } from 'react-router-dom';
 import Sidebar from './Sidebar';
 import UserMenu from './UserMenu';
 import Logo from './Logo';
+import DailyCheckin from './DailyCheckin';
 import {
   LayoutDashboard, Dumbbell, CalendarDays, Sparkles, Scale, Target,
   MoreHorizontal,
@@ -76,6 +77,9 @@ export default function Layout({ children }) {
   return (
     <div className="min-h-screen">
       <Sidebar />
+      {/* First visit after a configured check-in time opens the short
+          habit questionnaire (skippable) */}
+      <DailyCheckin />
 
       {/* Top bar – mobile only */}
       <header className="lg:hidden sticky top-0 z-40 bg-paper/85 backdrop-blur-xl border-b hairline">

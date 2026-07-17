@@ -17,6 +17,10 @@ const userSchema = new mongoose.Schema({
     weight: { type: Number, default: null },
     date: { type: Date, default: null },
   },
+  // Daily check-in reminder times ('HH:MM', local). On the first page visit
+  // after such a time the client offers the short habit questionnaire.
+  // Empty = check-in disabled.
+  checkinTimes: { type: [String], default: [] },
   // Incremented on every password change/reset. The JWT carries the value it
   // was issued with (`sv` claim); a mismatch invalidates the session, so a
   // stolen cookie dies the moment the password is changed.
