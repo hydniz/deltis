@@ -6,4 +6,6 @@
 // v7: meta goals + goal items, training types (/training-types, /planner/trainings)
 // v8: training plan names + manual completion + disjoint matches, trainings in
 //     copy-week, goal heatmaps (/goals/:id/heatmap)
-export const REQUIRED_API_VERSION = 8;
+// v9: personal habit library (soft delete/trash, /habits/catalog, inline
+//     settings on create), meta goal child previews
+export const REQUIRED_API_VERSION = 9;

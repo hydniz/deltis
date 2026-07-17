@@ -532,14 +532,95 @@ describe('bundled migrations', () => {
     await runMigrations({ dir: realMigrationsDir, backupDir, exitOnFailure: false });
     restoreConsole();
 
+    // 004 follows 003 in the same run and converts the grandfathered global
+    // selection into a personal copy — the selection therefore points to a
+    // user-owned habit with the same name, never to the global doc.
+    const HabitDefinition = require('../models/HabitDefinition');
     const legacySettings = await UserHabitSettings.findOne({ userId: legacyUser });
     expect(legacySettings.hasSelection).toBe(true);
-    expect(legacySettings.selectedHabitIds.map(id => id.toString())).toEqual([globalHabit.toString()]);
+    expect(legacySettings.selectedHabitIds).toHaveLength(1);
+    const legacyCopy = await HabitDefinition.findById(legacySettings.selectedHabitIds[0]);
+    expect(legacyCopy.name).toBe('Wasser');
+    expect(legacyCopy.userId.toString()).toBe(legacyUser.toString());
 
     expect(await UserHabitSettings.findOne({ userId: freshUser })).toBeNull();
 
     const pickySettings = await UserHabitSettings.findOne({ userId: pickyUser });
-    expect(pickySettings.selectedHabitIds.map(id => id.toString())).toEqual([hiddenHabit.toString()]);
+    expect(pickySettings.selectedHabitIds).toHaveLength(1);
+    const pickyCopy = await HabitDefinition.findById(pickySettings.selectedHabitIds[0]);
+    expect(pickyCopy.name).toBe('Kreatin');
+    expect(pickyCopy.userId.toString()).toBe(pickyUser.toString());
+  });
+
+  it('004-personal-habit-library copies used globals per user and rewrites references', async () => {
+    const backupDir = tmpDir('mig-backup-');
+    const UserHabitSettings = require('../models/UserHabitSettings');
+    const HabitDefinition = require('../models/HabitDefinition');
+    const HabitLog = require('../models/HabitLog');
+    const HabitPlan = require('../models/HabitPlan');
+    const Goal = require('../models/Goal');
+
+    const users = mongoose.connection.collection('users');
+    const habits = mongoose.connection.collection('habitdefinitions');
+
+    const water = (await habits.insertOne({
+      userId: null, name: 'Wasser', unitSymbol: 'ml', type: 'amount',
+      isPredefined: true, version: 2, nameHistory: [], createdAt: new Date(),
+    })).insertedId;
+    const untouched = (await habits.insertOne({
+      userId: null, name: 'Koffein', unitSymbol: 'mg', type: 'amount',
+      isPredefined: true, version: 1, nameHistory: [], createdAt: new Date(),
+    })).insertedId;
+    const hidden = (await habits.insertOne({
+      userId: null, name: 'Zigaretten', unitSymbol: 'Stück', type: 'amount',
+      isPredefined: true, version: 1, nameHistory: [], createdAt: new Date(),
+    })).insertedId;
+
+    const userId = (await users.insertOne({ uuid: 'mig4-1', name: 'Mig4', createdAt: new Date() })).insertedId;
+    await HabitLog.create({ userId, habitId: water, habitVersion: 2, date: new Date(), value: 500 });
+    await HabitPlan.create({ userId, habitId: water, habitName: 'Wasser', scheduledDate: new Date() });
+    const goal = await Goal.create({
+      userId, name: 'Trinken', type: 'periodic-habit',
+      targetRef: water, targetRefModel: 'HabitDefinition',
+      condition: 'min', targetValue: 14, metric: 'value', isActive: true,
+    });
+    // Hidden global with an old log: becomes a soft-deleted personal copy
+    await HabitLog.create({ userId, habitId: hidden, habitVersion: 1, date: new Date(), value: 3 });
+    await UserHabitSettings.create({
+      userId,
+      selectedHabitIds: [water],
+      hiddenHabitIds: [hidden],
+      hasSelection: true,
+      habitSettings: { [water.toString()]: { scheduleDays: [1, 3] } },
+    });
+
+    silenceConsole();
+    await runMigrations({ dir: realMigrationsDir, backupDir, exitOnFailure: false });
+    restoreConsole();
+
+    // Globals are gone; only the used ones exist as personal copies
+    expect(await HabitDefinition.countDocuments({ userId: null })).toBe(0);
+    expect(await HabitDefinition.findOne({ name: 'Koffein' })).toBeNull();
+    void untouched;
+
+    const waterCopy = await HabitDefinition.findOne({ userId, name: 'Wasser' });
+    expect(waterCopy).toBeTruthy();
+    expect(waterCopy.version).toBe(2);
+    expect(waterCopy.deletedAt).toBeNull();
+
+    const hiddenCopy = await HabitDefinition.findOne({ userId, name: 'Zigaretten' });
+    expect(hiddenCopy.deletedAt).toBeTruthy();
+
+    // References moved to the copies
+    expect((await HabitLog.findOne({ userId, value: 500 })).habitId.toString()).toBe(waterCopy._id.toString());
+    expect((await HabitPlan.findOne({ userId })).habitId.toString()).toBe(waterCopy._id.toString());
+    expect((await Goal.findById(goal._id)).targetRef.toString()).toBe(waterCopy._id.toString());
+
+    const settings = await UserHabitSettings.findOne({ userId });
+    expect(settings.selectedHabitIds.map(String)).toEqual([waterCopy._id.toString()]);
+    expect(settings.hiddenHabitIds).toHaveLength(0);
+    expect(settings.habitSettings[waterCopy._id.toString()]).toEqual({ scheduleDays: [1, 3] });
+    expect(settings.habitSettings[water.toString()]).toBeUndefined();
   });
 
   it('bundled migrations end up recorded with the correct names', async () => {
@@ -550,7 +631,7 @@ describe('bundled migrations', () => {
 
     const Migration = require('../models/Migration');
     const names = (await Migration.find().sort({ appliedAt: 1 }).lean()).map(m => m.name);
-    expect(names).toEqual(['001-versioned-refs', '002-habit-settings', '003-habit-selection-opt-in']);
+    expect(names).toEqual(['001-versioned-refs', '002-habit-settings', '003-habit-selection-opt-in', '004-personal-habit-library']);
   });
 });
 
