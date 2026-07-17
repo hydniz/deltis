@@ -159,7 +159,7 @@ export default function Dashboard() {
   const { user } = useAuth();
   const [data, setData] = useState({
     definitions: [], habitLogs: [], activities: [],
-    activityPlans: [], habitPlans: [], weight: null, goals: [],
+    activityPlans: [], habitPlans: [], trainingPlans: [], weight: null, goals: [],
   });
   const [loading, setLoading] = useState(true);
   // Stable for the whole browser-tab session; rotates in a new tab,
@@ -174,7 +174,8 @@ export default function Dashboard() {
     const dayStart = startOfDay(new Date()).toISOString();
     const dayEnd = endOfDay(new Date()).toISOString();
     try {
-      const [defsRes, logsRes, actRes, planRes, habitPlanRes, weightRes, goalRes] = await Promise.all([
+      const dayParam = format(new Date(), 'yyyy-MM-dd');
+      const [defsRes, logsRes, actRes, planRes, habitPlanRes, trainingPlanRes, weightRes, goalRes] = await Promise.all([
         api.get('/habits/definitions'),
         api.get('/habits/logs', { params: { startDate: dayStart, endDate: dayEnd } }),
         api.get('/activities', {
@@ -182,6 +183,10 @@ export default function Dashboard() {
         }),
         api.get('/planner', { params: { startDate: dayStart, endDate: dayEnd } }),
         api.get('/planner/habits', { params: { startDate: dayStart, endDate: dayEnd } }),
+        // Planned trainings are keyed by calendar day, not timestamps —
+        // missing integration simply yields an empty list.
+        api.get('/planner/trainings', { params: { startDate: dayParam, endDate: dayParam } })
+          .catch(() => ({ data: [] })),
         api.get('/weight', { params: { limit: 1 } }),
         api.get('/goals'),
       ]);
@@ -191,6 +196,7 @@ export default function Dashboard() {
         activities: actRes.data.activities || [],
         activityPlans: planRes.data,
         habitPlans: habitPlanRes.data,
+        trainingPlans: trainingPlanRes.data,
         weight: weightRes.data[0] || null,
         goals: goalRes.data || [],
       });
@@ -239,8 +245,9 @@ export default function Dashboard() {
     const log = getLog(h._id);
     return log && meetsTarget(h, log.value);
   }).length;
-  const totalPlans = data.activityPlans.length + data.habitPlans.length;
-  const donePlans = [...data.activityPlans, ...data.habitPlans].filter(p => p.completed).length;
+  const totalPlans = data.activityPlans.length + data.habitPlans.length + data.trainingPlans.length;
+  const donePlans = [...data.activityPlans, ...data.habitPlans, ...data.trainingPlans]
+    .filter(p => p.completed).length;
 
   return (
     <div className="space-y-6 anim-list">
@@ -348,6 +355,19 @@ export default function Dashboard() {
                 meta={plan.completed && plan.loggedValue != null
                   ? `${plan.loggedValue} ${plan.unitSymbol || ''}`.trim()
                   : plan.notes || 'Gewohnheit'}
+              />
+            ))}
+            {data.trainingPlans.map(plan => (
+              <PlanRow
+                key={plan._id}
+                label={plan.name || plan.trainingTypeName || 'Training'}
+                color="amber"
+                completed={plan.completed}
+                meta={plan.fulfilledBy
+                  ? `Erfüllt durch: ${plan.fulfilledBy.name}`
+                  : plan.completed
+                    ? 'Manuell absolviert'
+                    : plan.notes || 'Training – wird durch eine passende Aktivität erfüllt'}
               />
             ))}
           </div>

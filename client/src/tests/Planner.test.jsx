@@ -123,7 +123,7 @@ describe('Planner – Wochenübersicht', () => {
 
     expect(await screen.findByText('Entspannter Lauf')).toBeInTheDocument();
     expect(screen.getByText('Run · 26 min · 3.4 km')).toBeInTheDocument();
-    expect(screen.getByText('Strava')).toBeInTheDocument();
+    expect(screen.getAllByText('Strava').length).toBeGreaterThan(0);
   });
 });
 

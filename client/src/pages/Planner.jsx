@@ -14,6 +14,8 @@ import {
 } from '../components/ui';
 import PlannerHeatmap from '../components/PlannerHeatmap';
 import StravaCriteriaBuilder, { normalizeCriteria, criteriaSummary, emptyGroup } from '../components/StravaCriteriaBuilder';
+import TrainingDetailModal, { trainingLabel, MatchedActivityRow } from '../components/TrainingDetailModal';
+import StravaActivityDetailModal from '../components/StravaActivityDetailModal';
 
 // Strava brand colour — marks synced activities so their origin is obvious
 const STRAVA_ORANGE = '#FC4C02';
@@ -109,6 +111,7 @@ function AddPlanModal({ date, days, activityTypes, habits, trainingTypes = [], t
   const [trainingMode, setTrainingMode] = useState(trainingTypes.length > 0 ? 'type' : 'custom');
   const [trainingTypeId, setTrainingTypeId] = useState(trainingTypes[0]?._id || '');
   const [trainingCriteria, setTrainingCriteria] = useState(emptyGroup());
+  const [trainingName, setTrainingName] = useState('');
   const [trainingNotes, setTrainingNotes] = useState('');
 
   const [saving, setSaving] = useState(false);
@@ -167,6 +170,7 @@ function AddPlanModal({ date, days, activityTypes, habits, trainingTypes = [], t
         scheduledDate,
         trainingTypeId: useType ? trainingTypeId : undefined,
         criteria,
+        name: useType ? undefined : (trainingName.trim() || undefined),
         notes: trainingNotes || undefined,
       })));
       onSave();
@@ -342,11 +346,21 @@ function AddPlanModal({ date, days, activityTypes, habits, trainingTypes = [], t
               </Select>
             </Field>
           ) : (
-            <StravaCriteriaBuilder
-              criteria={trainingCriteria}
-              onChange={setTrainingCriteria}
-              sportTypes={[]}
-            />
+            <>
+              <Field label="Name" optional hint="Wie soll dieses Training im Planer heißen?">
+                <Input
+                  value={trainingName}
+                  onChange={e => setTrainingName(e.target.value)}
+                  maxLength={60}
+                  placeholder="z.B. Intervalle, Longrun…"
+                />
+              </Field>
+              <StravaCriteriaBuilder
+                criteria={trainingCriteria}
+                onChange={setTrainingCriteria}
+                sportTypes={[]}
+              />
+            </>
           )}
           {dayChips}
           <Field label="Notizen" optional>
@@ -516,8 +530,9 @@ function CompleteHabitModal({ plan, onSave, onClose }) {
 
 // Edit plan (activity or habit) — move to another day, adjust planned values and notes
 
-function EditPlanModal({ plan, kind, onSave, onClose }) {
+function EditPlanModal({ plan, kind, trainingTypes = [], onSave, onClose }) {
   const isActivity = kind === 'activity';
+  const isTraining = kind === 'training';
   const typeConfig = isActivity ? (plan.activityTypeRef || {}) : {};
   const [form, setForm] = useState({
     scheduledDate: (plan.scheduledDate || '').slice(0, 10),
@@ -526,6 +541,11 @@ function EditPlanModal({ plan, kind, onSave, onClose }) {
     notes: plan.notes || '',
   });
   const [customValues, setCustomValues] = useState(plan.customValues || {});
+  // Training target: switch between saved type and ad-hoc criteria in place.
+  const [trainingMode, setTrainingMode] = useState(plan.trainingTypeId ? 'type' : 'custom');
+  const [trainingTypeId, setTrainingTypeId] = useState(plan.trainingTypeId || trainingTypes[0]?._id || '');
+  const [trainingCriteria, setTrainingCriteria] = useState(plan.criteria?.strava || emptyGroup());
+  const [trainingName, setTrainingName] = useState(plan.name || '');
   const [saving, setSaving] = useState(false);
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
 
@@ -541,10 +561,14 @@ function EditPlanModal({ plan, kind, onSave, onClose }) {
           notes: form.notes || null,
           customValues,
         });
-      } else if (kind === 'training') {
+      } else if (isTraining) {
+        const useType = trainingMode === 'type' && trainingTypeId;
         await api.put(`/planner/trainings/${plan._id}`, {
           scheduledDate: form.scheduledDate,
           notes: form.notes || null,
+          trainingTypeId: useType ? trainingTypeId : undefined,
+          criteria: useType ? undefined : { strava: normalizeCriteria(trainingCriteria) },
+          name: useType ? '' : trainingName.trim(),
         });
       } else {
         await api.put(`/planner/habits/${plan._id}`, {
@@ -566,8 +590,8 @@ function EditPlanModal({ plan, kind, onSave, onClose }) {
       title="Plan bearbeiten"
       subtitle={isActivity
         ? (typeConfig.label || plan.activityType)
-        : kind === 'training'
-          ? (plan.trainingTypeName || 'Training')
+        : isTraining
+          ? trainingLabel(plan)
           : (plan.habitId?.name || plan.habitName)}
       icon={Pencil}
       footer={
@@ -606,6 +630,48 @@ function EditPlanModal({ plan, kind, onSave, onClose }) {
             <CustomFieldInput field={field} value={customValues[field.key]} onChange={v => setCustomValues(cv => ({ ...cv, [field.key]: v }))} />
           </Field>
         ))}
+        {isTraining && (
+          <>
+            {trainingTypes.length > 0 && (
+              <Field label="Was zählt als Training?">
+                <Segmented
+                  value={trainingMode}
+                  onChange={setTrainingMode}
+                  options={[
+                    { value: 'type', label: 'Trainingstyp' },
+                    { value: 'custom', label: 'Eigene Kriterien' },
+                  ]}
+                />
+              </Field>
+            )}
+            {trainingMode === 'type' && trainingTypes.length > 0 ? (
+              <Field
+                label="Trainingstyp"
+                hint={criteriaSummary(trainingTypes.find(t => t._id === trainingTypeId)?.criteria?.strava)}
+              >
+                <Select value={trainingTypeId} onChange={e => setTrainingTypeId(e.target.value)}>
+                  {trainingTypes.map(t => <option key={t._id} value={t._id}>{t.name}</option>)}
+                </Select>
+              </Field>
+            ) : (
+              <>
+                <Field label="Name" optional>
+                  <Input
+                    value={trainingName}
+                    onChange={e => setTrainingName(e.target.value)}
+                    maxLength={60}
+                    placeholder="z.B. Intervalle, Longrun…"
+                  />
+                </Field>
+                <StravaCriteriaBuilder
+                  criteria={trainingCriteria}
+                  onChange={setTrainingCriteria}
+                  sportTypes={[]}
+                />
+              </>
+            )}
+          </>
+        )}
         <Field label="Notizen">
           <Textarea rows={2} value={form.notes} onChange={e => set('notes', e.target.value)} placeholder="Optional…" />
         </Field>
@@ -633,6 +699,10 @@ export default function Planner() {
   const [editing, setEditing] = useState(null);
   const [copying, setCopying] = useState(false);
   const [copyInfo, setCopyInfo] = useState(null);
+  // Detail modals: the training is looked up by id so a reload (e.g. after
+  // the manual-completion toggle) refreshes the open modal in place.
+  const [trainingDetailId, setTrainingDetailId] = useState(null);
+  const [stravaDetailId, setStravaDetailId] = useState(null);
 
   const weekEnd = addDays(weekStart, 6);
   const days = Array.from({ length: 7 }, (_, i) => addDays(weekStart, i));
@@ -693,7 +763,7 @@ export default function Planner() {
         sourceStart: format(subWeeks(weekStart, 1), 'yyyy-MM-dd'),
         targetStart: format(weekStart, 'yyyy-MM-dd'),
       });
-      const copied = (res.data.copiedActivities || 0) + (res.data.copiedHabits || 0);
+      const copied = (res.data.copiedActivities || 0) + (res.data.copiedHabits || 0) + (res.data.copiedTrainings || 0);
       setCopyInfo(copied > 0
         ? `${copied} ${copied === 1 ? 'Plan' : 'Pläne'} aus der Vorwoche übernommen.`
         : 'Nichts übernommen – die Vorwoche war leer oder alles ist bereits geplant.');
@@ -710,6 +780,17 @@ export default function Planner() {
       api.put(`/planner/${plan._id}`, { completed: false }).then(load);
     } else {
       setCompletingPlan(plan);
+    }
+  };
+
+  // Manual completion of a training — independent of the derived
+  // auto-fulfilment, so a training can be ticked off without a synced activity.
+  const handleToggleTrainingManual = async (plan) => {
+    try {
+      await api.put(`/planner/trainings/${plan._id}`, { completed: !plan.manualCompleted });
+      await load();
+    } catch (err) {
+      alert('Fehler: ' + (err.response?.data?.error || err.message));
     }
   };
 
@@ -797,10 +878,16 @@ export default function Planner() {
             const dayPlans = plans.filter(p => (p.scheduledDate || '').slice(0, 10) === dayDate);
             const dayHabitPlans = habitPlans.filter(p => (p.scheduledDate || '').slice(0, 10) === dayDate);
             const dayTrainings = trainingPlans.filter(p => (p.scheduledDate || '').slice(0, 10) === dayDate);
+            // Activities already claimed by a training plan render nested
+            // inside that plan's card — don't list them a second time.
+            const claimedIds = new Set(
+              dayTrainings.flatMap(p => (p.matchedActivities || []).map(m => m.id))
+            );
             // startDateLocal carries the athlete's local wall time — the date
             // the activity belongs to from the user's perspective.
             const dayStrava = stravaActivities.filter(a =>
               ((a.startDateLocal || a.startDate) || '').slice(0, 10) === dayDate
+              && !claimedIds.has(a._id)
             );
             const isToday_ = isSameDay(day, today);
             const totalItems = dayPlans.length + dayHabitPlans.length + dayTrainings.length;
@@ -940,68 +1027,99 @@ export default function Planner() {
                     </div>
                   ))}
 
-                  {/* Planned trainings — auto-fulfilled by matching synced activities */}
-                  {dayTrainings.map(plan => (
-                    <div
-                      key={plan._id}
-                      className={`rounded-xl border p-2 border-ocher-200 bg-ocher-100/60 ${plan.completed ? 'opacity-55' : ''}`}
-                    >
-                      <div className="flex items-start justify-between gap-1">
-                        <span
-                          className="flex-shrink-0 mt-0.5"
-                          title={plan.completed ? 'Durch Aktivität erfüllt' : 'Wird automatisch erfüllt, sobald eine passende Aktivität synchronisiert wird'}
-                        >
-                          {plan.completed
-                            ? <CheckCircle2 size={14} className="text-emerald-600 anim-check" />
-                            : <Circle size={14} className="text-ocher-400" />
-                          }
-                        </span>
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-1">
-                            <Activity size={10} className="text-ocher-600 flex-shrink-0" />
-                            <p className={`text-xs font-semibold leading-tight truncate ${plan.completed ? 'line-through text-ink-400' : 'text-ocher-700'}`}>
-                              {plan.trainingTypeName || 'Training (eigene Kriterien)'}
-                            </p>
+                  {/* Planned trainings — auto-fulfilled by matching synced
+                      activities or ticked off manually. The card opens the
+                      detail view; fulfilled plans wrap their matching
+                      activities so the plan and its proof read as one unit. */}
+                  {dayTrainings.map(plan => {
+                    // Older payloads only carry fulfilledBy — treat it as the
+                    // single matched activity.
+                    const nested = plan.matchedActivities || (plan.fulfilledBy ? [plan.fulfilledBy] : []);
+                    const showNested = plan.completed && nested.length > 0;
+                    const autoCompleted = plan.autoCompleted ?? nested.length > 0;
+                    return (
+                      <div
+                        key={plan._id}
+                        role="button"
+                        tabIndex={0}
+                        onClick={() => setTrainingDetailId(plan._id)}
+                        onKeyDown={e => { if (e.key === 'Enter') setTrainingDetailId(plan._id); }}
+                        className={`rounded-xl border p-2 border-ocher-200 bg-ocher-100/60 cursor-pointer hover:border-ocher-400 transition-colors ${plan.completed && !showNested ? 'opacity-55' : ''}`}
+                      >
+                        <div className="flex items-start justify-between gap-1">
+                          <button
+                            onClick={e => { e.stopPropagation(); if (!autoCompleted) handleToggleTrainingManual(plan); }}
+                            className="flex-shrink-0 mt-0.5"
+                            title={autoCompleted
+                              ? 'Durch Aktivität erfüllt'
+                              : plan.manualCompleted
+                                ? 'Als offen markieren'
+                                : 'Als absolviert markieren'}
+                          >
+                            {plan.completed
+                              ? <CheckCircle2 size={14} className="text-emerald-600 anim-check" />
+                              : <Circle size={14} className="text-ocher-400 hover:text-emerald-600 transition-colors" />
+                            }
+                          </button>
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-1">
+                              <Activity size={10} className="text-ocher-600 flex-shrink-0" />
+                              <p className={`text-xs font-semibold leading-tight truncate ${plan.completed ? (showNested ? 'text-ocher-700' : 'line-through text-ink-400') : 'text-ocher-700'}`}>
+                                {trainingLabel(plan)}
+                              </p>
+                            </div>
+                            {plan.completed && !autoCompleted && (
+                              <p className="text-[10px] font-semibold text-emerald-600 mt-0.5">Manuell absolviert</p>
+                            )}
+                            {plan.notes && !plan.completed && (
+                              <p className="text-xs text-ink-400 mt-0.5 truncate">{plan.notes}</p>
+                            )}
+                            {isPast && !plan.completed && (
+                              <p className="text-[10px] font-semibold text-ocher-600 mt-0.5">Überfällig</p>
+                            )}
                           </div>
-                          {plan.completed && plan.fulfilledBy && (
-                            <p className="text-xs text-ink-500 mt-0.5 truncate flex items-center gap-1">
-                              <Activity size={9} style={{ color: STRAVA_ORANGE }} className="flex-shrink-0" />
-                              {plan.fulfilledBy.name}
-                            </p>
-                          )}
-                          {plan.notes && !plan.completed && (
-                            <p className="text-xs text-ink-400 mt-0.5 truncate">{plan.notes}</p>
-                          )}
-                          {isPast && !plan.completed && (
-                            <p className="text-[10px] font-semibold text-ocher-600 mt-0.5">Überfällig</p>
-                          )}
+                          <button
+                            onClick={e => { e.stopPropagation(); setEditing({ plan, kind: 'training' }); }}
+                            aria-label="Plan bearbeiten"
+                            className="flex-shrink-0 text-ink-300 hover:text-brand-600 transition-colors p-1"
+                          >
+                            <Pencil size={12} />
+                          </button>
+                          <button
+                            onClick={e => { e.stopPropagation(); api.delete(`/planner/trainings/${plan._id}`).then(load); }}
+                            aria-label="Plan löschen"
+                            className="flex-shrink-0 text-ink-300 hover:text-red-600 transition-colors p-1 -mr-1"
+                          >
+                            <Trash2 size={12} />
+                          </button>
                         </div>
-                        <button
-                          onClick={() => setEditing({ plan, kind: 'training' })}
-                          aria-label="Plan bearbeiten"
-                          className="flex-shrink-0 text-ink-300 hover:text-brand-600 transition-colors p-1"
-                        >
-                          <Pencil size={12} />
-                        </button>
-                        <button
-                          onClick={() => api.delete(`/planner/trainings/${plan._id}`).then(load)}
-                          aria-label="Plan löschen"
-                          className="flex-shrink-0 text-ink-300 hover:text-red-600 transition-colors p-1 -mr-1"
-                        >
-                          <Trash2 size={12} />
-                        </button>
+                        {showNested && (
+                          <div className="mt-1.5 space-y-1.5" onClick={e => e.stopPropagation()}>
+                            {nested.map(activity => (
+                              <MatchedActivityRow
+                                key={activity.id}
+                                activity={activity}
+                                onOpen={id => setStravaDetailId(id)}
+                              />
+                            ))}
+                          </div>
+                        )}
                       </div>
-                    </div>
-                  ))}
+                    );
+                  })}
 
                   {/* Synced Strava activities — read-only, clearly marked as
                       external data (not part of the plan progress) */}
                   {dayStrava.map(activity => (
                     <div
                       key={activity._id}
-                      className="rounded-xl border hairline bg-paper-50 p-2 border-l-4"
+                      role="button"
+                      tabIndex={0}
+                      onClick={() => setStravaDetailId(activity._id)}
+                      onKeyDown={e => { if (e.key === 'Enter') setStravaDetailId(activity._id); }}
+                      className="rounded-xl border hairline bg-paper-50 p-2 border-l-4 cursor-pointer hover:bg-paper-100 transition-colors"
                       style={{ borderLeftColor: STRAVA_ORANGE }}
-                      title="Von Strava synchronisiert"
+                      title="Von Strava synchronisiert – Details anzeigen"
                     >
                       <div className="flex items-start gap-1.5">
                         <Activity size={12} style={{ color: STRAVA_ORANGE }} className="flex-shrink-0 mt-0.5" />
@@ -1069,8 +1187,31 @@ export default function Planner() {
         <EditPlanModal
           plan={editing.plan}
           kind={editing.kind}
+          trainingTypes={trainingTypes}
           onSave={() => { setEditing(null); load(); }}
           onClose={() => setEditing(null)}
+        />
+      )}
+
+      {trainingDetailId && (() => {
+        const plan = trainingPlans.find(p => p._id === trainingDetailId);
+        if (!plan) return null;
+        return (
+          <TrainingDetailModal
+            plan={plan}
+            onClose={() => setTrainingDetailId(null)}
+            onEdit={p => { setTrainingDetailId(null); setEditing({ plan: p, kind: 'training' }); }}
+            onDelete={p => api.delete(`/planner/trainings/${p._id}`).then(() => { setTrainingDetailId(null); load(); })}
+            onToggleManual={handleToggleTrainingManual}
+            onOpenActivity={id => setStravaDetailId(id)}
+          />
+        );
+      })()}
+
+      {stravaDetailId && (
+        <StravaActivityDetailModal
+          activityId={stravaDetailId}
+          onClose={() => setStravaDetailId(null)}
         />
       )}
 

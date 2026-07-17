@@ -104,11 +104,13 @@ router.post('/copy-week', auth, async (req, res) => {
     const weekEnd = (start) => new Date(start.getTime() + 6 * DAY_MS + (DAY_MS - 1));
     const dayKey = (date) => new Date(date).toISOString().slice(0, 10);
 
-    const [srcActivities, srcHabits, tgtActivities, tgtHabits] = await Promise.all([
+    const [srcActivities, srcHabits, srcTrainings, tgtActivities, tgtHabits, tgtTrainings] = await Promise.all([
       ActivityPlan.find({ userId: req.user._id, scheduledDate: { $gte: src, $lte: weekEnd(src) } }),
       HabitPlan.find({ userId: req.user._id, scheduledDate: { $gte: src, $lte: weekEnd(src) } }),
+      TrainingPlan.find({ userId: req.user._id, scheduledDate: { $gte: src, $lte: weekEnd(src) } }),
       ActivityPlan.find({ userId: req.user._id, scheduledDate: { $gte: tgt, $lte: weekEnd(tgt) } }),
       HabitPlan.find({ userId: req.user._id, scheduledDate: { $gte: tgt, $lte: weekEnd(tgt) } }),
+      TrainingPlan.find({ userId: req.user._id, scheduledDate: { $gte: tgt, $lte: weekEnd(tgt) } }),
     ]);
 
     const existingActivityKeys = new Set(
@@ -116,6 +118,12 @@ router.post('/copy-week', auth, async (req, res) => {
     );
     const existingHabitKeys = new Set(
       tgtHabits.map(p => `${dayKey(p.scheduledDate)}|${p.habitId}`)
+    );
+    // A training is identified by its type reference or its criteria payload.
+    const trainingKey = (p, date) =>
+      `${dayKey(date)}|${p.trainingTypeId || JSON.stringify(p.criteria)}|${p.name || ''}`;
+    const existingTrainingKeys = new Set(
+      tgtTrainings.map(p => trainingKey(p, p.scheduledDate))
     );
 
     let skipped = 0;
@@ -157,14 +165,33 @@ router.post('/copy-week', auth, async (req, res) => {
       });
     }
 
+    const trainingDocs = [];
+    for (const p of srcTrainings) {
+      const newDate = new Date(p.scheduledDate.getTime() + offsetMs);
+      if (existingTrainingKeys.has(trainingKey(p, newDate))) {
+        skipped++;
+        continue;
+      }
+      trainingDocs.push({
+        userId: req.user._id,
+        trainingTypeId: p.trainingTypeId || null,
+        criteria: p.criteria || null,
+        name: p.name || '',
+        scheduledDate: newDate,
+        notes: p.notes,
+      });
+    }
+
     await Promise.all([
       activityDocs.length ? ActivityPlan.insertMany(activityDocs) : Promise.resolve(),
       habitDocs.length ? HabitPlan.insertMany(habitDocs) : Promise.resolve(),
+      trainingDocs.length ? TrainingPlan.insertMany(trainingDocs) : Promise.resolve(),
     ]);
 
     res.status(201).json({
       copiedActivities: activityDocs.length,
       copiedHabits: habitDocs.length,
+      copiedTrainings: trainingDocs.length,
       skipped,
     });
   } catch (err) {
@@ -324,10 +351,16 @@ const TrainingType = require('../models/TrainingType');
 const trainingCriteria = require('../services/trainingCriteria');
 
 // GET /api/planner/trainings?startDate&endDate
-// Fulfilment is never stored: a plan counts as completed when a synced
+// Auto-fulfilment is never stored: a plan counts as completed when a synced
 // activity of the same LOCAL calendar day matches its criteria (saved
-// training type or ad-hoc criteria map). Late syncs and deleted activities
-// therefore stay correct automatically.
+// training type or ad-hoc criteria map), or when the user ticked it off
+// manually (manualCompleted). Late syncs and deleted activities therefore
+// stay correct automatically.
+//
+// Matching activities are assigned DISJOINTLY per day: every activity fulfils
+// at most one plan. Plans claim their earliest unclaimed match in creation
+// order; leftover matches attach to the first plan they fit, so each
+// activity shows up exactly once ("two Zone-2 plans, one run" fulfils one).
 router.get('/trainings', auth, async (req, res) => {
   try {
     const { startDate, endDate } = req.query;
@@ -344,20 +377,54 @@ router.get('/trainings', auth, async (req, res) => {
 
     const plans = await TrainingPlan.find(query)
       .populate('trainingTypeId', 'name criteria')
-      .sort({ scheduledDate: 1 });
+      .sort({ scheduledDate: 1, createdAt: 1 });
 
-    const results = [];
-    for (const plan of plans) {
+    const byDay = new Map();
+    const results = plans.map(plan => {
       const obj = plan.toObject();
       const map = obj.trainingTypeId ? (obj.trainingTypeId.criteria || {}) : (obj.criteria || {});
-      const dayStr = new Date(obj.scheduledDate).toISOString().slice(0, 10);
-      const matches = await trainingCriteria.findMatchesOnDay(req.user._id, map, dayStr);
+      obj.name = obj.name || '';
+      obj.manualCompleted = !!obj.manualCompleted;
       obj.trainingTypeName = obj.trainingTypeId?.name || null;
+      obj.trainingTypeCriteria = obj.trainingTypeId?.criteria || null;
       obj.trainingTypeId = obj.trainingTypeId?._id || null;
-      obj.completed = matches.length > 0;
-      obj.fulfilledBy = matches[0] || null;
-      results.push(obj);
+      const dayStr = new Date(obj.scheduledDate).toISOString().slice(0, 10);
+      byDay.set(dayStr, byDay.get(dayStr) || []);
+      byDay.get(dayStr).push({ obj, map });
+      return obj;
+    });
+
+    for (const [dayStr, group] of byDay) {
+      for (const entry of group) {
+        entry.candidates = await trainingCriteria.findMatchesOnDay(req.user._id, entry.map, dayStr);
+        entry.matches = [];
+      }
+      // Pass 1: each plan claims its earliest unclaimed candidate.
+      const claimed = new Set();
+      for (const entry of group) {
+        const primary = entry.candidates.find(c => !claimed.has(c.id));
+        if (primary) {
+          claimed.add(primary.id);
+          entry.matches.push(primary);
+        }
+      }
+      // Pass 2: leftover activities attach to the first plan they match.
+      for (const entry of group) {
+        for (const candidate of entry.candidates) {
+          if (claimed.has(candidate.id)) continue;
+          claimed.add(candidate.id);
+          entry.matches.push(candidate);
+        }
+      }
+      for (const entry of group) {
+        entry.matches.sort((a, b) => new Date(a.date) - new Date(b.date));
+        entry.obj.matchedActivities = entry.matches;
+        entry.obj.autoCompleted = entry.matches.length > 0;
+        entry.obj.completed = entry.obj.manualCompleted || entry.obj.autoCompleted;
+        entry.obj.fulfilledBy = entry.matches[0] || null;
+      }
     }
+
     res.json(results);
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -392,12 +459,13 @@ async function resolveTrainingBody(body, userId) {
 
 router.post('/trainings', auth, async (req, res) => {
   try {
-    const { scheduledDate, notes } = req.body;
+    const { scheduledDate, notes, name } = req.body;
     if (!scheduledDate) return res.status(400).json({ error: 'Datum erforderlich.' });
     const target = await resolveTrainingBody(req.body, req.user._id);
     const plan = await TrainingPlan.create({
       userId: req.user._id,
       ...target,
+      name: typeof name === 'string' ? name : '',
       scheduledDate: new Date(scheduledDate),
       notes: notes || '',
     });
@@ -412,6 +480,10 @@ router.put('/trainings/:id', auth, async (req, res) => {
     const update = {};
     if (req.body.scheduledDate !== undefined) update.scheduledDate = new Date(req.body.scheduledDate);
     if (req.body.notes !== undefined) update.notes = req.body.notes || '';
+    if (req.body.name !== undefined) update.name = typeof req.body.name === 'string' ? req.body.name : '';
+    // `completed` toggles the MANUAL flag — auto-fulfilment stays derived.
+    if (req.body.completed !== undefined) update.manualCompleted = !!req.body.completed;
+    if (req.body.manualCompleted !== undefined) update.manualCompleted = !!req.body.manualCompleted;
     if (req.body.trainingTypeId !== undefined || req.body.criteria !== undefined) {
       Object.assign(update, await resolveTrainingBody(req.body, req.user._id));
     }

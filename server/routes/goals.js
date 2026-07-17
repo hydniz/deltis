@@ -494,6 +494,86 @@ router.get('/:id/items', auth, async (req, res) => {
   }
 });
 
+// GET /api/goals/:id/heatmap?weeks=16
+// Per-day contribution towards the goal's first condition metric over the
+// last N weeks (aligned to full Mon–Sun weeks) — feeds the goal heatmap on
+// the goals page and the shareable heatmap view. Meta goals have no daily
+// contribution and return an empty map.
+router.get('/:id/heatmap', auth, async (req, res) => {
+  try {
+    const goal = await Goal.findOne({ _id: req.params.id, userId: req.user._id });
+    if (!goal) return res.status(404).json({ error: 'Nicht gefunden' });
+
+    const weeks = Math.min(Math.max(parseInt(req.query.weeks, 10) || 16, 1), 26);
+    const end = new Date();
+    end.setHours(23, 59, 59, 999);
+    const start = new Date();
+    start.setHours(0, 0, 0, 0);
+    const dow = start.getDay();
+    start.setDate(start.getDate() - (dow === 0 ? 6 : dow - 1) - (weeks - 1) * 7);
+
+    const firstCond = goal.conditions?.length ? goal.conditions[0] : {
+      metric: goal.metric, condition: goal.condition,
+      targetValue: goal.targetValue, unitSymbol: goal.unitSymbol,
+    };
+    const metric = firstCond.metric || (goal.targetRefModel === 'HabitDefinition' || goal.targetRefModel === 'habit' ? 'value' : 'count');
+    const dayOf = (date) => new Date(date).toISOString().slice(0, 10);
+    const days = {};
+    const add = (date, value) => {
+      if (!Number.isFinite(value)) return;
+      const key = dayOf(date);
+      days[key] = Math.round(((days[key] || 0) + value) * 100) / 100;
+    };
+
+    if (goal.type === 'meta') {
+      return res.json({ start, end, weeks, metric: 'subgoals', unitSymbol: 'Ziele', days });
+    }
+
+    if (goal.targetRefModel === 'StravaActivity') {
+      const matches = await getStravaMatches(goal, req.user._id, start, end);
+      for (const m of matches) {
+        if (metric === 'duration') add(m.date, (m.movingTime || 0) / 60);
+        else if (metric === 'distance') add(m.date, (m.distance || 0) / 1000);
+        else add(m.date, 1);
+      }
+      return res.json({ start, end, weeks, metric, unitSymbol: firstCond.unitSymbol, days });
+    }
+
+    const isActivity = goal.targetRefModel === 'ActivityType' || goal.targetRefModel === 'activity';
+    if (isActivity) {
+      const typeFilter = await buildActivityMatchQuery(goal);
+      if (!typeFilter) return res.json({ start, end, weeks, metric, unitSymbol: firstCond.unitSymbol, days });
+      const logs = await ActivityLog.find({
+        userId: req.user._id, ...typeFilter, date: { $gte: start, $lte: end },
+      }).select('date duration distance customValues').lean();
+      for (const log of logs) {
+        if (metric === 'duration' || metric === 'distance') add(log.date, log.value = log[metric] || 0);
+        else if (metric?.startsWith('custom_')) add(log.date, Number(log.customValues?.[metric.slice(7)]) || 0);
+        else if (metric?.startsWith('select_')) {
+          const rest = metric.slice(7);
+          const colonIdx = rest.indexOf(':');
+          const fieldKey = rest.slice(0, colonIdx);
+          const fieldValue = rest.slice(colonIdx + 1);
+          const raw = log.customValues?.[fieldKey];
+          const hit = Array.isArray(raw) ? raw.includes(fieldValue) : raw === fieldValue;
+          if (colonIdx !== -1 && hit) add(log.date, 1);
+        } else add(log.date, 1);
+      }
+      return res.json({ start, end, weeks, metric, unitSymbol: firstCond.unitSymbol, days });
+    }
+
+    const logs = await HabitLog.find({
+      userId: req.user._id, habitId: goal.targetRef, date: { $gte: start, $lte: end },
+    }).select('date value').lean();
+    for (const log of logs) {
+      add(log.date, metric === 'count' ? 1 : (log.value || 0));
+    }
+    return res.json({ start, end, weeks, metric, unitSymbol: firstCond.unitSymbol, days });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // Strips server-owned fields from a goal payload. parentGoalId is managed
 // exclusively through the parent's childGoalIds (single-parent invariant).
 // Everything else is validated by the Mongoose schema (strict mode drops
