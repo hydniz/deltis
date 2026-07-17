@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { X } from 'lucide-react';
 
@@ -52,16 +52,59 @@ export default function Modal({
     return () => window.removeEventListener('keydown', onKey);
   }, [onClose]);
 
+  // Swipe-down to close (touch devices): dragging the sheet downwards — from
+  // the header/handle, or from the body while it is scrolled to the top —
+  // follows the finger and closes past a small threshold. Upward drags and
+  // scrolling inside the body keep working normally.
+  const sheetRef = useRef(null);
+  const bodyRef = useRef(null);
+  const drag = useRef({ active: false, startY: 0, delta: 0 });
+
+  const onTouchStart = (e) => {
+    const body = bodyRef.current;
+    const fromBody = body && body.contains(e.target);
+    if (fromBody && body.scrollTop > 0) return; // inner scroll wins
+    drag.current = { active: true, startY: e.touches[0].clientY, delta: 0 };
+  };
+  const onTouchMove = (e) => {
+    if (!drag.current.active || !sheetRef.current) return;
+    const delta = e.touches[0].clientY - drag.current.startY;
+    drag.current.delta = Math.max(0, delta);
+    sheetRef.current.style.transition = 'none';
+    sheetRef.current.style.transform = drag.current.delta > 0
+      ? `translateY(${drag.current.delta}px)`
+      : '';
+  };
+  const onTouchEnd = () => {
+    if (!drag.current.active) return;
+    const el = sheetRef.current;
+    drag.current.active = false;
+    if (drag.current.delta > 90) {
+      onClose?.();
+      return;
+    }
+    if (el) {
+      el.style.transition = 'transform 200ms ease';
+      el.style.transform = '';
+      setTimeout(() => { if (el) el.style.transition = ''; }, 220);
+    }
+  };
+
   return createPortal(
     <div
       className={`fixed inset-0 ${zIndex} bg-scrim/40 dark:bg-scrim/60 backdrop-blur-[2px] flex items-end sm:items-center justify-center sm:p-4 anim-overlay`}
       onMouseDown={e => { if (e.target === e.currentTarget) onClose?.(); }}
     >
       <div
+        ref={sheetRef}
         role="dialog"
         aria-modal="true"
         className={`bg-surface w-full ${SIZES[size]} rounded-t-3xl sm:rounded-3xl shadow-pop flex flex-col anim-modal`}
         style={{ maxHeight: '92dvh' }}
+        onTouchStart={onTouchStart}
+        onTouchMove={onTouchMove}
+        onTouchEnd={onTouchEnd}
+        onTouchCancel={onTouchEnd}
       >
         {/* Drag handle – mobile only */}
         <div className="w-10 h-1 bg-ink-200 rounded-full mx-auto mt-3 sm:hidden flex-shrink-0" />
@@ -93,7 +136,7 @@ export default function Modal({
         </div>
 
         {/* Scrollable body */}
-        <div className="flex-1 overflow-y-auto px-5 sm:px-6 py-5">
+        <div ref={bodyRef} className="flex-1 overflow-y-auto px-5 sm:px-6 py-5 overscroll-contain">
           {children}
         </div>
 

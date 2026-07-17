@@ -323,6 +323,16 @@
     -webkit-tap-highlight-color: transparent;
   }
 
+  /* Never let content widen the layout viewport: on phones a single
+     overflowing element (wide chart, long pre, unwrapped flex row) makes the
+     whole page horizontally pannable AND detaches position:fixed elements
+     (tab bar!) from the visible screen. `clip` avoids creating an extra
+     scroll container; `hidden` is the fallback for older engines. */
+  html, body {
+    overflow-x: hidden;
+    overflow-x: clip;
+  }
+
   body {
     @apply text-ink-900 font-sans antialiased;
     background-color: var(--bg-base);
@@ -360,6 +370,11 @@
   textarea.input:focus-visible {
     outline: none;
   }
+
+  /* Scroll containers that should scroll without showing a bar (segmented
+     pill groups on narrow screens). */
+  .no-scrollbar { scrollbar-width: none; }
+  .no-scrollbar::-webkit-scrollbar { display: none; }
 
   ::-webkit-scrollbar { width: 5px; height: 5px; }
   ::-webkit-scrollbar-track { background: transparent; }
@@ -527,8 +542,10 @@
   /* mymind-esque outlined pill chips — surface core, tinted border and text */
   .chip {
     @apply inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs
-      font-semibold border transition-colors duration-150;
+      font-semibold border transition-colors duration-150 leading-none;
     background: var(--surface-bg);
+    /* leading-none centers the text optically in the pill — the default
+       line-height sat the label a hair below the vertical middle. */
   }
   .chip-clay   { @apply border-brand-300 text-brand-600; }
   .chip-rose   { @apply border-rose-300 text-rose-600; }

@@ -43,9 +43,12 @@ const MODES = {
   },
 };
 
-function ModePanel({ mode, dockerImage }) {
+function ModePanel({ mode, dockerImage, updateAvailable }) {
   const cfg = MODES[mode];
   if (!cfg) return null;
+  // The manual-update warning with its host instructions only matters when
+  // there actually IS an update — an up-to-date instance stays quiet.
+  if (mode === 'docker-manual' && updateAvailable !== true) return null;
   return (
     <Alert tone={cfg.tone} title={cfg.title}>
       <p>{cfg.text}</p>
@@ -125,13 +128,13 @@ const CHANNELS = [
   {
     value: 'beta',
     label: 'Beta',
-    description: 'Vorschau auf kommende Releases – weitgehend stabil (z.B. v1.2.3-beta)',
+    description: 'Vorschau auf kommende Releases – weitgehend stabil. Berücksichtigt Beta- UND Stable-Releases, je nachdem was neuer ist (z.B. v1.2.3-beta2)',
     color: 'blue',
   },
   {
     value: 'alpha',
     label: 'Alpha',
-    description: 'Entwicklungsversionen – können instabil sein (z.B. v1.2.3-alpha)',
+    description: 'Entwicklungsversionen – können instabil sein. Berücksichtigt Alpha-, Beta- und Stable-Releases, je nachdem was neuer ist (z.B. v1.2.3-alpha4)',
     color: 'orange',
   },
   {
@@ -382,7 +385,13 @@ export default function AdminUpdates() {
       />
 
       {/* Environment / update mode */}
-      {status?.mode && <ModePanel mode={status.mode} dockerImage={status.dockerImage} />}
+      {status?.mode && (
+        <ModePanel
+          mode={status.mode}
+          dockerImage={status.dockerImage}
+          updateAvailable={status.updateAvailable}
+        />
+      )}
 
       {/* Failed update → rollback offer */}
       <RollbackPanel
