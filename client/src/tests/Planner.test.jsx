@@ -95,6 +95,36 @@ describe('Planner – Wochenübersicht', () => {
     // Only the open Monday plan is overdue — not the completed one, not future plans
     expect(screen.getAllByText('Überfällig').length).toBe(1);
   });
+
+  it('zeigt Tage ohne Pläne als frei an', async () => {
+    usePlannerHandlers();
+    render(<Planner />);
+    await screen.findByText('Wasser trinken');
+
+    // Tuesday, Friday, Saturday and Sunday have no plans
+    expect(screen.getAllByText('Frei').length).toBe(4);
+  });
+
+  it('zeigt synchronisierte Strava-Aktivitäten mit Metadaten an', async () => {
+    usePlannerHandlers();
+    server.use(
+      http.get('/api/strava/activities', () => HttpResponse.json({
+        activities: [{
+          _id: 'sa1',
+          name: 'Entspannter Lauf',
+          sportType: 'Run',
+          movingTime: 1560,
+          distance: 3400,
+          startDateLocal: '2026-07-15T18:00:00',
+        }],
+      }))
+    );
+    render(<Planner />);
+
+    expect(await screen.findByText('Entspannter Lauf')).toBeInTheDocument();
+    expect(screen.getByText('Run · 26 min · 3.4 km')).toBeInTheDocument();
+    expect(screen.getByText('Strava')).toBeInTheDocument();
+  });
 });
 
 describe('Planner – Vorwoche kopieren', () => {
