@@ -182,9 +182,13 @@ export default function ShareView() {
                         </button>
                       </div>
                     </div>
-                    {item.kind === 'goal'
-                      ? <GoalHeatmap goal={doc} showLegend={false} />
-                      : <HabitHeatmap habit={doc} />}
+                    {/* Cap the grid width — full-width cells blow up on
+                        desktop and make the screenshot unusable */}
+                    <div className="max-w-sm">
+                      {item.kind === 'goal'
+                        ? <GoalHeatmap goal={doc} showLegend={false} />
+                        : <HabitHeatmap habit={doc} />}
+                    </div>
                   </div>
                 ))}
               </div>

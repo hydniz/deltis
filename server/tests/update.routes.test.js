@@ -342,6 +342,47 @@ describe('compareSemver', () => {
     expect(cmp('not-a-version', '0.4.0')).toBeNull();
     expect(cmp('0.4.0', '')).toBeNull();
   });
+
+  it('orders dot-less prerelease counters numerically (beta2 < beta10)', () => {
+    expect(cmp('1.2.3-beta2', '1.2.3-beta10')).toBe(-1);
+    expect(cmp('1.2.3-beta10', '1.2.3-beta2')).toBe(1);
+    expect(cmp('1.2.3-beta', '1.2.3-beta1')).toBe(-1);
+    expect(cmp('1.2.3-alpha4', '1.2.3-alpha3')).toBe(1);
+    expect(cmp('1.2.3-beta1', '1.2.3-beta1')).toBe(0);
+  });
+});
+
+// Channel → tag matching (inclusive channels)
+
+describe('tagMatchesChannel', () => {
+  const matches = require('../routes/update')._tagMatchesChannel;
+
+  it('stable only accepts plain release tags', () => {
+    expect(matches('v1.2.3', 'stable')).toBe(true);
+    expect(matches('v1.2.3-beta1', 'stable')).toBe(false);
+    expect(matches('v1.2.3-alpha1', 'stable')).toBe(false);
+  });
+
+  it('beta accepts beta AND stable tags, in both counter formats', () => {
+    expect(matches('v1.2.3', 'beta')).toBe(true);
+    expect(matches('v1.2.3-beta', 'beta')).toBe(true);
+    expect(matches('v1.2.3-beta1', 'beta')).toBe(true);
+    expect(matches('v1.2.3-beta.2', 'beta')).toBe(true);
+    expect(matches('v1.2.3-alpha1', 'beta')).toBe(false);
+  });
+
+  it('alpha accepts alpha, beta and stable tags', () => {
+    expect(matches('v1.2.3', 'alpha')).toBe(true);
+    expect(matches('v1.2.3-beta2', 'alpha')).toBe(true);
+    expect(matches('v1.2.3-alpha3', 'alpha')).toBe(true);
+    expect(matches('v1.2.3-rc1', 'alpha')).toBe(false);
+  });
+
+  it('rejects unknown channels and malformed tags', () => {
+    expect(matches('v1.2.3', 'nightly')).toBe(false);
+    expect(matches('1.2.3', 'stable')).toBe(false);
+    expect(matches('v1.2', 'stable')).toBe(false);
+  });
 });
 
 describe('computeUpdateAvailable', () => {

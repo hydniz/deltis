@@ -927,7 +927,8 @@ function CreateGoalModal({ activityTypes, habits, strava, existingGoals = [], tr
         targetValue: +firstCond.targetValue,
         unitSymbol: firstCond.unitSymbol,
         metric: firstCond.metric,
-        intervalValue: !form.isLongTerm ? form.intervalValue : undefined,
+        // Empty input falls back to the placeholder default of 1
+        intervalValue: !form.isLongTerm ? (parseInt(form.intervalValue) || 1) : undefined,
         intervalUnit: !form.isLongTerm ? form.intervalUnit : undefined,
         startDate: form.isLongTerm ? (form.startDate || undefined) : undefined,
         endDate: form.isLongTerm ? (form.endDate || undefined) : undefined,
@@ -943,7 +944,7 @@ function CreateGoalModal({ activityTypes, habits, strava, existingGoals = [], tr
     }
   };
 
-  const targetLabel = intervalTargetLabel(form.intervalValue, form.intervalUnit);
+  const targetLabel = intervalTargetLabel(parseInt(form.intervalValue) || 1, form.intervalUnit);
   const totalSteps = form.isLongTerm ? 3 : 2;
   const stepTitles = form.isMeta
     ? ['Grundlagen', 'Unterziele']
@@ -1066,8 +1067,9 @@ function CreateGoalModal({ activityTypes, habits, strava, existingGoals = [], tr
                   className="!w-20"
                   min="1"
                   max="365"
+                  placeholder="1"
                   value={form.intervalValue}
-                  onChange={e => set('intervalValue', Math.max(1, parseInt(e.target.value) || 1))}
+                  onChange={e => set('intervalValue', e.target.value === '' ? '' : Math.max(1, parseInt(e.target.value) || 1))}
                 />
                 <Select className="flex-1" value={form.intervalUnit} onChange={e => set('intervalUnit', e.target.value)}>
                   <option value="day">Tag(e)</option>
@@ -1744,7 +1746,7 @@ function EditGoalModal({ goal, stravaSportTypes = [], trainingTypes = [], onSave
           endDate: form.endDate || undefined,
           intermediateSteps: validSteps,
         } : {
-          intervalValue: form.intervalValue,
+          intervalValue: parseInt(form.intervalValue) || 1,
           intervalUnit: form.intervalUnit,
         }),
         conditionOperator: condOpEdit,
@@ -1816,8 +1818,9 @@ function EditGoalModal({ goal, stravaSportTypes = [], trainingTypes = [], onSave
                     className="!w-20"
                     min="1"
                     max="365"
+                    placeholder="1"
                     value={form.intervalValue}
-                    onChange={e => set('intervalValue', Math.max(1, parseInt(e.target.value) || 1))}
+                    onChange={e => set('intervalValue', e.target.value === '' ? '' : Math.max(1, parseInt(e.target.value) || 1))}
                   />
                   <Select className="flex-1" value={form.intervalUnit} onChange={e => set('intervalUnit', e.target.value)}>
                     <option value="day">Tag(e)</option>
@@ -1826,7 +1829,7 @@ function EditGoalModal({ goal, stravaSportTypes = [], trainingTypes = [], onSave
                   </Select>
                 </div>
                 <p className="text-xs text-ink-400 mt-2">
-                  Fortschritt wird {intervalTargetLabel(form.intervalValue, form.intervalUnit)} gemessen
+                  Fortschritt wird {intervalTargetLabel(parseInt(form.intervalValue) || 1, form.intervalUnit)} gemessen
                 </p>
               </div>
             )}

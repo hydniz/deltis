@@ -81,9 +81,12 @@ describe('Goals – hierarchy display', () => {
     expect(screen.queryByText('Periodische Ziele')).toBeInTheDocument();
     expect(screen.queryByText(/Teil von: Trainingswoche/)).not.toBeInTheDocument();
 
-    // Expanding shows the full child card (with its hierarchy badge)
+    // Expanding shows the full child card (with its hierarchy badge and
+    // heatmap — the same card it would be as a free-standing goal)
     await userEvent.setup().click(screen.getByRole('button', { name: /Unterziele ausklappen/ }));
     expect(await screen.findByText(/Teil von: Trainingswoche/)).toBeInTheDocument();
+    // Both the free-standing goal AND the expanded child render a heatmap
+    await waitFor(() => expect(screen.getAllByText('Letzte 16 Wochen').length).toBeGreaterThanOrEqual(2));
     expect(screen.getByRole('button', { name: /Unterziele einklappen/ })).toBeInTheDocument();
   });
 

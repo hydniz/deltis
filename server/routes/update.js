@@ -110,14 +110,28 @@ function parseGitHubRepo(url) {
   return { owner: m[1], repo: m[2] };
 }
 
-// Returns a regex that matches the given channel's tag format.
-function channelTagRegex(channel) {
-  switch (channel) {
-    case 'stable': return /^v\d+\.\d+\.\d+$/;
-    case 'beta':   return /^v\d+\.\d+\.\d+-beta(\.\d+)?$/;
-    case 'alpha':  return /^v\d+\.\d+\.\d+-alpha(\.\d+)?$/;
-    default:       return null;
-  }
+// Tag formats per release stage. Prerelease tags may carry their counter with
+// or without a separating dot: v1.2.3-beta1, v1.2.3-beta.1, v1.2.3-alpha4 …
+const STAGE_REGEX = {
+  stable: /^v\d+\.\d+\.\d+$/,
+  beta:   /^v\d+\.\d+\.\d+-beta\.?\d*$/,
+  alpha:  /^v\d+\.\d+\.\d+-alpha\.?\d*$/,
+};
+
+// A channel INCLUDES the more stable channels below it: beta users get every
+// beta AND stable release (whichever is newest), alpha users get alpha, beta
+// and stable. Stable stays stable-only.
+const CHANNEL_STAGES = {
+  stable: ['stable'],
+  beta:   ['stable', 'beta'],
+  alpha:  ['stable', 'beta', 'alpha'],
+};
+
+// Does this tag belong to the given channel (including its lower stages)?
+function tagMatchesChannel(tag, channel) {
+  const stages = CHANNEL_STAGES[channel];
+  if (!stages) return false;
+  return stages.some(stage => STAGE_REGEX[stage].test(tag));
 }
 
 // Fetches the latest version available for the configured release channel.
@@ -135,9 +149,17 @@ async function fetchLatestForChannel(url, channel) {
   }
 
   const releases = await fetchGitHubJson(`/repos/${parsed.owner}/${parsed.repo}/releases`);
-  const re = channelTagRegex(channel);
-  const match = releases.find(r => !r.draft && re.test(r.tag_name));
-  if (!match) throw new Error(`Keine ${channel}-Version auf GitHub gefunden.`);
+  const candidates = releases.filter(r => !r.draft && tagMatchesChannel(r.tag_name, channel));
+  if (candidates.length === 0) throw new Error(`Keine ${channel}-Version auf GitHub gefunden.`);
+
+  // Highest version wins, not the most recently published one — a stable
+  // hotfix published after a newer beta must not hide that beta and vice
+  // versa. Unparseable tags lose against parseable ones.
+  const match = candidates.reduce((best, r) => {
+    if (!best) return r;
+    const cmp = compareSemver(r.tag_name.replace(/^v/, ''), best.tag_name.replace(/^v/, ''));
+    return cmp === 1 ? r : best;
+  }, null);
 
   return {
     version: match.tag_name.replace(/^v/, ''),
@@ -206,6 +228,15 @@ function compareSemver(a, b) {
     } else if (xNum !== yNum) {
       return xNum ? -1 : 1; // numeric identifiers sort below alphanumeric
     } else if (x !== y) {
+      // Dot-less counters like "beta2"/"beta10" compare word-then-number —
+      // a plain lexical compare would sort beta10 before beta2.
+      const mx = x.match(/^([A-Za-z-]+)(\d+)$/);
+      const my = y.match(/^([A-Za-z-]+)(\d+)$/);
+      if (mx && my && mx[1] === my[1]) {
+        return Number(mx[2]) > Number(my[2]) ? 1 : -1;
+      }
+      if (mx && mx[1] === y) return 1;  // "beta2" > "beta"
+      if (my && my[1] === x) return -1; // "beta"  < "beta2"
       return x > y ? 1 : -1;
     }
   }
@@ -836,6 +867,7 @@ router._PRE_UPDATE_BACKUP_DIR = PRE_UPDATE_BACKUP_DIR;
 router._computeUpdateAvailable = computeUpdateAvailable;
 router._updateBlockReason = updateBlockReason;
 router._compareSemver = compareSemver;
+router._tagMatchesChannel = tagMatchesChannel;
 router._dockerImageRefFor = dockerImageRefFor;
 router._performBackgroundCheck = performBackgroundCheck;
 router.startBackgroundChecks = startBackgroundChecks;

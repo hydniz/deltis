@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { ThemeProvider } from './contexts/ThemeContext';
 import Layout from './components/Layout';
@@ -352,10 +352,19 @@ function AdminArea() {
   );
 }
 
+// Every navigation starts at the top of the new page — without this the
+// browser keeps the previous page's scroll offset when switching tabs.
+function ScrollToTop() {
+  const { pathname } = useLocation();
+  useEffect(() => { window.scrollTo(0, 0); }, [pathname]);
+  return null;
+}
+
 function AppInner() {
   return (
     <AuthProvider>
       <BrowserRouter>
+        <ScrollToTop />
         <UsernameSetupModal />
         <MustChangePasswordModal />
         <OnboardingGate />
