@@ -33,6 +33,8 @@ const defs = [
 function useHandlers() {
   server.use(
     http.get('/api/habits/definitions', () => HttpResponse.json(defs)),
+    http.get('/api/activity-types', () => HttpResponse.json([{ _id: 'at1', label: 'Joggen' }])),
+    http.get('/api/training-types', () => HttpResponse.json([{ _id: 'tt1', name: 'Zone 2' }])),
   );
 }
 
@@ -119,6 +121,62 @@ describe('ManageHabitsModal', () => {
     // The default value is a yes/no choice, not a number input
     expect(screen.getByText('Nein – nicht gemacht')).toBeInTheDocument();
     expect(screen.getByText('Ja – gemacht')).toBeInTheDocument();
+  });
+
+  it('saves an interval schedule ("alle N Tage")', async () => {
+    useHandlers();
+    let putBody = null;
+    server.use(
+      http.put('/api/habits/definitions/:id', () => HttpResponse.json({})),
+      http.put('/api/habits/settings/:id', async ({ request }) => {
+        putBody = await request.json();
+        return HttpResponse.json({ success: true });
+      })
+    );
+    const user = userEvent.setup();
+    renderModal();
+
+    await waitFor(() => expect(screen.getByText('Wasser')).toBeInTheDocument());
+    await user.click(screen.getAllByLabelText('Einstellungen')[0]);
+    await user.click(screen.getByText('Intervall'));
+    const nInput = screen.getByPlaceholderText('3');
+    await user.clear(nInput);
+    await user.type(nInput, '4');
+    await user.click(screen.getByRole('button', { name: 'Übernehmen' }));
+
+    await waitFor(() => expect(putBody).not.toBeNull());
+    expect(putBody.scheduleMode).toBe('interval');
+    expect(putBody.scheduleIntervalDays).toBe(4);
+    expect(putBody.scheduleAnchorDate).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+  });
+
+  it('saves an event-trigger schedule ("nach Strava-Sportart")', async () => {
+    useHandlers();
+    let putBody = null;
+    server.use(
+      http.put('/api/habits/definitions/:id', () => HttpResponse.json({})),
+      http.put('/api/habits/settings/:id', async ({ request }) => {
+        putBody = await request.json();
+        return HttpResponse.json({ success: true });
+      })
+    );
+    const user = userEvent.setup();
+    renderModal();
+
+    await waitFor(() => expect(screen.getByText('Wasser')).toBeInTheDocument());
+    await user.click(screen.getAllByLabelText('Einstellungen')[0]);
+    await user.click(screen.getByText('Nach Ereignis'));
+    await user.selectOptions(screen.getByDisplayValue('Gewohnheit'), 'stravaSport');
+    const offset = screen.getByDisplayValue('0');
+    await user.clear(offset);
+    await user.type(offset, '2');
+    await user.click(screen.getByRole('button', { name: 'Übernehmen' }));
+
+    await waitFor(() => expect(putBody).not.toBeNull());
+    expect(putBody.scheduleMode).toBe('trigger');
+    expect(putBody.scheduleTrigger).toMatchObject({
+      kind: 'stravaSport', sport: 'Run', direction: 'after', offsetDays: 2,
+    });
   });
 
   it('warns about consequences when the type changes', async () => {

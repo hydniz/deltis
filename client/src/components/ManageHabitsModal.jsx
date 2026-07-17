@@ -8,6 +8,7 @@ import {
 } from './ui';
 import { WEEKDAYS, formatScheduleBadge } from '../utils/habitSchedule';
 import { TARGET_CONDITIONS } from '../utils/habitTarget';
+import { COMMON_SPORT_TYPES } from './StravaCriteriaBuilder';
 
 // Habit types: 'boolean' logs a simple done/not-done, the others a value.
 const TYPE_OPTIONS = [
@@ -26,12 +27,31 @@ const TYPE_OPTIONS = [
 // `onSave(lastCreated)` receives the most recently created definition (or
 // null) so the goal wizard can preselect it.
 
+// Trigger kinds: what the "nach/vor XY" schedule can reference. Direction is
+// fixed where only one makes sense (a Strava sport can only have HAPPENED,
+// a training type is only meaningful as PLANNED).
+const TRIGGER_KINDS = [
+  { value: 'habit', label: 'Gewohnheit' },
+  { value: 'activityType', label: 'Aktivität' },
+  { value: 'stravaSport', label: 'Strava-Sportart' },
+  { value: 'trainingType', label: 'Trainingstyp' },
+];
+
 // Initial settings state derived from a definition (or defaults for creation)
 function settingsStateFrom(def = {}) {
+  const trigger = def.scheduleTrigger || {};
   return {
-    scheduleMode: def.scheduleDate ? 'date' : def.scheduleDays?.length ? 'weekly' : 'daily',
+    scheduleMode: def.scheduleMode
+      || (def.scheduleDate ? 'date' : def.scheduleDays?.length ? 'weekly' : 'daily'),
     days: new Set(def.scheduleDays || []),
     date: def.scheduleDate || '',
+    intervalDays: def.scheduleIntervalDays ?? 3,
+    anchorDate: def.scheduleAnchorDate || new Date().toISOString().slice(0, 10),
+    triggerKind: trigger.kind || 'habit',
+    triggerRefId: trigger.refId || '',
+    triggerSport: trigger.sport || 'Run',
+    triggerDirection: trigger.direction || 'after',
+    triggerOffset: trigger.offsetDays ?? 0,
     missingMode: def.missingDayMode ?? 'none',
     defaultVal: def.defaultValue ?? 0,
     targetCondition: def.targetCondition ?? 'none',
@@ -44,25 +64,44 @@ function settingsPayload(s, type) {
   const target = type === 'boolean'
     ? { targetCondition: 'none', targetValue: 0 }
     : { targetCondition: s.targetCondition, targetValue: +s.targetValue };
+  const trigger = s.scheduleMode === 'trigger'
+    ? {
+        kind: s.triggerKind,
+        direction: s.triggerKind === 'stravaSport' ? 'after'
+          : s.triggerKind === 'trainingType' ? 'before'
+          : s.triggerDirection,
+        offsetDays: Math.max(0, parseInt(s.triggerOffset, 10) || 0),
+        ...(s.triggerKind === 'stravaSport' ? { sport: s.triggerSport } : { refId: s.triggerRefId }),
+      }
+    : null;
   return {
     missingDayMode: s.missingMode,
     defaultValue: type === 'boolean' ? (+s.defaultVal > 0 ? 1 : 0) : +s.defaultVal,
+    scheduleMode: s.scheduleMode,
     scheduleDays: s.scheduleMode === 'weekly' ? [...s.days] : [],
     scheduleDate: s.scheduleMode === 'date' && s.date ? s.date : null,
+    scheduleIntervalDays: s.scheduleMode === 'interval' ? (parseInt(s.intervalDays, 10) || null) : null,
+    scheduleAnchorDate: s.scheduleMode === 'interval' ? (s.anchorDate || null) : null,
+    scheduleTrigger: trigger,
     ...target,
   };
 }
 
 function settingsValid(s) {
-  return !(s.scheduleMode === 'date' && !s.date)
-    // max 0 is valid ("höchstens 0 Zigaretten"), min/exact need > 0
-    && !(['min', 'exact'].includes(s.targetCondition) && !(+s.targetValue > 0));
+  if (s.scheduleMode === 'date' && !s.date) return false;
+  if (s.scheduleMode === 'interval' && !(parseInt(s.intervalDays, 10) >= 1)) return false;
+  if (s.scheduleMode === 'trigger') {
+    if (s.triggerKind === 'stravaSport' && !s.triggerSport.trim()) return false;
+    if (s.triggerKind !== 'stravaSport' && !s.triggerRefId) return false;
+  }
+  // max 0 is valid ("höchstens 0 Zigaretten"), min/exact need > 0
+  return !(['min', 'exact'].includes(s.targetCondition) && !(+s.targetValue > 0));
 }
 
 // Shared schedule/target/missing-day fields — used by the edit form of every
 // habit row AND the create form, so a new habit can be fully configured
 // ("wann geplant" etc.) in one go.
-function HabitSettingsFields({ type, unitSymbol, value, onChange }) {
+function HabitSettingsFields({ type, unitSymbol, value, onChange, triggerSources = {} }) {
   const set = (patch) => onChange({ ...value, ...patch });
   const toggleDay = (day) => {
     const next = new Set(value.days);
@@ -70,6 +109,16 @@ function HabitSettingsFields({ type, unitSymbol, value, onChange }) {
     set({ days: next });
   };
   const isBoolean = type === 'boolean';
+  const { habits = [], activityTypes = [], trainingTypes = [], sportTypes = [] } = triggerSources;
+
+  const refOptions = value.triggerKind === 'habit' ? habits.map(h => ({ id: h._id, label: h.name }))
+    : value.triggerKind === 'activityType' ? activityTypes.map(t => ({ id: t._id, label: t.label }))
+    : value.triggerKind === 'trainingType' ? trainingTypes.map(t => ({ id: t._id, label: t.name }))
+    : [];
+  const directionFixed = value.triggerKind === 'stravaSport' ? 'after'
+    : value.triggerKind === 'trainingType' ? 'before'
+    : null;
+  const direction = directionFixed || value.triggerDirection;
 
   return (
     <>
@@ -81,6 +130,8 @@ function HabitSettingsFields({ type, unitSymbol, value, onChange }) {
           options={[
             { value: 'daily', label: 'Täglich' },
             { value: 'weekly', label: 'Wochentage' },
+            { value: 'interval', label: 'Intervall' },
+            { value: 'trigger', label: 'Nach Ereignis' },
             { value: 'date', label: 'Nur ein Datum' },
           ]}
         />
@@ -118,6 +169,89 @@ function HabitSettingsFields({ type, unitSymbol, value, onChange }) {
               Die Gewohnheit ist nur an diesem Tag fällig.
             </p>
           </>
+        )}
+        {value.scheduleMode === 'interval' && (
+          <>
+            <div className="flex items-center gap-2 mt-2">
+              <span className="text-xs text-ink-500">alle</span>
+              <Input
+                type="number"
+                className="!w-20 !text-sm"
+                min="1"
+                max="365"
+                placeholder="3"
+                value={value.intervalDays}
+                onChange={e => set({ intervalDays: e.target.value })}
+              />
+              <span className="text-xs text-ink-500">Tage, ab</span>
+              <Input
+                type="date"
+                className="flex-1 !text-sm"
+                value={value.anchorDate}
+                onChange={e => set({ anchorDate: e.target.value })}
+              />
+            </div>
+            <p className="text-[11px] text-ink-400 mt-1.5">
+              Z.B. „alle 3 Tage“ – gezählt ab dem Startdatum.
+            </p>
+          </>
+        )}
+        {value.scheduleMode === 'trigger' && (
+          <div className="space-y-2 mt-2">
+            <div className="grid grid-cols-2 gap-2">
+              <Select
+                className="!text-sm"
+                value={value.triggerKind}
+                onChange={e => set({ triggerKind: e.target.value, triggerRefId: '' })}
+              >
+                {TRIGGER_KINDS.map(k => <option key={k.value} value={k.value}>{k.label}</option>)}
+              </Select>
+              {value.triggerKind === 'stravaSport' ? (
+                <Input
+                  className="!text-sm"
+                  list="strava-sport-suggestions"
+                  value={value.triggerSport}
+                  onChange={e => set({ triggerSport: e.target.value })}
+                  placeholder="z.B. Run, Swim"
+                />
+              ) : (
+                <Select
+                  className="!text-sm"
+                  value={value.triggerRefId}
+                  onChange={e => set({ triggerRefId: e.target.value })}
+                >
+                  <option value="">– wählen –</option>
+                  {refOptions.map(o => <option key={o.id} value={o.id}>{o.label}</option>)}
+                </Select>
+              )}
+            </div>
+            <datalist id="strava-sport-suggestions">
+              {sportTypes.map(s => <option key={s} value={s} />)}
+            </datalist>
+            <div className="flex items-center gap-2">
+              <Input
+                type="number"
+                className="!w-16 !text-sm"
+                min="0"
+                max="30"
+                value={value.triggerOffset}
+                onChange={e => set({ triggerOffset: e.target.value })}
+              />
+              <Select
+                className="flex-1 !text-sm"
+                value={direction}
+                disabled={!!directionFixed}
+                onChange={e => set({ triggerDirection: e.target.value })}
+              >
+                <option value="after">Tage NACHDEM es gemacht wurde</option>
+                <option value="before">Tage BEVOR es geplant ist</option>
+              </Select>
+            </div>
+            <p className="text-[11px] text-ink-400">
+              0 Tage = am selben Tag. Strava-Sportarten zählen als „gemacht“,
+              Trainingstypen als „geplant“.
+            </p>
+          </div>
         )}
       </div>
 
@@ -191,7 +325,7 @@ function HabitSettingsFields({ type, unitSymbol, value, onChange }) {
   );
 }
 
-function HabitRow({ def, selected, onToggle, onDelete, onUpdate }) {
+function HabitRow({ def, selected, onToggle, onDelete, onUpdate, triggerSources }) {
   const [open, setOpen] = useState(false);
   const [saving, setSaving] = useState(false);
 
@@ -283,6 +417,7 @@ function HabitRow({ def, selected, onToggle, onDelete, onUpdate }) {
             unitSymbol={form.unitSymbol}
             value={settings}
             onChange={setSettings}
+            triggerSources={triggerSources}
           />
 
           <Button
@@ -310,6 +445,9 @@ export default function ManageHabitsModal({ onSave, onClose, initialShowAdd = fa
   const [saving, setSaving] = useState(false);
   const [addingSaving, setAddingSaving] = useState(false);
   const [lastCreated, setLastCreated] = useState(null);
+  // Reference lists for event-trigger schedules ("nach/vor XY")
+  const [activityTypes, setActivityTypes] = useState([]);
+  const [trainingTypes, setTrainingTypes] = useState([]);
 
   useEffect(() => {
     api.get('/habits/definitions', { params: { includeDeleted: true } }).then(res => {
@@ -320,6 +458,8 @@ export default function ManageHabitsModal({ onSave, onClose, initialShowAdd = fa
       console.error(err);
       setDefs([]);
     });
+    api.get('/activity-types').then(res => setActivityTypes(res.data)).catch(() => {});
+    api.get('/training-types').then(res => setTrainingTypes(res.data)).catch(() => {});
   }, []);
 
   const toggle = (id) => {
@@ -396,6 +536,12 @@ export default function ManageHabitsModal({ onSave, onClose, initialShowAdd = fa
 
   const active = defs?.filter(d => !d.hidden) ?? [];
   const trashed = defs?.filter(d => d.hidden) ?? [];
+  const triggerSources = {
+    habits: active,
+    activityTypes,
+    trainingTypes,
+    sportTypes: COMMON_SPORT_TYPES,
+  };
 
   return (
     <Modal
@@ -432,6 +578,7 @@ export default function ManageHabitsModal({ onSave, onClose, initialShowAdd = fa
                     onToggle={() => toggle(d._id)}
                     onDelete={() => handleDelete(d)}
                     onUpdate={handleUpdate}
+                    triggerSources={triggerSources}
                   />
                 ))}
               </div>
@@ -473,6 +620,7 @@ export default function ManageHabitsModal({ onSave, onClose, initialShowAdd = fa
                 unitSymbol={newHabit.unitSymbol}
                 value={newSettings}
                 onChange={setNewSettings}
+                triggerSources={triggerSources}
               />
               <div className="flex gap-2">
                 <Button variant="secondary" size="sm" className="flex-1" onClick={() => setShowAddForm(false)}>Abbrechen</Button>

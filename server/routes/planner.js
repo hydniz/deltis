@@ -135,6 +135,7 @@ router.post('/copy-week', auth, async (req, res) => {
         continue;
       }
       activityDocs.push({
+        source: 'copy-week',
         userId: req.user._id,
         activityType: p.activityType,
         activityTypeRef: p.activityTypeRef || undefined,
@@ -155,6 +156,7 @@ router.post('/copy-week', auth, async (req, res) => {
         continue;
       }
       habitDocs.push({
+        source: 'copy-week',
         userId: req.user._id,
         habitId: p.habitId,
         habitName: p.habitName,
@@ -173,6 +175,7 @@ router.post('/copy-week', auth, async (req, res) => {
         continue;
       }
       trainingDocs.push({
+        source: 'copy-week',
         userId: req.user._id,
         trainingTypeId: p.trainingTypeId || null,
         criteria: p.criteria || null,

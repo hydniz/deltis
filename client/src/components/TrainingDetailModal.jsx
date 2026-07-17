@@ -167,10 +167,14 @@ export default function TrainingDetailModal({
           </div>
         )}
 
-        {/* Planned for */}
+        {/* Planned for + provenance */}
         <p className="text-xs text-ink-400 flex items-center gap-1.5">
           <CalendarDays size={12} />
           Geplant für {format(parseISO(plan.scheduledDate), 'EEEE, d. MMMM yyyy', { locale: de })}
+        </p>
+        <p className="text-xs text-ink-400 -mt-2">
+          {plan.source === 'copy-week' ? 'Aus der Vorwoche kopiert' : 'Von dir geplant'}
+          {plan.createdAt && ` am ${format(parseISO(plan.createdAt), 'd. MMMM yyyy', { locale: de })}`}.
         </p>
 
         <button

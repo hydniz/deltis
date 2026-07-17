@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import api from '../utils/api';
 import {
-  format, startOfWeek, startOfDay, addDays, addWeeks, subWeeks, isSameDay, isBefore,
+  format, parseISO, startOfWeek, startOfDay, addDays, addWeeks, subWeeks, isSameDay, isBefore,
 } from 'date-fns';
 import { de } from 'date-fns/locale';
 import {
@@ -16,6 +16,97 @@ import PlannerHeatmap from '../components/PlannerHeatmap';
 import StravaCriteriaBuilder, { normalizeCriteria, criteriaSummary, emptyGroup } from '../components/StravaCriteriaBuilder';
 import TrainingDetailModal, { trainingLabel, MatchedActivityRow } from '../components/TrainingDetailModal';
 import StravaActivityDetailModal from '../components/StravaActivityDetailModal';
+import { formatDueReason } from '../utils/habitSchedule';
+
+// Which entry kinds the week view shows — persisted so the planner opens
+// the way the user left it.
+const FILTER_STORAGE_KEY = 'deltis.plannerFilters';
+const FILTER_OPTIONS = [
+  { key: 'activities', label: 'Aktivitäten' },
+  { key: 'habits', label: 'Geplante Gewohnheiten' },
+  { key: 'due', label: 'Fällige Gewohnheiten' },
+  { key: 'trainings', label: 'Trainings' },
+  { key: 'strava', label: 'Strava' },
+];
+
+function loadFilters() {
+  try {
+    const raw = JSON.parse(localStorage.getItem(FILTER_STORAGE_KEY));
+    if (raw && typeof raw === 'object') {
+      return Object.fromEntries(FILTER_OPTIONS.map(o => [o.key, raw[o.key] !== false]));
+    }
+  } catch { /* corrupted storage falls back to defaults */ }
+  return Object.fromEntries(FILTER_OPTIONS.map(o => [o.key, true]));
+}
+
+// Why is this due habit in the planner? Shows the reason and lets the user
+// log the habit right away.
+function DueHabitModal({ entry, onSave, onClose }) {
+  const isBoolean = entry.type === 'boolean';
+  const [value, setValue] = useState(entry.loggedValue ?? '');
+  const [saving, setSaving] = useState(false);
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setSaving(true);
+    try {
+      await api.post('/habits/logs', {
+        habitId: entry.habitId,
+        date: `${entry.date}T12:00:00`,
+        value: isBoolean ? 1 : (value !== '' ? +value : 1),
+      });
+      onSave();
+    } catch (err) {
+      alert('Fehler: ' + err.message);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <Modal
+      onClose={onClose}
+      title={entry.name}
+      subtitle={format(parseISO(entry.date), 'EEEE, d. MMMM', { locale: de })}
+      icon={Sparkles}
+      size="sm"
+      footer={
+        <>
+          <Button variant="secondary" className="flex-1" onClick={onClose}>Schließen</Button>
+          <Button type="submit" form="due-habit-form" className="flex-1" loading={saving} icon={CheckCircle2}>
+            {entry.logged ? 'Aktualisieren' : 'Erledigt'}
+          </Button>
+        </>
+      }
+    >
+      <form id="due-habit-form" onSubmit={handleSubmit} className="space-y-4">
+        <div className="rounded-xl border border-sage-200 bg-sage-100/50 px-3.5 py-3">
+          <p className="text-[10px] font-semibold uppercase tracking-[0.09em] text-sage-700 mb-1">
+            Warum steht das hier?
+          </p>
+          <p className="text-sm text-ink-600">{formatDueReason(entry.reason)}</p>
+        </div>
+        {!isBoolean && (
+          <Field label={`Wert${entry.unitSymbol ? ` (${entry.unitSymbol})` : ''}`}>
+            <Input
+              type="number"
+              value={value}
+              onChange={e => setValue(e.target.value)}
+              min="0"
+              step="0.01"
+              placeholder={`z.B. 1 ${entry.unitSymbol || ''}`}
+            />
+          </Field>
+        )}
+        {entry.logged && (
+          <p className="text-xs text-emerald-600 font-medium">
+            Bereits eingetragen{entry.loggedValue != null && !isBoolean ? `: ${entry.loggedValue} ${entry.unitSymbol || ''}` : ''}.
+          </p>
+        )}
+      </form>
+    </Modal>
+  );
+}
 
 // Strava brand colour — marks synced activities so their origin is obvious
 const STRAVA_ORANGE = '#FC4C02';
@@ -675,6 +766,11 @@ function EditPlanModal({ plan, kind, trainingTypes = [], onSave, onClose }) {
         <Field label="Notizen">
           <Textarea rows={2} value={form.notes} onChange={e => set('notes', e.target.value)} placeholder="Optional…" />
         </Field>
+        {/* Provenance — why is this entry in the planner? */}
+        <p className="text-xs text-ink-400">
+          {plan.source === 'copy-week' ? 'Aus der Vorwoche kopiert' : 'Von dir geplant'}
+          {plan.createdAt && ` am ${format(parseISO(plan.createdAt), 'd. MMMM yyyy', { locale: de })}`}.
+        </p>
       </form>
     </Modal>
   );
@@ -688,6 +784,9 @@ export default function Planner() {
   const [habitPlans, setHabitPlans] = useState([]);
   const [stravaActivities, setStravaActivities] = useState([]);
   const [trainingPlans, setTrainingPlans] = useState([]);
+  const [dueHabits, setDueHabits] = useState([]);
+  const [filters, setFilters] = useState(loadFilters);
+  const [dueDetail, setDueDetail] = useState(null);
   const [trainingTypes, setTrainingTypes] = useState([]);
   const [stravaConfigured, setStravaConfigured] = useState(false);
   const [activityTypes, setActivityTypes] = useState([]);
@@ -712,7 +811,7 @@ export default function Planner() {
   const load = useCallback(async () => {
     try {
       const params = { startDate: format(weekStart, 'yyyy-MM-dd'), endDate: format(weekEnd, 'yyyy-MM-dd') };
-      const [plansRes, habitPlansRes, typesRes, habitsRes, trainingPlansRes, trainingTypesRes, stravaRes] = await Promise.all([
+      const [plansRes, habitPlansRes, typesRes, habitsRes, trainingPlansRes, trainingTypesRes, stravaRes, dueRes] = await Promise.all([
         api.get('/planner', { params }),
         api.get('/planner/habits', { params }),
         api.get('/activity-types'),
@@ -730,6 +829,9 @@ export default function Planner() {
             limit: 100,
           },
         }).catch(() => ({ data: { activities: [] } })),
+        // Habits that are DUE this week per their schedule (implicit entries,
+        // separate from explicitly planned ones).
+        api.get('/habits/due', { params }).catch(() => ({ data: [] })),
       ]);
       setPlans(plansRes.data);
       setHabitPlans(habitPlansRes.data);
@@ -738,12 +840,21 @@ export default function Planner() {
       setTrainingPlans(trainingPlansRes.data);
       setTrainingTypes(trainingTypesRes.data);
       setStravaActivities(stravaRes.data.activities || []);
+      setDueHabits(dueRes.data || []);
     } catch (err) {
       console.error(err);
     } finally {
       setLoading(false);
     }
   }, [weekStart]);
+
+  const toggleFilter = (key) => {
+    setFilters(prev => {
+      const next = { ...prev, [key]: !prev[key] };
+      try { localStorage.setItem(FILTER_STORAGE_KEY, JSON.stringify(next)); } catch { /* private mode */ }
+      return next;
+    });
+  };
 
   useEffect(() => { setLoading(true); load(); }, [load]);
   useEffect(() => { setCopyInfo(null); }, [weekStart]);
@@ -867,6 +978,23 @@ export default function Planner() {
             </Button>
           </div>
           {copyInfo && <p className="text-xs text-ink-400 mt-2">{copyInfo}</p>}
+
+          {/* What the week view shows — persisted per browser */}
+          <div className="flex flex-wrap items-center gap-1.5 mt-3 pt-3 border-t hairline">
+            <span className="text-[10px] font-semibold uppercase tracking-[0.09em] text-ink-400 mr-1">
+              Anzeigen
+            </span>
+            {FILTER_OPTIONS.map(opt => (
+              <Chip
+                key={opt.key}
+                color="clay"
+                active={filters[opt.key]}
+                onClick={() => toggleFilter(opt.key)}
+              >
+                {opt.label}
+              </Chip>
+            ))}
+          </div>
         </div>
 
         {/* Week agenda: one row per day — stays readable on mobile and inside
@@ -875,9 +1003,21 @@ export default function Planner() {
         <div className="card overflow-hidden divide-y divide-[color:var(--surface-border)] anim-list">
           {days.map(day => {
             const dayDate = format(day, 'yyyy-MM-dd');
-            const dayPlans = plans.filter(p => (p.scheduledDate || '').slice(0, 10) === dayDate);
-            const dayHabitPlans = habitPlans.filter(p => (p.scheduledDate || '').slice(0, 10) === dayDate);
-            const dayTrainings = trainingPlans.filter(p => (p.scheduledDate || '').slice(0, 10) === dayDate);
+            const dayPlans = filters.activities
+              ? plans.filter(p => (p.scheduledDate || '').slice(0, 10) === dayDate)
+              : [];
+            const dayHabitPlans = filters.habits
+              ? habitPlans.filter(p => (p.scheduledDate || '').slice(0, 10) === dayDate)
+              : [];
+            const dayTrainings = filters.trainings
+              ? trainingPlans.filter(p => (p.scheduledDate || '').slice(0, 10) === dayDate)
+              : [];
+            // Habits DUE per schedule — implicit entries, not planned ones.
+            // Planned entries of the same habit win to avoid duplicates.
+            const plannedHabitIds = new Set(dayHabitPlans.map(p => String(p.habitId?._id || p.habitId)));
+            const dayDue = filters.due
+              ? dueHabits.filter(d => d.date === dayDate && !plannedHabitIds.has(d.habitId))
+              : [];
             // Activities already claimed by a training plan render nested
             // inside that plan's card — don't list them a second time.
             const claimedIds = new Set(
@@ -885,10 +1025,12 @@ export default function Planner() {
             );
             // startDateLocal carries the athlete's local wall time — the date
             // the activity belongs to from the user's perspective.
-            const dayStrava = stravaActivities.filter(a =>
-              ((a.startDateLocal || a.startDate) || '').slice(0, 10) === dayDate
-              && !claimedIds.has(a._id)
-            );
+            const dayStrava = filters.strava
+              ? stravaActivities.filter(a =>
+                  ((a.startDateLocal || a.startDate) || '').slice(0, 10) === dayDate
+                  && !claimedIds.has(a._id)
+                )
+              : [];
             const isToday_ = isSameDay(day, today);
             const totalItems = dayPlans.length + dayHabitPlans.length + dayTrainings.length;
             const doneItems = [...dayPlans, ...dayHabitPlans, ...dayTrainings].filter(p => p.completed).length;
@@ -1027,6 +1169,57 @@ export default function Planner() {
                     </div>
                   ))}
 
+                  {/* Habits DUE by schedule — implicit entries (dashed), not
+                      explicitly planned. Click shows WHY it is due + quick
+                      logging; the circle ticks boolean habits directly. */}
+                  {dayDue.map(entry => (
+                    <div
+                      key={`due-${entry.habitId}-${entry.date}`}
+                      role="button"
+                      tabIndex={0}
+                      onClick={() => setDueDetail(entry)}
+                      onKeyDown={e => { if (e.key === 'Enter') setDueDetail(entry); }}
+                      className={`rounded-xl border border-dashed p-2 border-sage-300 bg-sage-100/40 cursor-pointer hover:border-sage-400 transition-colors ${entry.logged ? 'opacity-55' : ''}`}
+                      title="Fällig laut Zeitplan – antippen für Details"
+                    >
+                      <div className="flex items-start justify-between gap-1">
+                        <button
+                          onClick={e => {
+                            e.stopPropagation();
+                            if (entry.logged) return;
+                            if (entry.type === 'boolean') {
+                              api.post('/habits/logs', {
+                                habitId: entry.habitId,
+                                date: `${entry.date}T12:00:00`,
+                                value: 1,
+                              }).then(load).catch(() => {});
+                            } else {
+                              setDueDetail(entry);
+                            }
+                          }}
+                          className="flex-shrink-0 mt-0.5"
+                          title={entry.logged ? 'Bereits eingetragen' : 'Erledigt'}
+                        >
+                          {entry.logged
+                            ? <CheckCircle2 size={14} className="text-emerald-600 anim-check" />
+                            : <Circle size={14} className="text-sage-400 hover:text-emerald-600 transition-colors" />
+                          }
+                        </button>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-1">
+                            <Sparkles size={10} className="text-sage-500 flex-shrink-0" />
+                            <p className={`text-xs font-semibold leading-tight truncate ${entry.logged ? 'line-through text-ink-400' : 'text-sage-700'}`}>
+                              {entry.name}
+                            </p>
+                          </div>
+                          <p className="text-[10px] text-ink-400 mt-0.5 truncate">
+                            {entry.reason?.kind === 'trigger' ? 'Fällig durch Ereignis' : 'Fällig laut Zeitplan'}
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+
                   {/* Planned trainings — auto-fulfilled by matching synced
                       activities or ticked off manually. The card opens the
                       detail view; fulfilled plans wrap their matching
@@ -1147,7 +1340,7 @@ export default function Planner() {
                     </div>
                   ))}
 
-                  {totalItems === 0 && dayStrava.length === 0 && (
+                  {totalItems === 0 && dayStrava.length === 0 && dayDue.length === 0 && (
                     <p className="text-xs text-ink-200 py-1">Frei</p>
                   )}
                 </div>
@@ -1212,6 +1405,14 @@ export default function Planner() {
         <StravaActivityDetailModal
           activityId={stravaDetailId}
           onClose={() => setStravaDetailId(null)}
+        />
+      )}
+
+      {dueDetail && (
+        <DueHabitModal
+          entry={dueDetail}
+          onSave={() => { setDueDetail(null); load(); }}
+          onClose={() => setDueDetail(null)}
         />
       )}
 

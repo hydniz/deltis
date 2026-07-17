@@ -12,6 +12,8 @@ const habitPlanSchema = new mongoose.Schema({
   completed: { type: Boolean, default: false },
   loggedValue: { type: Number },
   notes: { type: String },
+  // Provenance: how this entry got into the planner ("Warum steht das hier?")
+  source: { type: String, enum: ["manual", "copy-week"], default: "manual" },
   createdAt: { type: Date, default: Date.now }
 });
 

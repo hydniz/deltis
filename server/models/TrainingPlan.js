@@ -24,6 +24,9 @@ const trainingPlanSchema = new mongoose.Schema({
   // counts as completed when EITHER a synced activity matches OR this is set.
   manualCompleted: { type: Boolean, default: false },
 
+  // Provenance: how this entry got into the planner ("Warum steht das hier?")
+  source: { type: String, enum: ['manual', 'copy-week'], default: 'manual' },
+
   createdAt: { type: Date, default: Date.now },
 });
 
