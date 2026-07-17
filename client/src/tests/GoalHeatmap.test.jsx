@@ -36,6 +36,28 @@ describe('GoalHeatmap', () => {
     expect(screen.getByText('Letzte 16 Wochen')).toBeInTheDocument();
   });
 
+  it('renders one tile per interval for periodic goals with gradations', async () => {
+    server.use(
+      http.get('/api/goals/g1/heatmap', () => HttpResponse.json({
+        kind: 'intervals',
+        intervalValue: 1,
+        intervalUnit: 'week',
+        metric: 'count',
+        unitSymbol: 'Mal',
+        intervals: [
+          // Local timestamps (no Z) keep the rendered dates timezone-stable
+          { start: '2026-07-06T00:00:00.000', end: '2026-07-12T23:59:59.999', value: 1, targetValue: 2, condition: 'min', met: false, current: false },
+          { start: '2026-07-13T00:00:00.000', end: '2026-07-15T23:59:59.999', value: 2, targetValue: 2, condition: 'min', met: true, current: true },
+        ],
+      })),
+    );
+    render(<GoalHeatmap goal={goal} />);
+
+    await waitFor(() => expect(screen.getByText('Ein Feld = Woche')).toBeInTheDocument());
+    expect(screen.getByTitle('6. Juli – 12. Juli: 1 / 2 Mal – nicht erreicht')).toBeInTheDocument();
+    expect(screen.getByTitle('13. Juli – 15. Juli: 2 / 2 Mal – erreicht (läuft noch)')).toBeInTheDocument();
+  });
+
   it('survives a failing endpoint with an empty grid', async () => {
     server.use(
       http.get('/api/goals/g1/heatmap', () => HttpResponse.json({ error: 'kaputt' }, { status: 500 })),

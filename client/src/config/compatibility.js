@@ -10,4 +10,6 @@
 //     settings on create), meta goal child previews
 // v10: due-habit engine (/habits/due, interval + event-trigger schedules),
 //      planner provenance (plan source field)
-export const REQUIRED_API_VERSION = 10;
+// v11: due entries carry a target-aware `fulfilled` flag, goal heatmaps
+//      return interval tiles for periodic goals
+export const REQUIRED_API_VERSION = 11;

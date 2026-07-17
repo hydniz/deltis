@@ -190,7 +190,9 @@ describe('GET /api/goals/:id/heatmap', () => {
   it('returns per-day counts for an activity goal', async () => {
     const { token, user } = await createUser();
     const type = await createActivityType(user._id);
-    const goal = await createGoal(user._id, type._id, { metric: 'count' });
+    const goal = await createGoal(user._id, type._id, {
+      metric: 'count', type: 'long-term-activity', startDate: new Date('2026-01-01'), endDate: new Date('2026-12-31'),
+    });
 
     const today = new Date();
     await ActivityLog.create({ userId: user._id, activityType: 'Joggen', activityTypeRef: type._id, date: today, duration: 30 });
@@ -205,7 +207,9 @@ describe('GET /api/goals/:id/heatmap', () => {
   it('sums the metric per day (duration)', async () => {
     const { token, user } = await createUser();
     const type = await createActivityType(user._id);
-    const goal = await createGoal(user._id, type._id, { metric: 'duration' });
+    const goal = await createGoal(user._id, type._id, {
+      metric: 'duration', type: 'long-term-activity', startDate: new Date('2026-01-01'), endDate: new Date('2026-12-31'),
+    });
 
     const today = new Date();
     await ActivityLog.create({ userId: user._id, activityType: 'Joggen', activityTypeRef: type._id, date: today, duration: 30 });
@@ -219,10 +223,10 @@ describe('GET /api/goals/:id/heatmap', () => {
     const { token, user } = await createUser();
     const habit = await HabitDefinition.create({ userId: user._id, name: 'Wasser', type: 'amount', unitSymbol: 'l' });
     const goal = await Goal.create({
-      userId: user._id, name: 'Trinken', type: 'periodic-habit',
+      userId: user._id, name: 'Trinken', type: 'long-term-habit',
       targetRef: habit._id, targetRefModel: 'HabitDefinition',
       condition: 'min', targetValue: 14, metric: 'value',
-      intervalValue: 1, intervalUnit: 'week', isActive: true,
+      startDate: new Date('2026-01-01'), endDate: new Date('2026-12-31'), isActive: true,
     });
 
     const today = new Date();
@@ -257,11 +261,48 @@ describe('GET /api/goals/:id/heatmap', () => {
 
     const owner = await createUser({ name: 'Owner2' });
     const ownType = await createActivityType(owner.user._id);
-    const ownGoal = await createGoal(owner.user._id, ownType._id);
+    const ownGoal = await createGoal(owner.user._id, ownType._id, {
+      type: 'long-term-activity', startDate: new Date('2026-01-01'), endDate: new Date('2026-12-31'),
+    });
     const clamped = await request(app)
       .get(`/api/goals/${ownGoal._id}/heatmap?weeks=999`)
       .set(authHeader(owner.token));
     expect(clamped.status).toBe(200);
     expect(clamped.body.weeks).toBe(26);
+  });
+
+  it('returns one tile per interval for periodic goals', async () => {
+    const { token, user } = await createUser();
+    const type = await createActivityType(user._id);
+    // Weekly goal: at least 2 runs per week
+    const goal = await createGoal(user._id, type._id, { metric: 'count', targetValue: 2 });
+
+    const now = new Date();
+    const lastWeek = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+    // This week: 2 activities (met). Last week: 1 activity (near miss).
+    await ActivityLog.create({ userId: user._id, activityType: 'Joggen', activityTypeRef: type._id, date: now });
+    await ActivityLog.create({ userId: user._id, activityType: 'Joggen', activityTypeRef: type._id, date: now });
+    await ActivityLog.create({ userId: user._id, activityType: 'Joggen', activityTypeRef: type._id, date: lastWeek });
+
+    const res = await request(app)
+      .get(`/api/goals/${goal._id}/heatmap?intervals=4`)
+      .set(authHeader(token));
+    expect(res.status).toBe(200);
+    expect(res.body.kind).toBe('intervals');
+    expect(res.body.intervalUnit).toBe('week');
+    expect(res.body.intervals).toHaveLength(4);
+
+    const current = res.body.intervals[res.body.intervals.length - 1];
+    expect(current.current).toBe(true);
+    expect(current.value).toBe(2);
+    expect(current.met).toBe(true);
+
+    const previous = res.body.intervals[res.body.intervals.length - 2];
+    expect(previous.value).toBe(1);
+    expect(previous.met).toBe(false);
+
+    // Older intervals are empty and unmet
+    expect(res.body.intervals[0].value).toBe(0);
+    expect(res.body.intervals[0].met).toBe(false);
   });
 });

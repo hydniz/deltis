@@ -147,6 +147,41 @@ describe('dueHabitsForRange', () => {
     const logged = due.find(d => d.date === '2026-07-14');
     expect(logged.logged).toBe(true);
     expect(logged.loggedValue).toBe(15);
+    // Without a completion target any log fulfils the day
+    expect(logged.fulfilled).toBe(true);
+  });
+
+  it('only counts a day as fulfilled when the completion target is met (Kreatin 0/5 g)', async () => {
+    const { user } = await createUser();
+    const def = await habitWithSchedule(
+      user._id,
+      { scheduleMode: 'daily', targetCondition: 'min', targetValue: 5 },
+      { name: 'Kreatin', unitSymbol: 'g', type: 'amount' }
+    );
+    await HabitLog.create({ userId: user._id, habitId: def._id, date: new Date('2026-07-13T08:00:00Z'), value: 0 });
+    await HabitLog.create({ userId: user._id, habitId: def._id, date: new Date('2026-07-14T08:00:00Z'), value: 5 });
+
+    const due = await dueHabitsForRange(user._id, '2026-07-13', '2026-07-14');
+    const missed = due.find(d => d.date === '2026-07-13');
+    expect(missed.logged).toBe(true);
+    expect(missed.fulfilled).toBe(false); // 0 g logged, 5 g minimum → still open
+    const met = due.find(d => d.date === '2026-07-14');
+    expect(met.fulfilled).toBe(true);
+  });
+
+  it('max targets fulfil at or below the limit', async () => {
+    const { user } = await createUser();
+    const def = await habitWithSchedule(
+      user._id,
+      { scheduleMode: 'daily', targetCondition: 'max', targetValue: 0 },
+      { name: 'Zigaretten', unitSymbol: 'Stück', type: 'amount' }
+    );
+    await HabitLog.create({ userId: user._id, habitId: def._id, date: new Date('2026-07-13T08:00:00Z'), value: 0 });
+    await HabitLog.create({ userId: user._id, habitId: def._id, date: new Date('2026-07-14T08:00:00Z'), value: 3 });
+
+    const due = await dueHabitsForRange(user._id, '2026-07-13', '2026-07-14');
+    expect(due.find(d => d.date === '2026-07-13').fulfilled).toBe(true);
+    expect(due.find(d => d.date === '2026-07-14').fulfilled).toBe(false);
   });
 });
 

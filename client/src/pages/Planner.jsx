@@ -105,9 +105,14 @@ function DueHabitModal({ entry, onSave, onClose }) {
             />
           </Field>
         )}
-        {entry.logged && (
+        {entry.logged && (entry.fulfilled ?? true) && (
           <p className="text-xs text-emerald-600 font-medium">
             Bereits eingetragen{entry.loggedValue != null && !isBoolean ? `: ${entry.loggedValue} ${entry.unitSymbol || ''}` : ''}.
+          </p>
+        )}
+        {entry.logged && entry.fulfilled === false && (
+          <p className="text-xs text-ocher-600 font-medium">
+            Eingetragen: {entry.loggedValue} {entry.unitSymbol || ''} – Tagesziel ({entry.targetCondition === 'max' ? 'max.' : entry.targetCondition === 'exact' ? 'genau' : 'min.'} {entry.targetValue} {entry.unitSymbol || ''}) noch nicht erreicht.
           </p>
         )}
       </form>
@@ -1101,7 +1106,7 @@ export default function Planner() {
                     const entries = [
                       ...dayPlans.map(p => ({ key: `a-${p._id}`, kind: 'activity', done: !!p.completed, data: p })),
                       ...dayHabitPlans.map(p => ({ key: `h-${p._id}`, kind: 'habit', done: !!p.completed, data: p })),
-                      ...dayDue.map(d => ({ key: `d-${d.habitId}-${d.date}`, kind: 'due', done: !!d.logged, data: d })),
+                      ...dayDue.map(d => ({ key: `d-${d.habitId}-${d.date}`, kind: 'due', done: !!(d.fulfilled ?? d.logged), data: d })),
                       ...dayTrainings.map(t => ({ key: `t-${t._id}`, kind: 'training', done: !!t.completed, data: t })),
                       ...dayStrava.map(a => ({ key: `s-${a._id}`, kind: 'strava', done: true, data: a })),
                     ];
@@ -1200,23 +1205,29 @@ export default function Planner() {
 
                       if (entry.kind === 'due') {
                         const d = entry.data;
+                        // Done only when the daily target is met — a log of
+                        // 0 g against a 5 g minimum keeps the entry open.
+                        const fulfilled = !!(d.fulfilled ?? d.logged);
+                        const missedTarget = d.logged && !fulfilled;
                         return (
                           <DayRow
                             key={entry.key}
                             onOpen={() => setDueDetail(d)}
                             icon={Sparkles}
                             iconClass="text-sage-300"
-                            completed={d.logged}
-                            dim={d.logged}
+                            completed={fulfilled}
+                            dim={fulfilled}
                             title={d.name}
-                            titleClass={d.logged ? '' : '!text-sage-700'}
-                            meta={d.reason?.kind === 'trigger' ? 'Fällig durch Ereignis' : 'Fällig laut Zeitplan'}
+                            titleClass={fulfilled ? '' : '!text-sage-700'}
+                            meta={missedTarget
+                              ? `${d.loggedValue} / Ziel ${d.targetValue} ${d.unitSymbol || ''}`.trim()
+                              : d.reason?.kind === 'trigger' ? 'Fällig durch Ereignis' : 'Fällig laut Zeitplan'}
                             toggle={
                               <button
                                 onClick={e => {
                                   e.stopPropagation();
-                                  if (d.logged) return;
-                                  if (d.type === 'boolean') {
+                                  if (fulfilled) return;
+                                  if (d.type === 'boolean' && !d.logged) {
                                     api.post('/habits/logs', {
                                       habitId: d.habitId,
                                       date: `${d.date}T12:00:00`,
@@ -1227,11 +1238,11 @@ export default function Planner() {
                                   }
                                 }}
                                 className="flex-shrink-0"
-                                title={d.logged ? 'Bereits eingetragen' : 'Erledigt'}
+                                title={fulfilled ? 'Ziel erreicht' : 'Erledigt'}
                               >
-                                {d.logged
+                                {fulfilled
                                   ? <CheckCircle2 size={15} className="text-emerald-600 anim-check" />
-                                  : <Circle size={15} className="text-sage-400 hover:text-emerald-600 transition-colors" />}
+                                  : <Circle size={15} className={`${missedTarget ? 'text-ocher-500' : 'text-sage-400'} hover:text-emerald-600 transition-colors`} />}
                               </button>
                             }
                           />

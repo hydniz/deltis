@@ -85,8 +85,9 @@ describe('Goals – hierarchy display', () => {
     // heatmap — the same card it would be as a free-standing goal)
     await userEvent.setup().click(screen.getByRole('button', { name: /Unterziele ausklappen/ }));
     expect(await screen.findByText(/Teil von: Trainingswoche/)).toBeInTheDocument();
-    // Both the free-standing goal AND the expanded child render a heatmap
-    await waitFor(() => expect(screen.getAllByText('Letzte 16 Wochen').length).toBeGreaterThanOrEqual(2));
+    // Both the free-standing goal AND the expanded child offer their heatmap
+    // (collapsed by default since v0.5.18)
+    await waitFor(() => expect(screen.getAllByText('Heatmap anzeigen').length).toBeGreaterThanOrEqual(2));
     expect(screen.getByRole('button', { name: /Unterziele einklappen/ })).toBeInTheDocument();
   });
 

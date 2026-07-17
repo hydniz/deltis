@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { format, startOfWeek, addDays, subWeeks, isAfter } from 'date-fns';
+import { format, parseISO, startOfWeek, addDays, subWeeks, isAfter } from 'date-fns';
 import { de } from 'date-fns/locale';
 import api from '../utils/api';
 import { Skeleton, chipColorFor } from './ui';
@@ -45,6 +45,57 @@ export default function GoalHeatmap({ goal, showLegend = true }) {
 
   if (data === null) {
     return <Skeleton className="h-24 mt-4" />;
+  }
+
+  // Periodic goals: one tile per interval — achieved, nearly missed or
+  // missed, with the running interval marked.
+  if (data.kind === 'intervals') {
+    const levels = TONE_LEVELS[chipColorFor(goal._id)] ?? TONE_LEVELS.amber;
+    const unit = data.unitSymbol || METRIC_LABELS[data.metric] || '';
+    const intervalLabel = data.intervalValue === 1
+      ? { day: 'Tag', week: 'Woche', month: 'Monat' }[data.intervalUnit] || 'Intervall'
+      : `${data.intervalValue} ${{ day: 'Tage', week: 'Wochen', month: 'Monate' }[data.intervalUnit] || 'Intervalle'}`;
+
+    return (
+      <div className="mt-4">
+        <div className="flex gap-1" aria-label="Zielerreichung pro Intervall">
+          {(data.intervals || []).map((iv, i) => {
+            // Nearness to the target: met = full colour, near miss = strong,
+            // half way = medium, some progress = dim, nothing = empty.
+            const target = iv.targetValue || 0;
+            const ratio = iv.met ? 1
+              : iv.condition === 'max'
+                ? (iv.value > 0 && target >= 0 ? Math.min(target / iv.value, 0.99) : 0)
+                : (target > 0 ? Math.min(iv.value / target, 0.99) : 0);
+            const cls = iv.met ? levels[3]
+              : ratio >= 0.9 ? levels[2]
+              : ratio >= 0.5 ? levels[1]
+              : iv.value > 0 ? levels[0]
+              : EMPTY_CELL;
+            const range = `${format(parseISO(iv.start), 'd. MMM', { locale: de })} – ${format(parseISO(iv.end), 'd. MMM', { locale: de })}`;
+            const status = iv.met ? 'erreicht' : ratio >= 0.9 ? 'knapp verfehlt' : 'nicht erreicht';
+            return (
+              <div
+                key={i}
+                title={`${range}: ${iv.value} / ${iv.targetValue}${unit ? ` ${unit}` : ''} – ${status}${iv.current ? ' (läuft noch)' : ''}`}
+                className={`h-6 flex-1 max-w-8 rounded-[4px] ${cls} ${iv.current ? 'ring-1 ring-inset ring-ink-900/25' : ''}`}
+              />
+            );
+          })}
+        </div>
+        {showLegend && (
+          <div className="flex items-center justify-between mt-2">
+            <p className="text-[11px] text-ink-400">Ein Feld = {intervalLabel}</p>
+            <div className="flex items-center gap-1" aria-hidden="true">
+              <span className="text-[10px] text-ink-400 mr-0.5">Verfehlt</span>
+              <span className={`w-2.5 h-2.5 rounded-[3px] ${EMPTY_CELL}`} />
+              {levels.map(l => <span key={l} className={`w-2.5 h-2.5 rounded-[3px] ${l}`} />)}
+              <span className="text-[10px] text-ink-400 ml-0.5">Erreicht</span>
+            </div>
+          </div>
+        )}
+      </div>
+    );
   }
 
   const days = data.days || {};

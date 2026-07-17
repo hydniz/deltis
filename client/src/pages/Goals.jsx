@@ -184,6 +184,8 @@ function GoalProgress({ goal, actions, childGoals = [], childActions }) {
   // Meta goals: children render nested — collapsed as compact progress rows,
   // expanded as the same full cards they used to be in the main list.
   const [showChildren, setShowChildren] = useState(false);
+  // Heatmap collapsed by default — the goal cards stay compact.
+  const [showHeatmap, setShowHeatmap] = useState(false);
 
   useEffect(() => {
     api.get(`/goals/${goal._id}/progress`).then(r => setProgress(r.data)).catch(() => {});
@@ -487,8 +489,24 @@ function GoalProgress({ goal, actions, childGoals = [], childActions }) {
         </>
       )}
 
-      {/* Daily contribution heatmap — meta goals have no daily contribution */}
-      {!isMeta && <GoalHeatmap goal={goal} />}
+      {/* Heatmap (interval tiles for periodic, daily grid for long-term) —
+          collapsed by default so the card stays compact. */}
+      {!isMeta && (
+        <>
+          <button
+            type="button"
+            onClick={() => setShowHeatmap(v => !v)}
+            className="text-xs font-semibold text-brand-600 hover:text-brand-700 transition-colors"
+          >
+            {showHeatmap ? 'Heatmap ausblenden' : 'Heatmap anzeigen'}
+          </button>
+          {showHeatmap && (
+            <div className="max-w-sm">
+              <GoalHeatmap goal={goal} />
+            </div>
+          )}
+        </>
+      )}
 
       {/* Contribution breakdown — why does this goal have this progress? */}
       <GoalItemsBreakdown goalId={goal._id} />
