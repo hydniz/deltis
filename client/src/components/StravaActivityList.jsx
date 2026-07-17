@@ -100,7 +100,7 @@ export default function StravaActivityList({ connected }) {
           ? 'Sobald du bei Strava eine Aktivität aufzeichnest, taucht sie hier automatisch auf.'
           : 'Verbinde dein Strava-Konto in den Einstellungen, um Aktivitäten automatisch zu synchronisieren.'}
         action={!connected && (
-          <Link to="/settings" className="btn-primary">Zu den Einstellungen</Link>
+          <Link to="/settings/integrations" className="btn-primary">Zu den Einstellungen</Link>
         )}
       />
     );

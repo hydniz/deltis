@@ -1,17 +1,25 @@
 import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, NavLink, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { useTheme } from '../contexts/ThemeContext';
 import api from '../utils/api';
 import {
   Check, LogOut, User, Save, Download, Upload, AtSign, Lock, Server, Monitor,
-  Settings as SettingsIcon, Sun, Moon, MonitorSmartphone, SunMoon,
+  Settings as SettingsIcon, Sun, Moon, MonitorSmartphone, SunMoon, UserRound, Plug, Database,
 } from 'lucide-react';
 import {
   PageHeader, Button, Field, Input, Select, PasswordInput, Alert, TONE_BUBBLE,
 } from '../components/ui';
 import StravaCard from '../components/StravaCard';
 import TrainingTypesCard from '../components/TrainingTypesCard';
+
+// Sub-sections — each is its own route below /settings.
+const SECTIONS = [
+  { path: 'account', label: 'Konto', icon: UserRound },
+  { path: 'appearance', label: 'Erscheinungsbild', icon: SunMoon },
+  { path: 'integrations', label: 'Integrationen', icon: Plug },
+  { path: 'data', label: 'Daten & App', icon: Database },
+];
 
 // VersionBadge
 
@@ -309,9 +317,9 @@ function UserPasswordForm({ changePassword }) {
   );
 }
 
-// Main page
+// Section: Konto (profile, username, password, account footer)
 
-export default function Settings() {
+function AccountSection() {
   const { user, logout, updateUser, setUsername, changePassword } = useAuth();
   const navigate = useNavigate();
 
@@ -327,19 +335,12 @@ export default function Settings() {
   const [usernameSaving, setUsernameSaving] = useState(false);
   const [usernameSaved, setUsernameSaved] = useState(false);
 
-  // Backend version
-  const [backendVersion, setBackendVersion] = useState(null);
-
   useEffect(() => {
     if (user) {
       setName(user.name || '');
       setWeightUnit(user.weightUnit || 'kg');
     }
   }, [user]);
-
-  useEffect(() => {
-    api.get('').then(res => setBackendVersion(res.data.version)).catch(() => setBackendVersion('–'));
-  }, []);
 
   const handleSaveProfile = async (e) => {
     e.preventDefault();
@@ -383,37 +384,31 @@ export default function Settings() {
   };
 
   return (
-    <div className="space-y-6">
-      <PageHeader title="Einstellungen" subtitle="Profil & Präferenzen" icon={SettingsIcon} tone="stone" />
-
-      {/* Desktop: 2-column grid; mobile: single column */}
+    <div className="space-y-5">
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 items-start">
+        {/* Profile */}
+        <SettingsCard icon={User} tone="clay" title="Profil">
+          <form onSubmit={handleSaveProfile} className="space-y-4">
+            <Field label="Name">
+              <Input
+                value={name}
+                onChange={e => setName(e.target.value)}
+                placeholder="Dein Name"
+              />
+            </Field>
+            <Field label="Gewichtseinheit">
+              <Select value={weightUnit} onChange={e => setWeightUnit(e.target.value)}>
+                <option value="kg">Kilogramm (kg)</option>
+                <option value="lbs">Pfund (lbs)</option>
+              </Select>
+            </Field>
+            <Button type="submit" icon={saved ? Check : Save} loading={saving}>
+              {saved ? 'Gespeichert!' : 'Speichern'}
+            </Button>
+          </form>
+        </SettingsCard>
 
-        {/* Left column */}
         <div className="space-y-5">
-
-          {/* Profile */}
-          <SettingsCard icon={User} tone="clay" title="Profil">
-            <form onSubmit={handleSaveProfile} className="space-y-4">
-              <Field label="Name">
-                <Input
-                  value={name}
-                  onChange={e => setName(e.target.value)}
-                  placeholder="Dein Name"
-                />
-              </Field>
-              <Field label="Gewichtseinheit">
-                <Select value={weightUnit} onChange={e => setWeightUnit(e.target.value)}>
-                  <option value="kg">Kilogramm (kg)</option>
-                  <option value="lbs">Pfund (lbs)</option>
-                </Select>
-              </Field>
-              <Button type="submit" icon={saved ? Check : Save} loading={saving}>
-                {saved ? 'Gespeichert!' : 'Speichern'}
-              </Button>
-            </form>
-          </SettingsCard>
-
           {/* Username */}
           <SettingsCard icon={AtSign} tone="amber" title="Benutzername">
             {user?.username && (
@@ -443,31 +438,15 @@ export default function Settings() {
               </Button>
             </form>
           </SettingsCard>
-
         </div>
 
-        {/* Right column */}
-        <div className="space-y-5">
-
-          {/* Appearance */}
-          <AppearanceCard />
-
-          {/* Password */}
-          {user?.username && user?.hasPassword && (
-            <UserPasswordForm changePassword={changePassword} />
-          )}
-
-          {/* Integrations */}
-          <StravaCard />
-          <TrainingTypesCard />
-
-          {/* Export / Import */}
-          <ExportImport />
-
-        </div>
+        {/* Password */}
+        {user?.username && user?.hasPassword && (
+          <UserPasswordForm changePassword={changePassword} />
+        )}
       </div>
 
-      {/* Full-width footer row: account + versions */}
+      {/* Account footer */}
       <div className="card p-5">
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div>
@@ -484,8 +463,47 @@ export default function Settings() {
             Abmelden
           </button>
         </div>
+      </div>
+    </div>
+  );
+}
 
-        <div className="mt-4 pt-4 border-t hairline grid grid-cols-2 sm:grid-cols-4 gap-3">
+// Section: Erscheinungsbild
+
+function AppearanceSection() {
+  return (
+    <div className="max-w-xl">
+      <AppearanceCard />
+    </div>
+  );
+}
+
+// Section: Integrationen
+
+function IntegrationsSection() {
+  return (
+    <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 items-start">
+      <StravaCard />
+      <TrainingTypesCard />
+    </div>
+  );
+}
+
+// Section: Daten & App
+
+function DataSection() {
+  const [backendVersion, setBackendVersion] = useState(null);
+
+  useEffect(() => {
+    api.get('').then(res => setBackendVersion(res.data.version)).catch(() => setBackendVersion('–'));
+  }, []);
+
+  return (
+    <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 items-start">
+      <ExportImport />
+
+      <SettingsCard icon={Monitor} tone="stone" title="App-Version">
+        <div className="grid grid-cols-2 gap-3">
           <VersionBadge
             icon={<Monitor size={13} />}
             label="Frontend"
@@ -497,6 +515,67 @@ export default function Settings() {
             version={backendVersion}
           />
         </div>
+      </SettingsCard>
+    </div>
+  );
+}
+
+// Sub-navigation: horizontal pills on mobile, sticky vertical rail on desktop.
+
+function SectionNav() {
+  return (
+    <nav
+      aria-label="Einstellungsbereiche"
+      className="flex lg:flex-col gap-1.5 overflow-x-auto no-scrollbar -mx-1 px-1 py-1 lg:m-0 lg:p-0 lg:overflow-visible lg:sticky lg:top-24 lg:self-start"
+    >
+      {SECTIONS.map(({ path, label, icon: Icon }) => (
+        <NavLink
+          key={path}
+          to={path}
+          className={({ isActive }) =>
+            `flex items-center gap-2.5 px-3.5 py-2.5 rounded-full text-sm font-medium whitespace-nowrap flex-shrink-0 transition-all ${
+              isActive
+                ? 'bg-brand-50 text-brand-700 font-semibold shadow-[inset_0_0_0_1px_rgba(196,98,58,0.25)]'
+                : 'text-ink-500 hover:text-ink-900 hover:bg-ink-900/[.04]'
+            }`
+          }
+        >
+          <Icon size={16} className="flex-shrink-0" />
+          {label}
+        </NavLink>
+      ))}
+    </nav>
+  );
+}
+
+// /settings → first section; a Strava OAuth callback (…?strava=…) lands on
+// the integrations section so its status message is shown.
+function IndexRedirect() {
+  const location = useLocation();
+  const target = location.search.includes('strava=') ? 'integrations' : 'account';
+  return <Navigate to={`${target}${location.search}`} replace />;
+}
+
+// Main page
+
+export default function Settings() {
+  return (
+    <div className="space-y-6">
+      <PageHeader title="Einstellungen" subtitle="Konto, Darstellung & Integrationen" icon={SettingsIcon} tone="stone" />
+
+      <div className="lg:grid lg:grid-cols-[210px_1fr] lg:gap-8 space-y-4 lg:space-y-0">
+        <SectionNav />
+
+        <main className="min-w-0">
+          <Routes>
+            <Route index element={<IndexRedirect />} />
+            <Route path="account" element={<AccountSection />} />
+            <Route path="appearance" element={<AppearanceSection />} />
+            <Route path="integrations" element={<IntegrationsSection />} />
+            <Route path="data" element={<DataSection />} />
+            <Route path="*" element={<Navigate to="account" replace />} />
+          </Routes>
+        </main>
       </div>
     </div>
   );

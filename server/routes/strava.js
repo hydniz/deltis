@@ -85,7 +85,7 @@ router.get('/connect', auth, (req, res) => {
 // identified by the signed state, not by a cookie). Always redirects back to
 // the settings page with a status query parameter.
 router.get('/callback', async (req, res) => {
-  const redirect = status => res.redirect(frontendRedirect(`/settings?strava=${status}`));
+  const redirect = status => res.redirect(frontendRedirect(`/settings/integrations?strava=${status}`));
 
   if (!strava.isConfigured()) return redirect('config');
 

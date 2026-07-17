@@ -387,7 +387,7 @@ function AppInner() {
             <Route path="habits"     element={<Habits />} />
             <Route path="weight"     element={<Weight />} />
             <Route path="goals"      element={<Goals />} />
-            <Route path="settings"   element={<Settings />} />
+            <Route path="settings/*" element={<Settings />} />
           </Route>
 
           {/* Catch-all: redirect unknown paths to home */}

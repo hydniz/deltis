@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeAll, afterEach, afterAll, vi } from 'vitest';
 import { render, screen, waitFor, act } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { MemoryRouter } from 'react-router-dom';
+import { MemoryRouter, Routes, Route } from 'react-router-dom';
 import { server } from './mocks/server';
 import { http, HttpResponse } from 'msw';
 import Settings from '../pages/Settings';
@@ -22,7 +22,9 @@ vi.mock('react-router-dom', async () => {
   return { ...actual, useNavigate: () => vi.fn() };
 });
 
-function renderSettings(userOverride = {}) {
+// Settings is a sectioned page with sub-routes — tests mount it under its
+// wildcard route and pick the section via the initial path.
+function renderSettings(userOverride = {}, initialPath = '/settings/account') {
   const user = { ...mockUser, ...userOverride };
   server.use(
     http.get('/api/auth/me', () => HttpResponse.json(user))
@@ -31,8 +33,10 @@ function renderSettings(userOverride = {}) {
   return render(
     <ThemeProvider>
       <AuthProvider>
-        <MemoryRouter>
-          <Settings />
+        <MemoryRouter initialEntries={[initialPath]}>
+          <Routes>
+            <Route path="/settings/*" element={<Settings />} />
+          </Routes>
         </MemoryRouter>
       </AuthProvider>
     </ThemeProvider>
@@ -93,13 +97,13 @@ describe('Settings – Passwort', () => {
 
 describe('Settings – Versionen', () => {
   it('shows the frontend version from __APP_VERSION__', async () => {
-    renderSettings();
+    renderSettings({}, '/settings/data');
     await waitFor(() => expect(screen.getByText('Frontend')).toBeInTheDocument());
     expect(screen.getByText(__APP_VERSION__)).toBeInTheDocument();
   });
 
   it('fetches and displays the backend version', async () => {
-    renderSettings();
+    renderSettings({}, '/settings/data');
     await waitFor(() =>
       expect(screen.getByText('1.0.0+test123')).toBeInTheDocument()
     );
@@ -109,16 +113,16 @@ describe('Settings – Versionen', () => {
     server.use(
       http.get('/api', () => HttpResponse.error())
     );
-    renderSettings();
+    renderSettings({}, '/settings/data');
     await waitFor(() => expect(screen.getByText('–')).toBeInTheDocument());
   });
 });
 
 describe('Settings – Erscheinungsbild', () => {
   it('renders the three theme options with System active by default', async () => {
-    renderSettings();
+    renderSettings({}, '/settings/appearance');
     await waitFor(() =>
-      expect(screen.getByText('Erscheinungsbild')).toBeInTheDocument()
+      expect(screen.getByRole('heading', { name: 'Erscheinungsbild' })).toBeInTheDocument()
     );
     expect(screen.getByRole('button', { name: 'Hell' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Dunkel' })).toBeInTheDocument();
@@ -127,7 +131,7 @@ describe('Settings – Erscheinungsbild', () => {
 
   it('activates dark mode when Dunkel is selected', async () => {
     const user = userEvent.setup();
-    renderSettings();
+    renderSettings({}, '/settings/appearance');
     await waitFor(() => screen.getByRole('button', { name: 'Dunkel' }));
     await user.click(screen.getByRole('button', { name: 'Dunkel' }));
 
@@ -139,7 +143,7 @@ describe('Settings – Erscheinungsbild', () => {
   it('switches back to light mode when Hell is selected', async () => {
     localStorage.setItem(THEME_STORAGE_KEY, 'dark');
     const user = userEvent.setup();
-    renderSettings();
+    renderSettings({}, '/settings/appearance');
     await waitFor(() => screen.getByRole('button', { name: 'Hell' }));
     await user.click(screen.getByRole('button', { name: 'Hell' }));
 
@@ -161,5 +165,44 @@ describe('Settings – Konto', () => {
     await waitFor(() =>
       expect(screen.getByText(/Mitglied seit/i)).toBeInTheDocument()
     );
+  });
+});
+
+describe('Settings – Unterbereiche', () => {
+  it('renders the section navigation with all areas', async () => {
+    renderSettings();
+    const nav = await screen.findByRole('navigation', { name: 'Einstellungsbereiche' });
+    for (const label of ['Konto', 'Erscheinungsbild', 'Integrationen', 'Daten & App']) {
+      expect(screen.getByRole('link', { name: label })).toBeInTheDocument();
+    }
+    expect(nav).toBeInTheDocument();
+  });
+
+  it('redirects /settings to the account section', async () => {
+    renderSettings({}, '/settings');
+    await waitFor(() =>
+      expect(screen.getByPlaceholderText('Dein Name')).toBeInTheDocument()
+    );
+  });
+
+  it('sends a Strava OAuth callback to the integrations section', async () => {
+    renderSettings({}, '/settings?strava=denied');
+    // The StravaCard mounts on the integrations section and consumes the param
+    await waitFor(() =>
+      expect(screen.getByText(/Verbindung abgebrochen/)).toBeInTheDocument()
+    );
+    expect(screen.getByRole('heading', { name: 'Trainingstypen' })).toBeInTheDocument();
+  });
+
+  it('switches sections via the navigation', async () => {
+    const user = userEvent.setup();
+    renderSettings();
+    await waitFor(() => screen.getByPlaceholderText('Dein Name'));
+
+    await user.click(screen.getByRole('link', { name: 'Integrationen' }));
+    await waitFor(() =>
+      expect(screen.getByTestId('strava-card')).toBeInTheDocument()
+    );
+    expect(screen.queryByPlaceholderText('Dein Name')).not.toBeInTheDocument();
   });
 });
