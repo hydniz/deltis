@@ -12,6 +12,7 @@ const fs = require('fs');
 const branding = require('./config/branding');
 const serverState = require('./utils/serverState');
 const bootstrapConfig = require('./utils/bootstrapConfig');
+const logger = require('./utils/logger');
 
 const BACKUP_LOCK = path.join(__dirname, '..', 'backups', '.backup.lock');
 
@@ -36,6 +37,9 @@ app.use(cors({
 app.use(cookieParser());
 app.use(express.json());
 app.use(require('./middleware/sanitizeBody'));
+// Detailed activity log (info level, NDJSON in backups/logs/, 7-day
+// retention) — after body parsing so mutating requests log their payload.
+app.use(require('./middleware/requestLogger'));
 
 // Block write requests while a backup is in progress
 app.use((req, res, next) => {
@@ -245,10 +249,18 @@ async function start() {
     await connectAndInit();
     serverState.setupMode = false;
     console.log('✓ MongoDB connected');
+    logger.info('boot', 'MongoDB connected, server ready', {
+      version: require('../package.json').version,
+      apiVersion: API_VERSION,
+      env: process.env.NODE_ENV || 'development',
+    });
     // Loud log alert when a ransom bot has wiped this database — the operator
     // must restore a backup instead of re-initializing (see securityCheck.js).
     const { warnIfDatabaseCompromised } = require('./utils/securityCheck');
-    await warnIfDatabaseCompromised(mongoose.connection);
+    const markers = await warnIfDatabaseCompromised(mongoose.connection);
+    if (markers.length > 0) {
+      logger.error('security', 'Ransom marker databases detected', { markers });
+    }
   } catch (err) {
     bootError = err;
     if (MIGRATION_ERROR_CODES.has(err.code)) {
@@ -264,6 +276,7 @@ async function start() {
       console.error(`  Grund: [${err.code}] ${err.message}`);
       console.error('  Der Admin kann im UI den Rollback starten (Admin → Updates).');
       console.error('═'.repeat(58) + '\n');
+      logger.error('boot', 'Emergency mode entered', { code: err.code, message: err.message });
     } else {
       serverState.setupMode = true;
       console.warn('\n' + '═'.repeat(58));
@@ -271,6 +284,7 @@ async function start() {
       console.warn('  MongoDB not reachable. Configure the connection at /admin/setup');
       console.warn(`  Reason: ${err.message}`);
       console.warn('═'.repeat(58) + '\n');
+      logger.warn('boot', 'Setup mode entered (MongoDB unreachable)', { message: err.message });
     }
   }
 

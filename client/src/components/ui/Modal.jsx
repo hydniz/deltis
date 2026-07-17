@@ -68,10 +68,14 @@ export default function Modal({
   };
   const onTouchMove = (e) => {
     if (!drag.current.active || !sheetRef.current) return;
+    const el = sheetRef.current;
     const delta = e.touches[0].clientY - drag.current.startY;
     drag.current.delta = Math.max(0, delta);
-    sheetRef.current.style.transition = 'none';
-    sheetRef.current.style.transform = drag.current.delta > 0
+    // The entrance animation (anim-modal, fill-mode both) would override the
+    // inline transform — disable it once the finger takes over.
+    el.style.animation = 'none';
+    el.style.transition = 'none';
+    el.style.transform = drag.current.delta > 0
       ? `translateY(${drag.current.delta}px)`
       : '';
   };
@@ -79,15 +83,21 @@ export default function Modal({
     if (!drag.current.active) return;
     const el = sheetRef.current;
     drag.current.active = false;
+    if (!el) return;
     if (drag.current.delta > 90) {
-      onClose?.();
+      // Material-style dismiss: continue the finger's motion off-screen,
+      // then actually close.
+      el.style.transition = 'transform 180ms cubic-bezier(0.4, 0, 1, 1)';
+      el.style.transform = 'translateY(110%)';
+      setTimeout(() => onClose?.(), 170);
       return;
     }
-    if (el) {
-      el.style.transition = 'transform 200ms ease';
-      el.style.transform = '';
-      setTimeout(() => { if (el) el.style.transition = ''; }, 220);
-    }
+    // Below the threshold: spring back into place.
+    el.style.transition = 'transform 200ms ease';
+    el.style.transform = '';
+    setTimeout(() => {
+      if (el) { el.style.transition = ''; el.style.animation = ''; }
+    }, 220);
   };
 
   return createPortal(

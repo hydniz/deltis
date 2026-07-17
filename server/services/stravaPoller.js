@@ -4,6 +4,7 @@
 // config and is re-read on every tick, so admin changes apply immediately.
 const config = require('../utils/config');
 const strava = require('./strava');
+const logger = require('../utils/logger');
 
 const CHECK_INTERVAL_MS = 60 * 1000;
 
@@ -26,14 +27,18 @@ async function tick(now = Date.now()) {
   try {
     const StravaConnection = require('../models/StravaConnection');
     const connections = await StravaConnection.find({});
+    let failed = 0;
     for (const connection of connections) {
       try {
         await strava.syncConnection(connection);
       } catch (err) {
+        failed++;
         // Never log tokens — err.message from the service is already clean.
         console.error(`✗ Strava-Sync fehlgeschlagen (Athlet ${connection.athleteId}): ${err.message}`);
+        logger.error('strava', `Poll sync failed for athlete ${connection.athleteId}`, { message: err.message });
       }
     }
+    logger.info('strava', 'Poll cycle finished', { connections: connections.length, failed });
     return true;
   } finally {
     running = false;
