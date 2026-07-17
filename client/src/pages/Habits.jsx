@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import api from '../utils/api';
 import { format, subDays, parseISO, startOfDay } from 'date-fns';
 import { de } from 'date-fns/locale';
@@ -306,6 +307,18 @@ export default function Habits() {
   const [todayLogs, setTodayLogs] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showManage, setShowManage] = useState(false);
+  // Deep link from the planner ("Zeitplan anpassen"): /habits?manage=<id>
+  // opens the manage modal with that habit's settings expanded.
+  const [searchParams, setSearchParams] = useSearchParams();
+  const manageParam = searchParams.get('manage');
+  useEffect(() => {
+    if (manageParam) setShowManage(true);
+  }, [manageParam]);
+  const closeManage = () => {
+    setShowManage(false);
+    if (manageParam) setSearchParams({}, { replace: true });
+    load();
+  };
 
   // Quick-log refreshes call load() directly and swap data in place —
   // only the initial mount shows the loader (loading starts true).
@@ -403,8 +416,9 @@ export default function Habits() {
 
       {showManage && (
         <ManageHabitsModal
-          onSave={() => { setShowManage(false); load(); }}
-          onClose={() => { setShowManage(false); load(); }}
+          initialOpenId={manageParam || null}
+          onSave={closeManage}
+          onClose={closeManage}
         />
       )}
     </div>

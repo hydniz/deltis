@@ -3,6 +3,7 @@ import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { server } from './mocks/server';
 import { http, HttpResponse } from 'msw';
+import { MemoryRouter } from 'react-router-dom';
 import Planner from '../pages/Planner';
 
 const FIXED_NOW = new Date('2026-07-15T10:00:00');
@@ -50,7 +51,7 @@ function useHandlers({ trainings = [fulfilledPlan] } = {}) {
 describe('Planner – planned trainings', () => {
   it('shows a fulfilled training with the fulfilling activity', async () => {
     useHandlers();
-    render(<Planner />);
+    render(<MemoryRouter><Planner /></MemoryRouter>);
 
     await waitFor(() => expect(screen.getByText('Zone 2')).toBeInTheDocument());
     expect(screen.getByText('Morgenlauf am Fluss')).toBeInTheDocument();
@@ -67,7 +68,7 @@ describe('Planner – planned trainings', () => {
         fulfilledBy: null,
       }],
     });
-    render(<Planner />);
+    render(<MemoryRouter><Planner /></MemoryRouter>);
 
     await waitFor(() => expect(screen.getByText('Zone 2')).toBeInTheDocument());
     expect(screen.getByText('Überfällig')).toBeInTheDocument();
@@ -90,7 +91,7 @@ describe('Planner – planned trainings', () => {
         ],
       }],
     });
-    render(<Planner />);
+    render(<MemoryRouter><Planner /></MemoryRouter>);
 
     await waitFor(() => expect(screen.getByText('Intervalle')).toBeInTheDocument());
     expect(screen.getByText('Morgenlauf am Fluss')).toBeInTheDocument();
@@ -107,7 +108,7 @@ describe('Planner – planned trainings', () => {
       }],
     });
     const user = userEvent.setup();
-    render(<Planner />);
+    render(<MemoryRouter><Planner /></MemoryRouter>);
 
     await waitFor(() => expect(screen.getByText('Zone 2')).toBeInTheDocument());
     await user.click(screen.getByText('Zone 2'));
@@ -136,7 +137,7 @@ describe('Planner – planned trainings', () => {
       })
     );
     const user = userEvent.setup();
-    render(<Planner />);
+    render(<MemoryRouter><Planner /></MemoryRouter>);
 
     await waitFor(() => expect(screen.getByText('Zone 2')).toBeInTheDocument());
     await user.click(screen.getByTitle('Als absolviert markieren'));
@@ -155,7 +156,7 @@ describe('Planner – planned trainings', () => {
       })
     );
     const user = userEvent.setup();
-    render(<Planner />);
+    render(<MemoryRouter><Planner /></MemoryRouter>);
 
     await waitFor(() => expect(screen.getAllByLabelText('Plan hinzufügen').length).toBe(7));
     await user.click(screen.getAllByLabelText('Plan hinzufügen')[0]); // Monday

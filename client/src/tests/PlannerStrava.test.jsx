@@ -2,6 +2,7 @@ import { describe, it, expect, beforeAll, afterEach, afterAll, beforeEach, vi } 
 import { render, screen, waitFor } from '@testing-library/react';
 import { server } from './mocks/server';
 import { http, HttpResponse } from 'msw';
+import { MemoryRouter } from 'react-router-dom';
 import Planner from '../pages/Planner';
 
 // Fixed "now" (a Wednesday) so the visible week is deterministic.
@@ -44,7 +45,7 @@ function useHandlers({ strava = stravaActivities } = {}) {
 describe('Planner – Strava activities', () => {
   it('shows synced Strava activities on their local day, marked as Strava', async () => {
     useHandlers();
-    render(<Planner />);
+    render(<MemoryRouter><Planner /></MemoryRouter>);
 
     await waitFor(() => expect(screen.getByText('Morgenlauf am Fluss')).toBeInTheDocument());
     // "Strava" shows up on the card badge (and as heatmap filter tab)
@@ -55,7 +56,7 @@ describe('Planner – Strava activities', () => {
 
   it('does not count Strava activities towards the weekly plan progress', async () => {
     useHandlers();
-    render(<Planner />);
+    render(<MemoryRouter><Planner /></MemoryRouter>);
 
     await waitFor(() => expect(screen.getByText('Morgenlauf am Fluss')).toBeInTheDocument());
     // No plans exist — progress must still read "nothing planned".
@@ -77,7 +78,7 @@ describe('Planner – Strava activities', () => {
         return HttpResponse.json({ error: 'nicht verbunden' }, { status: 500 });
       }),
     );
-    render(<Planner />);
+    render(<MemoryRouter><Planner /></MemoryRouter>);
 
     // Week 2026-07-13 (Mon) – 2026-07-19 (Sun); buffer of one day either side
     await waitFor(() => expect(requestedParams.length).toBeGreaterThan(0));

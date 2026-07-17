@@ -3,6 +3,7 @@ import { render, screen, waitFor, fireEvent } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { server } from './mocks/server';
 import { http, HttpResponse } from 'msw';
+import { MemoryRouter } from 'react-router-dom';
 import Planner from '../pages/Planner';
 
 // Fixed "now" (a Wednesday) so week layout, overdue marking and copy-week
@@ -59,7 +60,7 @@ afterAll(() => {
 describe('Planner – Wochenübersicht', () => {
   it('zeigt Pläne der Woche und den Wochenfortschritt', async () => {
     usePlannerHandlers();
-    render(<Planner />);
+    render(<MemoryRouter><Planner /></MemoryRouter>);
 
     expect(await screen.findByText('Wasser trinken')).toBeInTheDocument();
     expect(screen.getAllByText('Joggen').length).toBe(2);
@@ -69,7 +70,7 @@ describe('Planner – Wochenübersicht', () => {
 
   it('zeigt die Fortschritts-Heatmap unterhalb des Wochen-Rasters', async () => {
     usePlannerHandlers();
-    render(<Planner />);
+    render(<MemoryRouter><Planner /></MemoryRouter>);
     await screen.findByText('Wasser trinken');
 
     expect(await screen.findByLabelText('Planungsverlauf der letzten 12 Wochen')).toBeInTheDocument();
@@ -79,7 +80,7 @@ describe('Planner – Wochenübersicht', () => {
 
   it('zeigt pro Tag ein Erledigt-Badge', async () => {
     usePlannerHandlers();
-    render(<Planner />);
+    render(<MemoryRouter><Planner /></MemoryRouter>);
     await screen.findByText('Wasser trinken');
 
     // Wednesday: 1/1 done, Monday and Thursday: 0/1 each
@@ -89,7 +90,7 @@ describe('Planner – Wochenübersicht', () => {
 
   it('markiert offene Pläne vergangener Tage als überfällig', async () => {
     usePlannerHandlers();
-    render(<Planner />);
+    render(<MemoryRouter><Planner /></MemoryRouter>);
     await screen.findByText('Wasser trinken');
 
     // Only the open Monday plan is overdue — not the completed one, not future plans
@@ -98,7 +99,7 @@ describe('Planner – Wochenübersicht', () => {
 
   it('zeigt Tage ohne Pläne als frei an', async () => {
     usePlannerHandlers();
-    render(<Planner />);
+    render(<MemoryRouter><Planner /></MemoryRouter>);
     await screen.findByText('Wasser trinken');
 
     // Tuesday, Friday, Saturday and Sunday have no plans
@@ -119,7 +120,7 @@ describe('Planner – Wochenübersicht', () => {
         }],
       }))
     );
-    render(<Planner />);
+    render(<MemoryRouter><Planner /></MemoryRouter>);
 
     expect(await screen.findByText('Entspannter Lauf')).toBeInTheDocument();
     expect(screen.getByText('Run · 26 min · 3.4 km')).toBeInTheDocument();
@@ -138,7 +139,7 @@ describe('Planner – Vorwoche kopieren', () => {
       })
     );
     const user = userEvent.setup();
-    render(<Planner />);
+    render(<MemoryRouter><Planner /></MemoryRouter>);
     await screen.findByText('Wasser trinken');
 
     await user.click(screen.getByRole('button', { name: /Vorwoche kopieren/i }));
@@ -157,7 +158,7 @@ describe('Planner – Vorwoche kopieren', () => {
       )
     );
     const user = userEvent.setup();
-    render(<Planner />);
+    render(<MemoryRouter><Planner /></MemoryRouter>);
     await screen.findByText('Wasser trinken');
 
     await user.click(screen.getByRole('button', { name: /Vorwoche kopieren/i }));
@@ -181,7 +182,7 @@ describe('Planner – Plan für mehrere Tage anlegen', () => {
       })
     );
     const user = userEvent.setup();
-    render(<Planner />);
+    render(<MemoryRouter><Planner /></MemoryRouter>);
     await screen.findByText('Wasser trinken');
 
     // Open the add modal on Monday (first day column)
@@ -209,7 +210,7 @@ describe('Planner – Plan bearbeiten', () => {
       })
     );
     const user = userEvent.setup();
-    render(<Planner />);
+    render(<MemoryRouter><Planner /></MemoryRouter>);
     await screen.findByText('Wasser trinken');
 
     await user.click(screen.getAllByLabelText('Plan bearbeiten')[0]);
@@ -234,7 +235,7 @@ describe('Planner – Plan bearbeiten', () => {
       })
     );
     const user = userEvent.setup();
-    render(<Planner />);
+    render(<MemoryRouter><Planner /></MemoryRouter>);
     await screen.findByText('Wasser trinken');
 
     // Third edit button belongs to the Thursday habit plan

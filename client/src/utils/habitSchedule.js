@@ -52,8 +52,8 @@ export function formatScheduleBadge(habit) {
 // heute im Planer?" text.
 export function formatDueReason(reason) {
   if (!reason) return '';
-  if (reason.kind === 'daily') return 'Steht täglich an.';
-  if (reason.kind === 'weekly') return `Geplante Wochentage: ${formatScheduleDays(reason.days)}.`;
+  if (reason.kind === 'daily') return 'In den Gewohnheits-Einstellungen als täglich geplant.';
+  if (reason.kind === 'weekly') return `In den Gewohnheits-Einstellungen für diese Wochentage geplant: ${formatScheduleDays(reason.days)}.`;
   if (reason.kind === 'date') {
     return `Einmalig geplant für den ${format(parseISO(reason.date), 'd. MMMM', { locale: de })}.`;
   }
