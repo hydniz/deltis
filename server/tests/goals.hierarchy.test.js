@@ -173,7 +173,11 @@ describe('meta goals — progress', () => {
     expect(progress.body.conditions[0].currentValue).toBe(1);
     expect(progress.body.met).toBe(false);
     expect(progress.body.childResults).toHaveLength(2);
-    expect(progress.body.childResults.find(c => c.name === 'Laufen').met).toBe(true);
+    const run = progress.body.childResults.find(c => c.name === 'Laufen');
+    expect(run.met).toBe(true);
+    // Compact preview data for the nested rendering in the meta card
+    expect(run.currentValue).toBe(1);
+    expect(run.targetValue).toBe(1);
     expect(progress.body.childResults.find(c => c.name === 'Radfahren').met).toBe(false);
 
     await seedRun(user._id, { sportType: 'Ride', type: 'Ride' });

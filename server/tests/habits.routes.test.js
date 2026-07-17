@@ -456,3 +456,145 @@ describe('DELETE /api/habits/logs/:id', () => {
     expect(stillExists).not.toBeNull();
   });
 });
+
+// ─Personal habit library (post-migration-004 behaviour)
+
+describe('soft delete & trash', () => {
+  it('soft-deletes a user habit: history stays, trash lists it, restore revives it', async () => {
+    const { token, user } = await createUser();
+    const def = await createHabitDef(user._id);
+    await HabitLog.create({ userId: user._id, habitId: def._id, habitVersion: 1, date: new Date(), value: 2 });
+    await request(app).put('/api/habits/selection').set(authHeader(token)).send({ selectedIds: [def._id] });
+
+    const delRes = await request(app)
+      .delete(`/api/habits/definitions/${def._id}`)
+      .set(authHeader(token));
+    expect(delRes.status).toBe(200);
+
+    // Definition survives as soft-deleted — logs keep resolving
+    const stored = await HabitDefinition.findById(def._id);
+    expect(stored).not.toBeNull();
+    expect(stored.deletedAt).toBeTruthy();
+    expect(await HabitLog.countDocuments({ habitId: def._id })).toBe(1);
+
+    // Out of the normal listing, in the trash listing
+    const normal = await request(app).get('/api/habits/definitions').set(authHeader(token));
+    expect(normal.body.find(d => d._id === def._id.toString())).toBeUndefined();
+    const withDeleted = await request(app)
+      .get('/api/habits/definitions?includeDeleted=true')
+      .set(authHeader(token));
+    const trashed = withDeleted.body.find(d => d._id === def._id.toString());
+    expect(trashed.hidden).toBe(true);
+    expect(trashed.selected).toBe(false);
+
+    // Restore revives it
+    await request(app).post(`/api/habits/definitions/${def._id}/restore`).set(authHeader(token));
+    const restored = await request(app).get('/api/habits/definitions').set(authHeader(token));
+    expect(restored.body.find(d => d._id === def._id.toString())).toBeDefined();
+  });
+
+  it('does not restore another user\'s habit', async () => {
+    const { user } = await createUser();
+    const def = await createHabitDef(user._id);
+    await HabitDefinition.updateOne({ _id: def._id }, { $set: { deletedAt: new Date() } });
+
+    const { token: otherToken } = await createUser({ name: 'Other' });
+    await request(app).post(`/api/habits/definitions/${def._id}/restore`).set(authHeader(otherToken));
+    expect((await HabitDefinition.findById(def._id)).deletedAt).toBeTruthy();
+  });
+});
+
+describe('GET /api/habits/catalog', () => {
+  it('lists suggestions minus habits the user already has (even deleted ones)', async () => {
+    const { token, user } = await createUser();
+    await createHabitDef(user._id, { name: 'Wasser' });
+    await createHabitDef(user._id, { name: 'Meditation', deletedAt: new Date() });
+
+    const res = await request(app).get('/api/habits/catalog').set(authHeader(token));
+    expect(res.status).toBe(200);
+    const names = res.body.map(h => h.name);
+    expect(names).not.toContain('Wasser');
+    expect(names).not.toContain('Meditation');
+    expect(names).toContain('Schlaf');
+    expect(res.body.every(h => h.unitSymbol && h.type)).toBe(true);
+  });
+});
+
+describe('inline settings on create', () => {
+  it('persists schedule and target settings passed with the creation', async () => {
+    const { token } = await createUser();
+    const res = await request(app).post('/api/habits/definitions').set(authHeader(token)).send({
+      name: 'Lesen',
+      unitSymbol: 'min',
+      type: 'duration',
+      scheduleDays: [1, 3, 5],
+      targetCondition: 'min',
+      targetValue: 30,
+      missingDayMode: 'default',
+      defaultValue: 0,
+    });
+    expect(res.status).toBe(201);
+    expect(res.body.scheduleDays).toEqual([1, 3, 5]);
+    expect(res.body.targetCondition).toBe('min');
+
+    const listed = await request(app).get('/api/habits/definitions').set(authHeader(token));
+    const def = listed.body.find(d => d.name === 'Lesen');
+    expect(def.scheduleDays).toEqual([1, 3, 5]);
+    expect(def.targetCondition).toBe('min');
+    expect(def.targetValue).toBe(30);
+    expect(def.missingDayMode).toBe('default');
+  });
+
+  it('clamps boolean defaults to 0/1 and drops numeric targets for yes/no habits', async () => {
+    const { token } = await createUser();
+    const res = await request(app).post('/api/habits/definitions').set(authHeader(token)).send({
+      name: 'Vitamine',
+      unitSymbol: '✓',
+      type: 'boolean',
+      missingDayMode: 'default',
+      defaultValue: 7,
+      targetCondition: 'min',
+      targetValue: 5,
+    });
+    expect(res.status).toBe(201);
+    expect(res.body.defaultValue).toBe(1);
+    expect(res.body.targetCondition).toBe('none');
+    expect(res.body.targetValue).toBe(0);
+  });
+});
+
+describe('type change side effects', () => {
+  it('updates open plan snapshots and sanitizes settings when switching to boolean', async () => {
+    const HabitPlan = require('../models/HabitPlan');
+    const { token, user } = await createUser();
+    const def = await createHabitDef(user._id, { name: 'Dehnen', unitSymbol: 'min', type: 'duration' });
+    await request(app).put(`/api/habits/settings/${def._id}`).set(authHeader(token)).send({
+      missingDayMode: 'default', defaultValue: 15, targetCondition: 'min', targetValue: 10,
+    });
+    const openPlan = await HabitPlan.create({
+      userId: user._id, habitId: def._id, habitName: 'Dehnen',
+      unitSymbol: 'min', habitType: 'duration', scheduledDate: new Date(), completed: false,
+    });
+    const donePlan = await HabitPlan.create({
+      userId: user._id, habitId: def._id, habitName: 'Dehnen',
+      unitSymbol: 'min', habitType: 'duration', scheduledDate: new Date(), completed: true,
+    });
+
+    const res = await request(app)
+      .put(`/api/habits/definitions/${def._id}`)
+      .set(authHeader(token))
+      .send({ name: 'Dehnen', unitSymbol: '✓', type: 'boolean' });
+    expect(res.status).toBe(200);
+    expect(res.body.type).toBe('boolean');
+
+    // Open plans follow the new type; completed ones keep their snapshot
+    expect((await HabitPlan.findById(openPlan._id)).habitType).toBe('boolean');
+    expect((await HabitPlan.findById(donePlan._id)).habitType).toBe('duration');
+
+    // Numeric target dropped, default clamped to 1
+    const listed = await request(app).get('/api/habits/definitions').set(authHeader(token));
+    const updated = listed.body.find(d => d._id === def._id.toString());
+    expect(updated.targetCondition).toBe('none');
+    expect(updated.defaultValue).toBe(1);
+  });
+});

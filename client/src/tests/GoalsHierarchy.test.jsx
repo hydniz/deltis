@@ -21,6 +21,7 @@ const childGoal = {
   _id: 'g1', name: 'Cardio', type: 'periodic-strava',
   targetRef: 'strava', targetRefModel: 'StravaActivity', targetName: 'Strava',
   condition: 'min', targetValue: 3, metric: 'count', unitSymbol: 'Mal',
+  parentGoalId: 'm1',
   parentGoal: { _id: 'm1', name: 'Trainingswoche' },
   stravaCriteria: null, customFields: [], isActive: true,
   intervalValue: 1, intervalUnit: 'week',
@@ -42,8 +43,12 @@ function useGoalHandlers() {
     http.get('/api/goals/m1/progress', () => HttpResponse.json({
       conditions: [{ metric: 'subgoals', condition: 'min', targetValue: 1, unitSymbol: 'Ziele', currentValue: 1, met: true }],
       conditionOperator: 'AND', met: true, weeklyData: [], stepResults: [],
-      childResults: [{ _id: 'g1', name: 'Cardio', met: true }],
+      childResults: [{
+        _id: 'g1', name: 'Cardio', met: true,
+        currentValue: 3, targetValue: 3, unitSymbol: 'Mal', condition: 'min',
+      }],
     })),
+    http.get('/api/goals/:id/heatmap', () => HttpResponse.json({ metric: 'count', days: {} })),
     http.get('/api/goals/:id/progress', () => HttpResponse.json({
       conditions: [{ metric: 'count', condition: 'min', targetValue: 3, unitSymbol: 'Mal', currentValue: 1, met: false }],
       conditionOperator: 'AND', met: false, weeklyData: [], stepResults: [],
@@ -63,22 +68,31 @@ function renderGoals() {
 }
 
 describe('Goals – hierarchy display', () => {
-  it('groups meta goals and shows the hierarchy in both directions', async () => {
+  it('nests children in the meta card: compact preview, expandable full card', async () => {
     useGoalHandlers();
     renderGoals();
 
     await waitFor(() => expect(screen.getByText('Gesamtziele')).toBeInTheDocument());
     expect(screen.getByText('Trainingswoche')).toBeInTheDocument();
-    // Child badge on the sub-goal
-    expect(screen.getByText(/Teil von: Trainingswoche/)).toBeInTheDocument();
-    // Child status inside the meta card
+    // Child status inside the meta card as compact preview with progress
     await waitFor(() => expect(screen.getByText('Unterziele')).toBeInTheDocument());
-    expect(screen.getByText('Erfüllte Unterziele', { exact: false })).toBeInTheDocument();
+    expect(screen.getByText('3 / 3 Mal')).toBeInTheDocument();
+    // The child no longer clutters the top-level groups
+    expect(screen.queryByText('Periodische Ziele')).toBeInTheDocument();
+    expect(screen.queryByText(/Teil von: Trainingswoche/)).not.toBeInTheDocument();
+
+    // Expanding shows the full child card (with its hierarchy badge)
+    await userEvent.setup().click(screen.getByRole('button', { name: /Unterziele ausklappen/ }));
+    expect(await screen.findByText(/Teil von: Trainingswoche/)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Unterziele einklappen/ })).toBeInTheDocument();
   });
 
-  it('reveals the contributing entries behind "Was zählt dazu?"', async () => {
+  it('reveals the contributing entries behind "Was zählt dazu?" of an expanded child', async () => {
     useGoalHandlers();
     renderGoals();
+
+    await waitFor(() => expect(screen.getByText('Trainingswoche')).toBeInTheDocument());
+    await userEvent.setup().click(await screen.findByRole('button', { name: /Unterziele ausklappen/ }));
 
     await waitFor(() => expect(screen.getByText('Cardio')).toBeInTheDocument());
     const childCard = screen.getByText('Cardio').closest('.card');

@@ -327,12 +327,20 @@ async function computeMetaProgress(goal, userId) {
   const childResults = [];
   for (const child of children) {
     const progress = await computeProgress(child, userId);
+    // First condition as a compact preview so the meta card can show child
+    // progress without loading every child's full progress payload.
+    const first = progress.conditions?.[0] || {};
     childResults.push({
       _id: child._id,
       name: child.name,
       type: child.type,
       targetRefModel: child.targetRefModel,
       met: progress.met,
+      currentValue: first.currentValue ?? null,
+      targetValue: first.targetValue ?? null,
+      unitSymbol: first.unitSymbol || '',
+      condition: first.condition || 'min',
+      conditionCount: progress.conditions?.length ?? 0,
     });
   }
 

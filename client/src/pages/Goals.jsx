@@ -177,10 +177,13 @@ function GoalItemsBreakdown({ goalId }) {
 // `actions` (edit/delete buttons) render inside the header row so they never
 // overlap the chips on narrow screens.
 
-function GoalProgress({ goal, actions }) {
+function GoalProgress({ goal, actions, childGoals = [], childActions }) {
   const CHART = useChart();
   const [progress, setProgress] = useState(null);
   const [showChart, setShowChart] = useState(false);
+  // Meta goals: children render nested — collapsed as compact progress rows,
+  // expanded as the same full cards they used to be in the main list.
+  const [showChildren, setShowChildren] = useState(false);
 
   useEffect(() => {
     api.get(`/goals/${goal._id}/progress`).then(r => setProgress(r.data)).catch(() => {});
@@ -331,23 +334,61 @@ function GoalProgress({ goal, actions }) {
         </div>
       )}
 
-      {/* Meta goals: per-child status */}
+      {/* Meta goals: children live INSIDE the card — compact progress rows
+          by default, expandable to the full goal cards. */}
       {isMeta && childResults.length > 0 && (
         <div className="mb-3 space-y-1.5">
           <div className="text-[11px] text-ink-400 uppercase tracking-[0.09em] font-semibold">Unterziele</div>
-          {childResults.map(child => (
-            <div key={child._id} className="flex items-center gap-2 text-xs">
-              {child.met
-                ? <Check size={12} className="text-emerald-600 flex-shrink-0" />
-                : <Clock size={12} className="text-ink-300 flex-shrink-0" />}
-              <span className={`font-medium truncate ${child.met ? 'text-emerald-700' : 'text-ink-600'}`}>
-                {child.name}
-              </span>
-              <span className={`ml-auto font-semibold whitespace-nowrap ${child.met ? 'text-emerald-600' : 'text-ink-400'}`}>
-                {child.met ? 'Erfüllt' : 'Offen'}
-              </span>
+          {!showChildren && childResults.map(child => {
+            const hasPreview = child.currentValue != null && child.targetValue != null && child.targetValue > 0;
+            const pct = !hasPreview ? 0
+              : child.condition === 'max'
+                ? (child.currentValue <= child.targetValue ? 100 : Math.max(0, 100 - ((child.currentValue - child.targetValue) / child.targetValue) * 100))
+                : Math.min(100, (child.currentValue / child.targetValue) * 100);
+            return (
+              <div key={child._id} className="space-y-1">
+                <div className="flex items-center gap-2 text-xs">
+                  {child.met
+                    ? <Check size={12} className="text-emerald-600 flex-shrink-0" />
+                    : <Clock size={12} className="text-ink-300 flex-shrink-0" />}
+                  <span className={`font-medium truncate ${child.met ? 'text-emerald-700' : 'text-ink-600'}`}>
+                    {child.name}
+                  </span>
+                  <span className={`ml-auto font-semibold whitespace-nowrap ${child.met ? 'text-emerald-600' : 'text-ink-400'}`}>
+                    {hasPreview
+                      ? `${child.currentValue} / ${child.targetValue}${child.unitSymbol ? ` ${child.unitSymbol}` : ''}`
+                      : child.met ? 'Erfüllt' : 'Offen'}
+                  </span>
+                </div>
+                {hasPreview && (
+                  <ProgressBar pct={pct} tone={child.met ? 'success' : 'auto'} className="!h-1" />
+                )}
+              </div>
+            );
+          })}
+          {showChildren && childGoals.length > 0 && (
+            <div className="space-y-3 pt-1">
+              {childGoals.map(child => (
+                <GoalProgress
+                  key={child._id}
+                  goal={child}
+                  actions={childActions?.(child)}
+                />
+              ))}
             </div>
-          ))}
+          )}
+          {childGoals.length > 0 && (
+            <button
+              type="button"
+              onClick={() => setShowChildren(v => !v)}
+              className="flex items-center gap-1 text-xs font-semibold text-brand-600 hover:text-brand-700 transition-colors pt-0.5"
+            >
+              {showChildren ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
+              {showChildren
+                ? 'Unterziele einklappen'
+                : `Unterziele ausklappen (${childGoals.length})`}
+            </button>
+          )}
         </div>
       )}
 
@@ -2096,9 +2137,25 @@ export default function Goals() {
     load();
   };
 
+  // Children of a meta goal render nested inside their parent card — the
+  // top-level groups only list free-standing goals so the page stays tidy.
   const metaGoals = goals.filter(g => g.type === 'meta');
-  const periodic = goals.filter(g => g.type !== 'meta' && !g.type.startsWith('long-term'));
-  const longTerm = goals.filter(g => g.type.startsWith('long-term'));
+  const childrenByParent = goals.reduce((map, g) => {
+    if (!g.parentGoalId) return map;
+    const key = String(g.parentGoalId);
+    (map[key] ??= []).push(g);
+    return map;
+  }, {});
+  const freeStanding = goals.filter(g => g.type !== 'meta' && !g.parentGoalId);
+  const periodic = freeStanding.filter(g => !g.type.startsWith('long-term'));
+  const longTerm = freeStanding.filter(g => g.type.startsWith('long-term'));
+
+  const goalActions = (g) => (
+    <>
+      <IconButton icon={Pencil} label="Bearbeiten" tone="brand" size={15} onClick={() => setEditGoal(g)} />
+      <IconButton icon={Trash2} label="Löschen" tone="danger" size={15} onClick={() => handleDelete(g._id)} />
+    </>
+  );
 
   const GROUP_STYLES = {
     olive: { text: 'text-lime-700', dot: 'bg-lime-600' },
@@ -2117,12 +2174,9 @@ export default function Goals() {
           <GoalProgress
             key={g._id}
             goal={g}
-            actions={
-              <>
-                <IconButton icon={Pencil} label="Bearbeiten" tone="brand" size={15} onClick={() => setEditGoal(g)} />
-                <IconButton icon={Trash2} label="Löschen" tone="danger" size={15} onClick={() => handleDelete(g._id)} />
-              </>
-            }
+            actions={goalActions(g)}
+            childGoals={childrenByParent[String(g._id)] || []}
+            childActions={goalActions}
           />
         ))}
       </div>

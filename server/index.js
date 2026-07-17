@@ -99,27 +99,10 @@ if (process.env.NODE_ENV === 'production') {
 }
 
 // Seeding
-
-async function seedPredefinedData() {
-  const HabitDefinition = require('./models/HabitDefinition');
-  const habits = [
-    { name: 'Screen Time', unitSymbol: 'h', type: 'duration' },
-    { name: 'Kreatin', unitSymbol: 'g', type: 'amount' },
-    { name: 'Zigaretten', unitSymbol: 'Stück', type: 'amount' },
-    { name: 'Wasser', unitSymbol: 'ml', type: 'amount' },
-    { name: 'Schlaf', unitSymbol: 'h', type: 'duration' },
-    { name: 'Meditation', unitSymbol: 'min', type: 'duration' },
-    { name: 'Koffein', unitSymbol: 'mg', type: 'amount' },
-    { name: 'Alkohol', unitSymbol: 'Gläser', type: 'amount' },
-  ];
-  for (const h of habits) {
-    await HabitDefinition.findOneAndUpdate(
-      { name: h.name, userId: null },
-      { ...h, userId: null, isPredefined: true },
-      { upsert: true }
-    );
-  }
-}
+//
+// Habits are no longer seeded as shared global documents: migration 004 moved
+// the library into user ownership and onboarding offers a static catalog
+// (GET /api/habits/catalog) whose entries become personal copies on adoption.
 
 async function seedAdminUser() {
   const User = require('./models/User');
@@ -161,7 +144,6 @@ async function connectAndInit() {
   await runMigrations({ exitOnFailure: false });
   await appConfig.loadAll();
   await seedAdminUser();
-  await seedPredefinedData();
 }
 
 // Error codes from the migration runner that mean "DB reachable, but the
@@ -228,7 +210,6 @@ serverState.reconnect = async () => {
     // Already connected – just reload config and seeds.
     await appConfig.loadAll();
     await seedAdminUser();
-    await seedPredefinedData();
     serverState.setupMode = false;
     return;
   }

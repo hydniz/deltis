@@ -18,7 +18,12 @@ const habitDefinitionSchema = new mongoose.Schema({
   nameHistory: [nameHistorySchema],
   unitSymbol: { type: String, required: true },
   type: { type: String, enum: ['duration', 'amount', 'boolean'], default: 'amount' },
+  // Legacy flag from the global-library era (migration 004 moved every habit
+  // into user ownership); kept so old exports stay importable.
   isPredefined: { type: Boolean, default: false },
+  // Soft delete: deleted habits keep their logs/plans resolvable forever and
+  // land in the trash section of the manage modal, restorable at any time.
+  deletedAt: { type: Date, default: null },
   createdAt: { type: Date, default: Date.now }
 });
 

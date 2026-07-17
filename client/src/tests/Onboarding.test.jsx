@@ -16,10 +16,10 @@ afterEach(() => {
 });
 afterAll(() => server.close());
 
-const PREDEFINED_HABITS = [
-  { _id: 'h1', name: 'Wasser', unitSymbol: 'ml', type: 'amount', isPredefined: true, selected: true },
-  { _id: 'h2', name: 'Schlaf', unitSymbol: 'h', type: 'duration', isPredefined: true, selected: true },
-  { _id: 'h3', name: 'Eigene', unitSymbol: 'x', type: 'amount', isPredefined: false, selected: true },
+// Catalog templates: picking one creates a personal habit definition.
+const HABIT_CATALOG = [
+  { name: 'Wasser', unitSymbol: 'ml', type: 'amount' },
+  { name: 'Schlaf', unitSymbol: 'h', type: 'duration' },
 ];
 
 const TYPE_DEFAULTS = [
@@ -44,7 +44,7 @@ function renderOnboarding(userOverride = {}) {
   };
   server.use(
     http.get('/api/auth/me', () => HttpResponse.json(user)),
-    http.get('/api/habits/definitions', () => HttpResponse.json(PREDEFINED_HABITS)),
+    http.get('/api/habits/catalog', () => HttpResponse.json(HABIT_CATALOG)),
     http.get('/api/activity-types/defaults', () => HttpResponse.json(TYPE_DEFAULTS)),
   );
   localStorage.setItem('auth_token', 'valid-token');
@@ -71,11 +71,10 @@ describe('Onboarding – Anzeige & Resume', () => {
     expect(screen.getByText('Schritt 3 von 5')).toBeInTheDocument();
   });
 
-  it('lists only predefined habits in the habit step', async () => {
+  it('lists the habit catalog in the habit step', async () => {
     renderOnboarding({ onboardingStep: 2 });
     expect(await screen.findByText('Wasser')).toBeInTheDocument();
     expect(screen.getByText('Schlaf')).toBeInTheDocument();
-    expect(screen.queryByText('Eigene')).not.toBeInTheDocument();
   });
 
   it('preselects no habits – the user opts in', async () => {
@@ -125,9 +124,15 @@ describe('Onboarding – Schritte & Speichern', () => {
     expect(await screen.findByText('Dein Profil')).toBeInTheDocument();
   });
 
-  it('saves only the opted-in habits', async () => {
+  it('creates personal habits for the picked catalog entries and selects them', async () => {
     let savedSelection = null;
+    const postedDefs = [];
     server.use(
+      http.post('/api/habits/definitions', async ({ request }) => {
+        const body = await request.json();
+        postedDefs.push(body);
+        return HttpResponse.json({ _id: `new-${postedDefs.length}`, ...body }, { status: 201 });
+      }),
       http.put('/api/habits/selection', async ({ request }) => {
         savedSelection = (await request.json()).selectedIds;
         return HttpResponse.json({ success: true });
@@ -145,18 +150,21 @@ describe('Onboarding – Schritte & Speichern', () => {
     await user.click(await screen.findByText('Wasser'));
     await user.click(screen.getByRole('button', { name: 'Weiter' }));
 
-    await waitFor(() => expect(savedSelection).toEqual(['h1']));
+    await waitFor(() => expect(savedSelection).toEqual(['new-1']));
+    expect(postedDefs).toEqual([{ name: 'Wasser', unitSymbol: 'ml', type: 'amount' }]);
   });
 
-  it('saves an empty habit selection when nothing is opted in', async () => {
-    let savedSelection = null;
+  it('creates nothing when no catalog entry is picked', async () => {
+    let savedStep = null;
+    const postedDefs = [];
     server.use(
-      http.put('/api/habits/selection', async ({ request }) => {
-        savedSelection = (await request.json()).selectedIds;
-        return HttpResponse.json({ success: true });
+      http.post('/api/habits/definitions', async ({ request }) => {
+        postedDefs.push(await request.json());
+        return HttpResponse.json({ _id: 'x' }, { status: 201 });
       }),
       http.put('/api/auth/me/onboarding', async ({ request }) => {
         const body = await request.json();
+        savedStep = body.step;
         return HttpResponse.json({
           ...mockUser, onboardingPending: true, onboardingStep: body.step,
         });
@@ -168,7 +176,8 @@ describe('Onboarding – Schritte & Speichern', () => {
     await screen.findByText('Wasser');
     await user.click(screen.getByRole('button', { name: 'Weiter' }));
 
-    await waitFor(() => expect(savedSelection).toEqual([]));
+    await waitFor(() => expect(savedStep).toBe(3));
+    expect(postedDefs).toEqual([]);
   });
 
   it('saves only the opted-in activity types', async () => {

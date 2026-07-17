@@ -84,8 +84,10 @@ export default function Onboarding() {
   const [weightUnit, setWeightUnit] = useState(user?.weightUnit || 'kg');
   const [weight, setWeight] = useState('');
 
-  // Step 2 – predefined habits (opt-in: none preselected)
-  const [habitDefs, setHabitDefs] = useState(null);
+  // Step 2 – habit catalog (opt-in: none preselected). The catalog holds
+  // suggestion templates; picking one creates a personal habit — only the
+  // habits chosen here will exist afterwards.
+  const [habitCatalog, setHabitCatalog] = useState(null);
   const [selectedHabits, setSelectedHabits] = useState(new Set());
 
   // Step 3 – predefined activity types (opt-in: none preselected)
@@ -93,9 +95,9 @@ export default function Onboarding() {
   const [selectedTypes, setSelectedTypes] = useState(new Set());
 
   useEffect(() => {
-    api.get('/habits/definitions').then(res => {
-      setHabitDefs(res.data.filter(d => d.isPredefined));
-    }).catch(() => setHabitDefs([]));
+    api.get('/habits/catalog').then(res => {
+      setHabitCatalog(res.data);
+    }).catch(() => setHabitCatalog([]));
 
     api.get('/activity-types/defaults').then(res => {
       setTypeDefaults(res.data);
@@ -129,7 +131,21 @@ export default function Onboarding() {
         }
       }
       if (step === 2) {
-        await api.put('/habits/selection', { selectedIds: [...selectedHabits] });
+        // Chosen catalog entries become personal habit definitions.
+        const chosen = (habitCatalog || []).filter(h => selectedHabits.has(h.name));
+        const created = [];
+        for (const h of chosen) {
+          const res = await api.post('/habits/definitions', h);
+          created.push(res.data._id);
+        }
+        if (created.length > 0) {
+          await api.put('/habits/selection', { selectedIds: created });
+        }
+        // Don't create the same habits again if the user navigates back here.
+        if (chosen.length > 0) {
+          setHabitCatalog(cat => cat.filter(h => !selectedHabits.has(h.name)));
+          setSelectedHabits(new Set());
+        }
       }
       if (step === 3) {
         await api.post('/activity-types/setup', { labels: [...selectedTypes] });
@@ -280,20 +296,25 @@ export default function Onboarding() {
                   text="Welche davon möchtest du täglich tracken? Wähle aus, was du brauchst — eigene kannst du später anlegen."
                 />
                 <div className="grid sm:grid-cols-2 gap-2 max-h-72 overflow-y-auto pr-0.5">
-                  {habitDefs === null && <p className="text-sm text-ink-400 col-span-2 text-center py-6">Lade…</p>}
-                  {habitDefs?.map((d, i) => (
+                  {habitCatalog === null && <p className="text-sm text-ink-400 col-span-2 text-center py-6">Lade…</p>}
+                  {habitCatalog?.map((d, i) => (
                     <PickCard
-                      key={d._id}
+                      key={d.name}
                       title={d.name}
                       subtitle={`in ${d.unitSymbol}`}
-                      selected={selectedHabits.has(d._id)}
-                      onToggle={() => toggleHabit(d._id)}
+                      selected={selectedHabits.has(d.name)}
+                      onToggle={() => toggleHabit(d.name)}
                       delay={i * 55}
                     />
                   ))}
+                  {habitCatalog?.length === 0 && (
+                    <p className="text-sm text-ink-400 col-span-2 text-center py-6">
+                      Alles Wichtige hast du schon – eigene Gewohnheiten kannst du jederzeit anlegen.
+                    </p>
+                  )}
                 </div>
                 <p className="text-xs text-ink-400 mt-3 text-center">
-                  {selectedHabits.size} von {habitDefs?.length ?? 0} ausgewählt
+                  {selectedHabits.size} von {habitCatalog?.length ?? 0} ausgewählt
                 </p>
               </>
             )}
