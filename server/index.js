@@ -245,6 +245,10 @@ async function start() {
     await connectAndInit();
     serverState.setupMode = false;
     console.log('✓ MongoDB connected');
+    // Loud log alert when a ransom bot has wiped this database — the operator
+    // must restore a backup instead of re-initializing (see securityCheck.js).
+    const { warnIfDatabaseCompromised } = require('./utils/securityCheck');
+    await warnIfDatabaseCompromised(mongoose.connection);
   } catch (err) {
     bootError = err;
     if (MIGRATION_ERROR_CODES.has(err.code)) {
