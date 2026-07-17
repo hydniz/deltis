@@ -12,7 +12,19 @@ services:
     volumes:
       - mongo_data:/data/db
     ports:
-      - "${MONGO_PORT:-27017}:27017"
+      # SECURITY: bound to localhost by default. Docker-published ports bypass
+      # host firewalls (ufw), and an internet-reachable, unauthenticated
+      # MongoDB WILL be found and wiped by ransom bots. The app reaches mongo
+      # over the internal compose network; backup.sh/restore.sh use `docker
+      # exec` — nothing needs this port from outside the host. Only override
+      # MONGO_BIND if you fully understand the exposure.
+      - "${MONGO_BIND:-127.0.0.1}:${MONGO_PORT:-27017}:27017"
+    environment:
+      # Optional root credentials — only applied when BOTH are set AND the
+      # data volume is empty (first initialization). See docs/DEPLOYMENT.md
+      # "Securing MongoDB" for enabling auth on an existing instance.
+      MONGO_INITDB_ROOT_USERNAME: ${MONGO_ROOT_USER:-}
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_ROOT_PASSWORD:-}
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "mongosh", "--quiet", "--eval", "db.runCommand('ping').ok"]
@@ -44,7 +56,9 @@ services:
       NODE_ENV: production
       # Override MONGODB_URI from .env.production – inside the container
       # MongoDB is reachable via the service name 'mongo', not localhost.
-      MONGODB_URI: mongodb://mongo:27017/deltis
+      # With mongo auth enabled, set DELTIS_MONGODB_URI in .env to
+      # mongodb://USER:PASSWORD@mongo:27017/deltis?authSource=admin
+      MONGODB_URI: ${DELTIS_MONGODB_URI:-mongodb://mongo:27017/deltis}
     depends_on:
       mongo:
         condition: service_healthy

@@ -198,3 +198,78 @@ image rollback is enough and keeps all data written since the deploy.
 
 Independent of deploys, `./backup.sh` and `./restore.sh` continue to work per
 instance (they read `DELTIS_INSTANCE` from the same `.env`).
+
+## Securing MongoDB
+
+**Never expose the MongoDB port to the internet.** Docker-published ports
+bypass host firewalls like ufw (Docker writes its own iptables NAT rules), and
+an internet-reachable mongod without authentication is found by automated
+ransom bots within hours. They drop every database and leave a marker like
+`READ_ME_TO_RECOVER_YOUR_DATA` behind — the data is NOT copied, it is simply
+destroyed. This happened to a Deltis production instance on 2026-07-17.
+
+Since that incident the compose file binds the port to localhost by default:
+
+```yaml
+ports:
+  - "${MONGO_BIND:-127.0.0.1}:${MONGO_PORT:-27017}:27017"
+```
+
+Nothing in Deltis needs the published port: the app reaches mongo over the
+internal compose network, and `backup.sh` / `restore.sh` /
+`scripts/deploy-remote.sh` all go through `docker exec`. If you do not need
+host-local `mongosh` access you can remove the `ports:` block entirely.
+Only set `MONGO_BIND=0.0.0.0` if you really know what you are doing.
+
+### Checklist per instance
+
+```bash
+# 1. Is the port reachable from outside? (run on ANOTHER machine)
+nc -zv <server-ip> 27017 27018 27019
+
+# 2. What does the host actually publish?
+sudo docker ps --format '{{.Names}}\t{{.Ports}}' | grep mongo
+# GOOD:  127.0.0.1:27017->27017/tcp
+# BAD:   0.0.0.0:27017->27017/tcp
+
+# 3. Has a ransom bot already been here?
+sudo docker exec <instance>-mongo mongosh --quiet --eval 'db.getMongo().getDBNames()'
+```
+
+The server also checks this at startup and logs a loud `SECURITY ALERT` when
+a ransom marker database is present (`server/utils/securityCheck.js`).
+
+### Optional: enable authentication (defense in depth)
+
+On a **fresh** instance set both variables in the instance `.env` before the
+first start — the official mongo image only creates the root user while the
+data volume is empty:
+
+```bash
+MONGO_ROOT_USER=deltis
+MONGO_ROOT_PASSWORD=<long random secret>
+DELTIS_MONGODB_URI=mongodb://deltis:<long random secret>@mongo:27017/deltis?authSource=admin
+```
+
+On an **existing** instance create the user manually once, then set the same
+`.env` values and recreate the containers:
+
+```bash
+sudo docker exec -it <instance>-mongo mongosh admin --eval \
+  'db.createUser({ user: "deltis", pwd: "<long random secret>", roles: [ { role: "root", db: "admin" } ] })'
+```
+
+### Ransom incident response (READ_ME_TO_RECOVER_YOUR_DATA present)
+
+1. **Do not pay. Do not run the /init wizard.** The wizard warns when backups
+   exist for exactly this situation.
+2. Close the hole FIRST (localhost binding as above, `docker compose up -d`),
+   otherwise the bot wipes the restored data again within hours.
+3. Restore the newest backup: `./restore.sh` lists EJSON snapshots
+   (`backups/pre-migration/`, `backups/pre-update/`) and mongodump archives
+   (pre-deploy). Pending migrations re-run automatically on the next boot.
+4. Check the other instances on the same host (beta, manual) for the marker
+   and restore them the same way.
+5. Rotate application secrets that live in the database or could have been
+   read (JWT secret, Strava tokens); the password pepper lives in
+   `/etc/deltis/` on the host and is not part of the database.
