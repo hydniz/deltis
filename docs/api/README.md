@@ -20,6 +20,7 @@
 | Planner | [planner.md](planner.md) | `/api/planner` |
 | Weight | [weight.md](weight.md) | `/api/weight` |
 | Strava | [strava.md](strava.md) | `/api/strava` |
+| Training Types | [training-types.md](training-types.md) | `/api/training-types` |
 | Data (export/import) | [data.md](data.md) | `/api/data` |
 | Admin | [admin.md](admin.md) | `/api/admin` |
 

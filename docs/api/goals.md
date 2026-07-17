@@ -205,3 +205,38 @@ Supported metrics: `count`, `duration` (sum of moving time in minutes),
 `distance` (sum in km) — each over the set of matching activities.
 
 Full rule reference and examples: [strava.md](strava.md#strava-goals).
+
+---
+
+## Meta goals (Gesamtziele)
+
+Goals with `type: "meta"` bundle other goals: met when at least `targetValue`
+of their child goals are met (e.g. "Trainingswoche = 3 von 4 Zielen").
+
+- Create/update with `childGoalIds: [goalId, …]` — the server manages the
+  `parentGoalId` pointer on the children (a child has at most **one** parent;
+  a parent may have many children; meta goals cannot be children).
+- `targetRef`/`targetRefModel` are server-owned (`"meta"` / `"Goal"`).
+- Enrichment: meta goals carry `childGoals: [{_id, name}]`; children carry
+  `parentGoal: {_id, name}`.
+- `GET /:id/progress` returns a synthetic `subgoals` condition plus
+  `childResults: [{_id, name, met}]`.
+- Deleting a meta goal frees its children (`parentGoalId: null`).
+
+## `GET /api/goals/:id/items`
+
+The entries contributing to the goal's **current interval** — explains the
+progress value ("which Strava activities / logs / sub-goals count?").
+
+**Response `200`** — `{ "kind": "strava"|"activity"|"habit"|"meta", "start", "end", "entries": [...] }`
+
+Entry shapes: strava → normalized integration matches (name, sportType, date,
+movingTime, distance); activity → activity logs; habit → habit logs
+(date, value); meta → child results (name, met).
+
+## Training types on goals
+
+Strava goals may reference a saved training type instead of their own
+criteria tree: `trainingTypeId` (own types only, `404` otherwise). The type's
+per-integration criteria map then defines what counts; `targetName` becomes
+the type name. See [training-types.md](training-types.md).

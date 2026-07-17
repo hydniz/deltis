@@ -42,9 +42,15 @@ const goalSchema = new mongoose.Schema({
     // periodic-* = freely configurable interval
     // weekly-*   = legacy, treated as periodic with intervalValue=1, intervalUnit='week'
     // periodic-strava = counts synced Strava activities matching stravaCriteria
-    enum: ['periodic-activity', 'periodic-habit', 'periodic-strava', 'weekly-activity', 'weekly-habit', 'long-term-activity', 'long-term-habit'],
+    // meta = umbrella goal: met when >= targetValue of its child goals are met
+    enum: ['periodic-activity', 'periodic-habit', 'periodic-strava', 'weekly-activity', 'weekly-habit', 'long-term-activity', 'long-term-habit', 'meta'],
     required: true
   },
+
+  // Goal hierarchy: a child references its (single) parent meta goal; a meta
+  // goal finds its children via this pointer. Meta goals themselves never
+  // carry a parent (one level only — keeps evaluation cycle-free).
+  parentGoalId: { type: mongoose.Schema.Types.ObjectId, ref: 'Goal', default: null },
 
   // Interval for periodic goals (ignored for long-term goals)
   intervalValue: { type: Number, default: 1, min: 1 },
@@ -56,13 +62,14 @@ const goalSchema = new mongoose.Schema({
   targetRef: { type: mongoose.Schema.Types.Mixed, required: true },
 
   // Determines which model targetRef points to.
-  // Current values: 'ActivityType' | 'HabitDefinition' | 'StravaActivity'
+  // Current values: 'ActivityType' | 'HabitDefinition' | 'StravaActivity' | 'Goal'
   // Legacy values: 'activity' | 'habit' (still supported)
   // For 'StravaActivity' targetRef holds the fixed string 'strava' — the
-  // matching set is defined by stravaCriteria, not by a referenced document.
+  // matching set is defined by stravaCriteria/trainingTypeId, not by a
+  // referenced document. Meta goals use 'Goal' with targetRef 'meta'.
   targetRefModel: {
     type: String,
-    enum: ['ActivityType', 'HabitDefinition', 'StravaActivity', 'activity', 'habit'],
+    enum: ['ActivityType', 'HabitDefinition', 'StravaActivity', 'Goal', 'activity', 'habit'],
     required: true
   },
 
@@ -70,6 +77,10 @@ const goalSchema = new mongoose.Schema({
   // rule schema). Mixed on purpose: the rule set is designed to grow without
   // schema migrations; writes are validated by the criteria engine.
   stravaCriteria: { type: mongoose.Schema.Types.Mixed, default: null },
+
+  // Alternative to stravaCriteria: reference a saved training type whose
+  // per-integration criteria map defines what counts.
+  trainingTypeId: { type: mongoose.Schema.Types.ObjectId, ref: 'TrainingType', default: null },
 
   // Legacy single-condition fields (backward compat)
   condition: { type: String, enum: ['min', 'max', 'exact'], required: true },

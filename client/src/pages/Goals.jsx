@@ -5,6 +5,7 @@ import { format, parseISO } from 'date-fns';
 import { de } from 'date-fns/locale';
 import {
   Plus, Target, Trash2, X, Dumbbell, Sparkles, AlertTriangle, Check, Clock, Pencil, Activity,
+  Layers, ChevronDown, ChevronUp, CornerDownRight,
 } from 'lucide-react';
 import {
   ResponsiveContainer, LineChart, Line, XAxis, YAxis,
@@ -49,6 +50,7 @@ function intervalTargetLabel(value, unit) {
 }
 
 function metricLabel(metric, customFields = []) {
+  if (metric === 'subgoals') return 'Erfüllte Unterziele';
   if (!metric || metric === 'count') return 'Anzahl';
   if (metric === 'distance') return 'Distanz';
   if (metric === 'duration') return 'Dauer';
@@ -76,6 +78,100 @@ const CONDITION_OPTIONS = [
   { value: 'exact', label: 'Genau' },
 ];
 
+const STRAVA_ORANGE = '#FC4C02';
+
+// Collapsible "Was zählt dazu?" breakdown: the entries contributing to the
+// goal's current interval, loaded lazily from /goals/:id/items.
+function GoalItemsBreakdown({ goalId }) {
+  const [open, setOpen] = useState(false);
+  const [items, setItems] = useState(null);
+
+  const toggle = () => {
+    if (!open && items === null) {
+      api.get(`/goals/${goalId}/items`)
+        .then(r => setItems(r.data))
+        .catch(() => setItems({ kind: 'error', entries: [] }));
+    }
+    setOpen(v => !v);
+  };
+
+  const renderEntry = (entry, i) => {
+    if (items.kind === 'strava') {
+      return (
+        <li key={i} className="flex items-center gap-2 text-xs">
+          <Activity size={11} style={{ color: STRAVA_ORANGE }} className="flex-shrink-0" />
+          <span className="text-ink-700 font-medium truncate">{entry.name}</span>
+          <span className="text-ink-400 whitespace-nowrap ml-auto">
+            {format(parseISO(entry.date), 'd. MMM', { locale: de })}
+            {entry.movingTime ? ` · ${Math.round(entry.movingTime / 60)} min` : ''}
+            {entry.distance ? ` · ${(entry.distance / 1000).toFixed(1)} km` : ''}
+          </span>
+        </li>
+      );
+    }
+    if (items.kind === 'activity') {
+      return (
+        <li key={i} className="flex items-center gap-2 text-xs">
+          <Dumbbell size={11} className="text-brand-500 flex-shrink-0" />
+          <span className="text-ink-700 font-medium truncate">{entry.name}</span>
+          <span className="text-ink-400 whitespace-nowrap ml-auto">
+            {format(parseISO(entry.date), 'd. MMM', { locale: de })}
+            {entry.duration ? ` · ${entry.duration} min` : ''}
+            {entry.distance ? ` · ${entry.distance} km` : ''}
+          </span>
+        </li>
+      );
+    }
+    if (items.kind === 'habit') {
+      return (
+        <li key={i} className="flex items-center gap-2 text-xs">
+          <Sparkles size={11} className="text-sage-500 flex-shrink-0" />
+          <span className="text-ink-700 font-medium">{format(parseISO(entry.date), 'EEEE, d. MMM', { locale: de })}</span>
+          <span className="text-ink-400 ml-auto">{entry.value}</span>
+        </li>
+      );
+    }
+    if (items.kind === 'meta') {
+      return (
+        <li key={i} className="flex items-center gap-2 text-xs">
+          {entry.met
+            ? <Check size={11} className="text-emerald-600 flex-shrink-0" />
+            : <X size={11} className="text-red-500 flex-shrink-0" />}
+          <span className="text-ink-700 font-medium truncate">{entry.name}</span>
+          <span className={`ml-auto font-semibold ${entry.met ? 'text-emerald-600' : 'text-ink-400'}`}>
+            {entry.met ? 'Erfüllt' : 'Offen'}
+          </span>
+        </li>
+      );
+    }
+    return null;
+  };
+
+  return (
+    <div className="mt-3 pt-3 border-t hairline">
+      <button
+        type="button"
+        onClick={toggle}
+        className="text-xs font-semibold text-brand-600 hover:text-brand-700 flex items-center gap-1"
+      >
+        {open ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
+        Was zählt dazu?
+      </button>
+      {open && (
+        <div className="mt-2">
+          {items === null ? (
+            <p className="text-xs text-ink-300">Lade…</p>
+          ) : items.entries.length === 0 ? (
+            <p className="text-xs text-ink-400">Noch keine Einträge in diesem Zeitraum.</p>
+          ) : (
+            <ul className="space-y-1.5">{items.entries.map(renderEntry)}</ul>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // Single goal progress display
 // `actions` (edit/delete buttons) render inside the header row so they never
 // overlap the chips on narrow screens.
@@ -89,10 +185,11 @@ function GoalProgress({ goal, actions }) {
     api.get(`/goals/${goal._id}/progress`).then(r => setProgress(r.data)).catch(() => {});
   }, [goal._id]);
 
-  const { conditions: condResults, conditionOperator: condOp, met: goalMet, weeklyData, stepResults = [] } = progress || {};
+  const { conditions: condResults, conditionOperator: condOp, met: goalMet, weeklyData, stepResults = [], childResults = [] } = progress || {};
   const isLongTerm = goal.type.startsWith('long-term');
   const isHabit = goal.targetRefModel === 'HabitDefinition' || goal.targetRefModel === 'habit';
   const isStrava = goal.targetRefModel === 'StravaActivity';
+  const isMeta = goal.type === 'meta';
   const iv = goal.intervalValue || 1;
   const iu = goal.intervalUnit || 'week';
   const customFields = goal.customFields || [];
@@ -161,12 +258,21 @@ function GoalProgress({ goal, actions }) {
         <div className="flex-1 min-w-0">
           <h3 className="display text-lg leading-snug">{goal.name}</h3>
           <div className="flex items-center gap-1.5 flex-wrap mt-1.5">
-            <Chip variant="soft" color={isLongTerm ? 'amber' : 'olive'}>
-              {isLongTerm ? 'Langfristig' : intervalBadgeLabel(iv, iu)}
-            </Chip>
-            <Chip variant="soft" color={isHabit ? 'sage' : 'clay'} icon={isHabit ? Sparkles : isStrava ? Activity : Dumbbell}>
-              {isHabit ? 'Gewohnheit' : isStrava ? 'Strava' : 'Aktivität'}
-            </Chip>
+            {isMeta ? (
+              <Chip variant="soft" color="amber" icon={Layers}>Gesamtziel</Chip>
+            ) : (<>
+              <Chip variant="soft" color={isLongTerm ? 'amber' : 'olive'}>
+                {isLongTerm ? 'Langfristig' : intervalBadgeLabel(iv, iu)}
+              </Chip>
+              <Chip variant="soft" color={isHabit ? 'sage' : 'clay'} icon={isHabit ? Sparkles : isStrava ? Activity : Dumbbell}>
+                {isHabit ? 'Gewohnheit' : isStrava ? 'Strava' : 'Aktivität'}
+              </Chip>
+            </>)}
+            {goal.parentGoal && (
+              <Chip variant="soft" color="stone" icon={CornerDownRight}>
+                Teil von: {goal.parentGoal.name}
+              </Chip>
+            )}
           </div>
           {goal.description && <p className="text-xs text-ink-400 mt-1.5">{goal.description}</p>}
           {goal.metricWarnings?.length > 0 && (
@@ -221,6 +327,26 @@ function GoalProgress({ goal, actions }) {
               Gesamtziel: {goalMet ? 'Erfüllt' : 'Nicht erfüllt'}
             </div>
           )}
+        </div>
+      )}
+
+      {/* Meta goals: per-child status */}
+      {isMeta && childResults.length > 0 && (
+        <div className="mb-3 space-y-1.5">
+          <div className="text-[11px] text-ink-400 uppercase tracking-[0.09em] font-semibold">Unterziele</div>
+          {childResults.map(child => (
+            <div key={child._id} className="flex items-center gap-2 text-xs">
+              {child.met
+                ? <Check size={12} className="text-emerald-600 flex-shrink-0" />
+                : <Clock size={12} className="text-ink-300 flex-shrink-0" />}
+              <span className={`font-medium truncate ${child.met ? 'text-emerald-700' : 'text-ink-600'}`}>
+                {child.name}
+              </span>
+              <span className={`ml-auto font-semibold whitespace-nowrap ${child.met ? 'text-emerald-600' : 'text-ink-400'}`}>
+                {child.met ? 'Erfüllt' : 'Offen'}
+              </span>
+            </div>
+          ))}
         </div>
       )}
 
@@ -318,6 +444,9 @@ function GoalProgress({ goal, actions }) {
           )}
         </>
       )}
+
+      {/* Contribution breakdown — why does this goal have this progress? */}
+      <GoalItemsBreakdown goalId={goal._id} />
     </div>
   );
 }
@@ -450,11 +579,12 @@ function ActivityFilterEditor({ filters, filterFields, onAdd, onUpdate, onRemove
 
 // Goal creation wizard
 
-function CreateGoalModal({ activityTypes, habits, strava, onSave, onClose, onTargetsChanged }) {
+function CreateGoalModal({ activityTypes, habits, strava, existingGoals = [], trainingTypes = [], onSave, onClose, onTargetsChanged }) {
   const [form, setForm] = useState({
     name: '',
     description: '',
     isLongTerm: false,
+    isMeta: false,
     targetCategory: 'activity',
     intervalValue: 1,
     intervalUnit: 'week',
@@ -465,10 +595,18 @@ function CreateGoalModal({ activityTypes, habits, strava, onSave, onClose, onTar
     startDate: new Date().toISOString().slice(0, 10),
     endDate: '',
     stravaCriteria: null,
+    trainingTypeId: '',
   });
   const [steps, setSteps] = useState([]);
   const [saving, setSaving] = useState(false);
   const [currentStep, setCurrentStep] = useState(1);
+  // Strava goals: saved training type vs ad-hoc criteria
+  const [stravaMode, setStravaMode] = useState('custom'); // 'custom' | 'type'
+  // Meta goals: child selection + threshold
+  const [metaChildIds, setMetaChildIds] = useState([]);
+  const [metaTargetValue, setMetaTargetValue] = useState('');
+  // Eligible children: regular goals without another parent
+  const eligibleChildren = existingGoals.filter(g => g.type !== 'meta' && !g.parentGoal);
 
   // Inline creation of missing targets — the goal wizard stays mounted with
   // all its state, and the freshly created item is selected on return.
@@ -553,6 +691,20 @@ function CreateGoalModal({ activityTypes, habits, strava, onSave, onClose, onTar
       handleCategoryChange('activity');
     }
     set('isLongTerm', isLongTerm);
+  };
+
+  // Zielart: periodisch | langfristig | Gesamtziel (meta)
+  const handleZielartChange = (zielart) => {
+    if (zielart === 'meta') {
+      setForm(f => ({ ...f, isMeta: true, isLongTerm: false }));
+      return;
+    }
+    setForm(f => ({ ...f, isMeta: false }));
+    handleLongTermChange(zielart === 'longterm');
+  };
+
+  const toggleMetaChild = (id) => {
+    setMetaChildIds(prev => prev.includes(id) ? prev.filter(v => v !== id) : [...prev, id]);
   };
 
   const handleRefChange = (ref) => {
@@ -683,6 +835,25 @@ function CreateGoalModal({ activityTypes, habits, strava, onSave, onClose, onTar
   const removeStep = (i) => setSteps(s => s.filter((_, idx) => idx !== i));
 
   const handleSubmit = async () => {
+    if (form.isMeta) {
+      setSaving(true);
+      try {
+        await api.post('/goals', {
+          name: form.name,
+          description: form.description || undefined,
+          type: 'meta',
+          targetValue: +metaTargetValue,
+          childGoalIds: metaChildIds,
+        });
+        onSave();
+      } catch (err) {
+        alert('Fehler: ' + (err.response?.data?.error || err.message));
+      } finally {
+        setSaving(false);
+      }
+      return;
+    }
+
     if (!form.targetRef) return;
     setSaving(true);
 
@@ -702,7 +873,8 @@ function CreateGoalModal({ activityTypes, habits, strava, onSave, onClose, onTar
         type: goalType,
         targetRef: form.targetRef,
         targetRefModel: form.targetRefModel,
-        stravaCriteria: isStravaGoal ? normalizeCriteria(form.stravaCriteria) : undefined,
+        stravaCriteria: isStravaGoal && stravaMode !== 'type' ? normalizeCriteria(form.stravaCriteria) : undefined,
+        trainingTypeId: isStravaGoal && stravaMode === 'type' ? form.trainingTypeId : undefined,
         conditionOperator: form.conditionOperator,
         conditions: validConditions.map(c => ({ ...c, targetValue: +c.targetValue })),
         // Legacy fields from first condition for backward compat
@@ -728,7 +900,13 @@ function CreateGoalModal({ activityTypes, habits, strava, onSave, onClose, onTar
 
   const targetLabel = intervalTargetLabel(form.intervalValue, form.intervalUnit);
   const totalSteps = form.isLongTerm ? 3 : 2;
-  const stepTitles = ['Grundlagen', 'Was & Bedingungen', 'Meilensteine'];
+  const stepTitles = form.isMeta
+    ? ['Grundlagen', 'Unterziele']
+    : ['Grundlagen', 'Was & Bedingungen', 'Meilensteine'];
+
+  const metaTargetNum = +metaTargetValue;
+  const metaValid = form.name.trim() && metaChildIds.length > 0 &&
+    Number.isInteger(metaTargetNum) && metaTargetNum >= 1 && metaTargetNum <= metaChildIds.length;
 
   return (
     <>
@@ -761,7 +939,9 @@ function CreateGoalModal({ activityTypes, habits, strava, onSave, onClose, onTar
             <Button
               className="flex-1"
               loading={saving}
-              disabled={!form.name.trim() || !form.targetRef || !form.conditions.some(c => c.targetValue !== '')}
+              disabled={form.isMeta
+                ? !metaValid
+                : (!form.name.trim() || !form.targetRef || !form.conditions.some(c => c.targetValue !== ''))}
               onClick={handleSubmit}
             >
               Ziel erstellen
@@ -785,12 +965,12 @@ function CreateGoalModal({ activityTypes, habits, strava, onSave, onClose, onTar
 
           <div>
             <label className="label">Zielart</label>
-            <div className="grid grid-cols-2 gap-2">
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
               <button
                 type="button"
-                onClick={() => handleLongTermChange(false)}
+                onClick={() => handleZielartChange('periodic')}
                 className={`p-3.5 rounded-xl border text-left transition-colors ${
-                  !form.isLongTerm
+                  !form.isLongTerm && !form.isMeta
                     ? 'border-brand-400 bg-brand-50 text-ink-900'
                     : 'border-paper-200 bg-paper-50 text-ink-400 hover:text-ink-600'
                 }`}
@@ -800,7 +980,7 @@ function CreateGoalModal({ activityTypes, habits, strava, onSave, onClose, onTar
               </button>
               <button
                 type="button"
-                onClick={() => handleLongTermChange(true)}
+                onClick={() => handleZielartChange('longterm')}
                 className={`p-3.5 rounded-xl border text-left transition-colors ${
                   form.isLongTerm
                     ? 'border-ocher-400 bg-ocher-100/60 text-ink-900'
@@ -810,15 +990,29 @@ function CreateGoalModal({ activityTypes, habits, strava, onSave, onClose, onTar
                 <div className="font-semibold text-sm">Langfristig</div>
                 <div className="text-xs opacity-70 mt-0.5">Enddatum & Meilensteine</div>
               </button>
+              <button
+                type="button"
+                onClick={() => handleZielartChange('meta')}
+                className={`p-3.5 rounded-xl border text-left transition-colors ${
+                  form.isMeta
+                    ? 'border-ocher-400 bg-ocher-100/60 text-ink-900'
+                    : 'border-paper-200 bg-paper-50 text-ink-400 hover:text-ink-600'
+                }`}
+              >
+                <div className="flex items-center gap-1.5 font-semibold text-sm"><Layers size={13} /> Gesamtziel</div>
+                <div className="text-xs opacity-70 mt-0.5">Bündelt andere Ziele</div>
+              </button>
             </div>
             <p className="text-xs text-ink-400 mt-2">
-              {!form.isLongTerm
-                ? 'Läuft dauerhaft. Fortschritt wird pro Intervall gemessen.'
-                : 'Hat ein Enddatum. Ideal für Projekte & persönliche Rekorde.'}
+              {form.isMeta
+                ? 'Erfüllt, wenn genügend Unterziele erfüllt sind — z. B. „3 von 4 Zielen“.'
+                : !form.isLongTerm
+                  ? 'Läuft dauerhaft. Fortschritt wird pro Intervall gemessen.'
+                  : 'Hat ein Enddatum. Ideal für Projekte & persönliche Rekorde.'}
             </p>
           </div>
 
-          {!form.isLongTerm && (
+          {!form.isLongTerm && !form.isMeta && (
             <div className="panel p-4">
               <label className="label">Intervall</label>
               <div className="flex gap-2">
@@ -859,8 +1053,70 @@ function CreateGoalModal({ activityTypes, habits, strava, onSave, onClose, onTar
           </Field>
         </>)}
 
+        {/* Step 2 (meta): pick sub-goals + threshold */}
+        {currentStep === 2 && form.isMeta && (<>
+          <div>
+            <label className="label">Unterziele</label>
+            {eligibleChildren.length === 0 ? (
+              <p className="text-sm text-ink-400 border-2 border-dashed border-ink-200 rounded-2xl py-6 px-4 text-center">
+                Keine verfügbaren Ziele. Lege zuerst normale Ziele an — danach kannst du
+                sie hier zu einem Gesamtziel bündeln. (Ziele, die bereits zu einem anderen
+                Gesamtziel gehören, tauchen hier nicht auf.)
+              </p>
+            ) : (
+              <div className="space-y-2">
+                {eligibleChildren.map(g => {
+                  const selected = metaChildIds.includes(g._id);
+                  return (
+                    <button
+                      key={g._id}
+                      type="button"
+                      onClick={() => toggleMetaChild(g._id)}
+                      className={`w-full flex items-center gap-2.5 p-3 rounded-xl border text-left transition-colors ${
+                        selected
+                          ? 'border-brand-400 bg-brand-50'
+                          : 'border-paper-200 bg-paper-50 hover:border-ink-300'
+                      }`}
+                    >
+                      <span className={`w-5 h-5 rounded-md border-2 flex items-center justify-center flex-shrink-0 ${
+                        selected ? 'bg-brand-500 border-brand-500' : 'border-ink-200 bg-surface'
+                      }`}>
+                        {selected && <Check size={12} className="text-white" strokeWidth={3} />}
+                      </span>
+                      <span className="min-w-0">
+                        <span className="block text-sm font-medium text-ink-800 truncate">{g.name}</span>
+                        <span className="block text-xs text-ink-400">{g.targetName}</span>
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+
+          {metaChildIds.length > 0 && (
+            <Field
+              label="Erfüllt, wenn mindestens … Unterziele erfüllt sind"
+              hint={`z. B. ${Math.max(metaChildIds.length - 1, 1)} von ${metaChildIds.length}`}
+            >
+              <div className="flex items-center gap-2">
+                <Input
+                  type="number"
+                  className="!w-24"
+                  min="1"
+                  max={metaChildIds.length}
+                  value={metaTargetValue}
+                  onChange={e => setMetaTargetValue(e.target.value)}
+                  placeholder={String(metaChildIds.length)}
+                />
+                <span className="text-sm text-ink-500">von {metaChildIds.length} Unterzielen</span>
+              </div>
+            </Field>
+          )}
+        </>)}
+
         {/* Step 2: target & conditions */}
-        {currentStep === 2 && (<>
+        {currentStep === 2 && !form.isMeta && (<>
           <div>
             <label className="label">Kategorie</label>
             <div className={`grid grid-cols-2 gap-2 ${strava?.configured && !form.isLongTerm ? 'sm:grid-cols-3' : ''}`}>
@@ -915,11 +1171,39 @@ function CreateGoalModal({ activityTypes, habits, strava, onSave, onClose, onTar
                 </Link>
               </Alert>
             )}
-            <StravaCriteriaBuilder
-              criteria={form.stravaCriteria}
-              onChange={c => set('stravaCriteria', c)}
-              sportTypes={strava?.sportTypes || []}
-            />
+
+            {trainingTypes.length > 0 && (
+              <Field label="Was zählt als Training?">
+                <Segmented
+                  value={stravaMode}
+                  onChange={mode => {
+                    setStravaMode(mode);
+                    if (mode === 'type' && !form.trainingTypeId) set('trainingTypeId', trainingTypes[0]._id);
+                  }}
+                  options={[
+                    { value: 'custom', label: 'Eigene Kriterien' },
+                    { value: 'type', label: 'Trainingstyp' },
+                  ]}
+                />
+              </Field>
+            )}
+
+            {stravaMode === 'type' && trainingTypes.length > 0 ? (
+              <Field
+                label="Trainingstyp"
+                hint={criteriaSummary(trainingTypes.find(t => t._id === form.trainingTypeId)?.criteria?.strava)}
+              >
+                <Select value={form.trainingTypeId} onChange={e => set('trainingTypeId', e.target.value)}>
+                  {trainingTypes.map(t => <option key={t._id} value={t._id}>{t.name}</option>)}
+                </Select>
+              </Field>
+            ) : (
+              <StravaCriteriaBuilder
+                criteria={form.stravaCriteria}
+                onChange={c => set('stravaCriteria', c)}
+                sportTypes={strava?.sportTypes || []}
+              />
+            )}
           </>)}
 
           {!isStravaGoal && (
@@ -1166,13 +1450,134 @@ function CreateGoalModal({ activityTypes, habits, strava, onSave, onClose, onTar
   );
 }
 
+// Edit modal for meta goals (name, threshold, child set)
+
+function EditMetaGoalModal({ goal, allGoals, onSave, onClose }) {
+  const [name, setName] = useState(goal.name);
+  const [description, setDescription] = useState(goal.description || '');
+  const [childIds, setChildIds] = useState((goal.childGoals || []).map(c => String(c._id)));
+  const [targetValue, setTargetValue] = useState(String(goal.targetValue ?? ''));
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
+
+  // Eligible: regular goals that are free or already belong to this meta goal
+  const eligible = allGoals.filter(g =>
+    g.type !== 'meta' && (!g.parentGoal || String(g.parentGoal._id) === String(goal._id))
+  );
+
+  const toggleChild = (id) => {
+    setChildIds(prev => prev.includes(id) ? prev.filter(v => v !== id) : [...prev, id]);
+  };
+
+  const targetNum = +targetValue;
+  const valid = name.trim() && childIds.length > 0 &&
+    Number.isInteger(targetNum) && targetNum >= 1 && targetNum <= childIds.length;
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setSaving(true);
+    setError('');
+    try {
+      await api.put(`/goals/${goal._id}`, {
+        name,
+        description: description || undefined,
+        targetValue: targetNum,
+        childGoalIds: childIds,
+      });
+      onSave();
+    } catch (err) {
+      setError(err.response?.data?.error || 'Speichern fehlgeschlagen.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <Modal
+      onClose={onClose}
+      title="Gesamtziel bearbeiten"
+      subtitle={goal.name}
+      icon={Layers}
+      size="lg"
+      footer={
+        <>
+          <Button variant="secondary" className="flex-1" onClick={onClose}>Abbrechen</Button>
+          <Button type="submit" form="edit-meta-form" className="flex-1" loading={saving} disabled={!valid}>
+            Speichern
+          </Button>
+        </>
+      }
+    >
+      <form id="edit-meta-form" onSubmit={handleSubmit} className="space-y-4">
+        <Field label="Name">
+          <Input value={name} onChange={e => setName(e.target.value)} required />
+        </Field>
+        <Field label="Beschreibung" optional>
+          <Input value={description} onChange={e => setDescription(e.target.value)} />
+        </Field>
+
+        <div>
+          <label className="label">Unterziele</label>
+          <div className="space-y-2">
+            {eligible.map(g => {
+              const selected = childIds.includes(String(g._id));
+              return (
+                <button
+                  key={g._id}
+                  type="button"
+                  onClick={() => toggleChild(String(g._id))}
+                  className={`w-full flex items-center gap-2.5 p-3 rounded-xl border text-left transition-colors ${
+                    selected ? 'border-brand-400 bg-brand-50' : 'border-paper-200 bg-paper-50 hover:border-ink-300'
+                  }`}
+                >
+                  <span className={`w-5 h-5 rounded-md border-2 flex items-center justify-center flex-shrink-0 ${
+                    selected ? 'bg-brand-500 border-brand-500' : 'border-ink-200 bg-surface'
+                  }`}>
+                    {selected && <Check size={12} className="text-white" strokeWidth={3} />}
+                  </span>
+                  <span className="min-w-0">
+                    <span className="block text-sm font-medium text-ink-800 truncate">{g.name}</span>
+                    <span className="block text-xs text-ink-400">{g.targetName}</span>
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        {childIds.length > 0 && (
+          <Field label="Erfüllt, wenn mindestens … Unterziele erfüllt sind">
+            <div className="flex items-center gap-2">
+              <Input
+                type="number"
+                className="!w-24"
+                min="1"
+                max={childIds.length}
+                value={targetValue}
+                onChange={e => setTargetValue(e.target.value)}
+              />
+              <span className="text-sm text-ink-500">von {childIds.length} Unterzielen</span>
+            </div>
+          </Field>
+        )}
+
+        {error && <Alert tone="error">{error}</Alert>}
+      </form>
+    </Modal>
+  );
+}
+
 // Edit modal (periodic & long-term)
 
-function EditGoalModal({ goal, stravaSportTypes = [], onSave, onClose }) {
+function EditGoalModal({ goal, stravaSportTypes = [], trainingTypes = [], onSave, onClose }) {
   const isActivityGoal = goal.targetRefModel === 'ActivityType' || goal.targetRefModel === 'activity';
   const isStravaGoal = goal.targetRefModel === 'StravaActivity';
   const isLongTerm = goal.type.startsWith('long-term');
   const [stravaCriteria, setStravaCriteria] = useState(goal.stravaCriteria || emptyGroup());
+  const [stravaMode, setStravaMode] = useState(goal.trainingTypeId ? 'type' : 'custom');
+  const [editTrainingTypeId, setEditTrainingTypeId] = useState(
+    goal.trainingTypeId ? String(goal.trainingTypeId) : (trainingTypes[0]?._id || '')
+  );
 
   const getFilterableFieldsEdit = () => {
     const fields = [];
@@ -1303,7 +1708,9 @@ function EditGoalModal({ goal, stravaSportTypes = [], onSave, onClose }) {
         targetValue: fc ? +fc.targetValue : goal.targetValue,
         unitSymbol: fc?.unitSymbol || goal.unitSymbol,
         metric: fc?.metric || goal.metric,
-        ...(isStravaGoal ? { stravaCriteria: normalizeCriteria(stravaCriteria) } : {}),
+        ...(isStravaGoal ? (stravaMode === 'type' && editTrainingTypeId
+          ? { trainingTypeId: editTrainingTypeId, stravaCriteria: null }
+          : { trainingTypeId: null, stravaCriteria: normalizeCriteria(stravaCriteria) }) : {}),
       });
       onSave();
     } catch (err) {
@@ -1395,13 +1802,39 @@ function EditGoalModal({ goal, stravaSportTypes = [], onSave, onClose }) {
           {/* Conditions */}
           {editTab === 'conditions' && (
             <div className="space-y-3">
-              {isStravaGoal && (
-                <StravaCriteriaBuilder
-                  criteria={stravaCriteria}
-                  onChange={setStravaCriteria}
-                  sportTypes={stravaSportTypes}
-                />
-              )}
+              {isStravaGoal && (<>
+                {trainingTypes.length > 0 && (
+                  <Field label="Was zählt als Training?">
+                    <Segmented
+                      value={stravaMode}
+                      onChange={mode => {
+                        setStravaMode(mode);
+                        if (mode === 'type' && !editTrainingTypeId) setEditTrainingTypeId(trainingTypes[0]._id);
+                      }}
+                      options={[
+                        { value: 'custom', label: 'Eigene Kriterien' },
+                        { value: 'type', label: 'Trainingstyp' },
+                      ]}
+                    />
+                  </Field>
+                )}
+                {stravaMode === 'type' && trainingTypes.length > 0 ? (
+                  <Field
+                    label="Trainingstyp"
+                    hint={criteriaSummary(trainingTypes.find(t => t._id === editTrainingTypeId)?.criteria?.strava)}
+                  >
+                    <Select value={editTrainingTypeId} onChange={e => setEditTrainingTypeId(e.target.value)}>
+                      {trainingTypes.map(t => <option key={t._id} value={t._id}>{t.name}</option>)}
+                    </Select>
+                  </Field>
+                ) : (
+                  <StravaCriteriaBuilder
+                    criteria={stravaCriteria}
+                    onChange={setStravaCriteria}
+                    sportTypes={stravaSportTypes}
+                  />
+                )}
+              </>)}
               <div className="flex items-center justify-between">
                 <p className="text-xs text-ink-400">Was muss erfüllt sein, damit das Ziel gilt?</p>
                 <button
@@ -1605,6 +2038,7 @@ export default function Goals() {
   const [showCreate, setShowCreate] = useState(false);
   const [editGoal, setEditGoal] = useState(null);
   const [strava, setStrava] = useState({ configured: false, connected: false, sportTypes: [] });
+  const [trainingTypes, setTrainingTypes] = useState([]);
 
   // Strava availability decides whether the goal wizard offers the Strava
   // category — loaded separately so a failure never blocks the goals page.
@@ -1618,6 +2052,7 @@ export default function Goals() {
         setStrava({ configured: res.data.configured, connected: res.data.connected, sportTypes });
       })
       .catch(() => {});
+    api.get('/training-types').then(res => setTrainingTypes(res.data)).catch(() => {});
   }, []);
 
   const load = async () => {
@@ -1657,12 +2092,14 @@ export default function Goals() {
     load();
   };
 
-  const periodic = goals.filter(g => !g.type.startsWith('long-term'));
+  const metaGoals = goals.filter(g => g.type === 'meta');
+  const periodic = goals.filter(g => g.type !== 'meta' && !g.type.startsWith('long-term'));
   const longTerm = goals.filter(g => g.type.startsWith('long-term'));
 
   const GROUP_STYLES = {
     olive: { text: 'text-lime-700', dot: 'bg-lime-600' },
     amber: { text: 'text-ocher-600', dot: 'bg-ocher-400' },
+    brand: { text: 'text-brand-600', dot: 'bg-brand-500' },
   };
 
   const renderGoalGroup = (title, groupGoals, tone) => (
@@ -1718,6 +2155,7 @@ export default function Goals() {
         />
       ) : (
         <div className="space-y-8">
+          {metaGoals.length > 0 && renderGoalGroup('Gesamtziele', metaGoals, 'brand')}
           {periodic.length > 0 && renderGoalGroup('Periodische Ziele', periodic, 'olive')}
           {longTerm.length > 0 && renderGoalGroup('Langfristige Ziele', longTerm, 'amber')}
         </div>
@@ -1728,16 +2166,27 @@ export default function Goals() {
           activityTypes={activityTypes}
           habits={habits}
           strava={strava}
+          existingGoals={goals}
+          trainingTypes={trainingTypes}
           onSave={() => { setShowCreate(false); load(); }}
           onClose={() => setShowCreate(false)}
           onTargetsChanged={reloadTargets}
         />
       )}
 
-      {editGoal && (
+      {editGoal && editGoal.type === 'meta' && (
+        <EditMetaGoalModal
+          goal={editGoal}
+          allGoals={goals}
+          onSave={() => { setEditGoal(null); load(); }}
+          onClose={() => setEditGoal(null)}
+        />
+      )}
+      {editGoal && editGoal.type !== 'meta' && (
         <EditGoalModal
           goal={editGoal}
           stravaSportTypes={strava.sportTypes}
+          trainingTypes={trainingTypes}
           onSave={() => { setEditGoal(null); load(); }}
           onClose={() => setEditGoal(null)}
         />

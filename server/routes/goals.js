@@ -11,6 +11,8 @@ const ActivityType = require('../models/ActivityType');
 const HabitDefinition = require('../models/HabitDefinition');
 const StravaActivity = require('../models/StravaActivity');
 const stravaCriteria = require('../services/stravaCriteria');
+const TrainingType = require('../models/TrainingType');
+const trainingCriteria = require('../services/trainingCriteria');
 
 // ─Hilfsfunktionen
 
@@ -82,25 +84,34 @@ function buildActivityFilterMatch(activityFilters, isMax) {
   return match;
 }
 
-// Progress value for Strava goals: activities in the window are filtered by
-// the goal's criteria tree, then the metric aggregates over the matching set.
-// Evaluation happens in JS — HR-stream rules cannot run as a Mongo query.
-async function getStravaValueForMetric(metric, goal, userId, start, end, valueScope = 'total', aggregation = 'sum') {
-  const activities = await StravaActivity.find({
-    userId,
-    startDate: { $gte: start, $lte: end },
-  }).select('-detail').lean();
+// Resolves the criteria map for a Strava/training goal: a referenced training
+// type wins, otherwise the goal's own stravaCriteria tree (null tree = every
+// synced Strava activity). A dangling type reference matches nothing.
+async function resolveGoalCriteriaMap(goal, userId) {
+  if (goal.trainingTypeId) {
+    const type = await TrainingType.findOne({ _id: goal.trainingTypeId, userId }).lean();
+    return type ? (type.criteria || {}) : null;
+  }
+  return { strava: goal.stravaCriteria ?? null };
+}
 
-  const criteria = goal.stravaCriteria;
-  const matching = criteria
-    ? activities.filter(a => stravaCriteria.evaluateActivity(a, criteria))
-    : activities;
+// Matching activities (across integrations) for a Strava/training goal —
+// evaluation happens in JS: HR-stream rules cannot run as a Mongo query.
+async function getStravaMatches(goal, userId, start, end) {
+  const map = await resolveGoalCriteriaMap(goal, userId);
+  if (!map) return [];
+  return trainingCriteria.findMatches(userId, map, start, end);
+}
+
+// Progress value for Strava goals: the metric aggregates over the matches.
+async function getStravaValueForMetric(metric, goal, userId, start, end, valueScope = 'total', aggregation = 'sum') {
+  const matching = await getStravaMatches(goal, userId, start, end);
 
   if (!metric || metric === 'count') return matching.length;
 
-  const values = matching.map(a => {
-    if (metric === 'duration') return (a.movingTime || 0) / 60; // minutes
-    if (metric === 'distance') return (a.distance || 0) / 1000; // km
+  const values = matching.map(m => {
+    if (metric === 'duration') return (m.movingTime || 0) / 60; // minutes
+    if (metric === 'distance') return (m.distance || 0) / 1000; // km
     return 0;
   });
   if (values.length === 0) return 0;
@@ -221,10 +232,31 @@ function checkMetricValid(metric, customFields = []) {
 async function enrichGoal(goal, userId) {
   const obj = goal.toObject ? goal.toObject() : { ...goal };
 
+  // Child goals carry their parent's name so the hierarchy is visible.
+  if (obj.parentGoalId) {
+    const parent = await Goal.findOne({ _id: obj.parentGoalId, userId }).select('name').lean();
+    if (parent) obj.parentGoal = { _id: parent._id, name: parent.name };
+  }
+
+  // Meta goals list their children instead of a referenced document.
+  if (obj.type === 'meta') {
+    const children = await Goal.find({ userId, parentGoalId: obj._id, isActive: true })
+      .select('name').sort({ createdAt: 1 }).lean();
+    obj.targetName = 'Gesamtziel';
+    obj.customFields = [];
+    obj.childGoals = children.map(c => ({ _id: c._id, name: c.name }));
+    return obj;
+  }
+
   // Strava goals reference no document — the criteria tree defines the target.
   if (obj.targetRefModel === 'StravaActivity') {
     obj.targetName = 'Strava';
     obj.customFields = [];
+    if (obj.trainingTypeId) {
+      const type = await TrainingType.findOne({ _id: obj.trainingTypeId, userId }).select('name').lean();
+      obj.trainingTypeName = type?.name ?? null; // null = type was deleted
+      if (type) obj.targetName = type.name;
+    }
     return obj;
   }
 
@@ -274,24 +306,65 @@ router.get('/', auth, async (req, res) => {
   }
 });
 
-router.get('/:id/progress', auth, async (req, res) => {
-  try {
-    const goal = await Goal.findOne({ _id: req.params.id, userId: req.user._id });
-    if (!goal) return res.status(404).json({ error: 'Nicht gefunden' });
+// Current evaluation window of a goal (long-term: since start; periodic:
+// the running interval).
+function getGoalBounds(goal) {
+  if (goal.type.startsWith('long-term')) {
+    const start = goal.startDate ? new Date(goal.startDate) : new Date(0);
+    const end = new Date(); end.setHours(23, 59, 59, 999);
+    return { start, end };
+  }
+  return getIntervalBounds(goal.intervalValue || 1, goal.intervalUnit || 'week');
+}
 
-    const isLongTerm = goal.type.startsWith('long-term');
+// Meta goals: met when >= targetValue of the child goals are met. Children
+// are evaluated with their own intervals/criteria; they can never be meta
+// themselves (enforced on write), so the recursion is bounded.
+async function computeMetaProgress(goal, userId) {
+  const children = await Goal.find({ userId, parentGoalId: goal._id, isActive: true })
+    .sort({ createdAt: 1 });
 
-    let start, end;
-    if (isLongTerm) {
-      start = goal.startDate ? new Date(goal.startDate) : new Date(0);
-      end = new Date(); end.setHours(23, 59, 59, 999);
-    } else {
-      const iv = goal.intervalValue || 1;
-      const iu = goal.intervalUnit || 'week';
-      ({ start, end } = getIntervalBounds(iv, iu));
-    }
+  const childResults = [];
+  for (const child of children) {
+    const progress = await computeProgress(child, userId);
+    childResults.push({
+      _id: child._id,
+      name: child.name,
+      type: child.type,
+      targetRefModel: child.targetRefModel,
+      met: progress.met,
+    });
+  }
 
-    let condDefs;
+  const currentValue = childResults.filter(c => c.met).length;
+  const met = checkConditionMet(goal.condition || 'min', currentValue, goal.targetValue);
+
+  return {
+    conditions: [{
+      metric: 'subgoals',
+      condition: goal.condition || 'min',
+      targetValue: goal.targetValue,
+      unitSymbol: 'Ziele',
+      currentValue,
+      met,
+    }],
+    conditionOperator: 'AND',
+    met,
+    weeklyData: [],
+    stepResults: [],
+    childResults,
+  };
+}
+
+// Full progress payload for one goal — shared by the progress route and the
+// meta evaluation of parent goals.
+async function computeProgress(goal, userId) {
+  if (goal.type === 'meta') return computeMetaProgress(goal, userId);
+
+  const isLongTerm = goal.type.startsWith('long-term');
+  const { start, end } = getGoalBounds(goal);
+
+  let condDefs;
     if (goal.conditions && goal.conditions.length > 0) {
       condDefs = goal.conditions;
     } else {
@@ -299,7 +372,7 @@ router.get('/:id/progress', auth, async (req, res) => {
     }
 
     const condResults = await Promise.all(condDefs.map(async (cond) => {
-      const currentValue = await getValueForMetric(cond.metric, goal, req.user._id, start, end, cond.valueScope, cond.aggregation, cond.activityFilters);
+      const currentValue = await getValueForMetric(cond.metric, goal, userId, start, end, cond.valueScope, cond.aggregation, cond.activityFilters);
       const met = checkConditionMet(cond.condition, currentValue, cond.targetValue);
       return { metric: cond.metric, condition: cond.condition, targetValue: cond.targetValue, unitSymbol: cond.unitSymbol, valueScope: cond.valueScope, aggregation: cond.aggregation, activityFilters: cond.activityFilters, currentValue, met };
     }));
@@ -319,7 +392,7 @@ router.get('/:id/progress', auth, async (req, res) => {
       const now = new Date();
       while (weekStart <= goal.endDate && weekStart <= now) {
         const { monday, sunday } = getWeekBoundsForDate(weekStart);
-        const value = await getValueForMetric(firstMetric, goal, req.user._id, monday, sunday, undefined, firstAggregation, firstActivityFilters);
+        const value = await getValueForMetric(firstMetric, goal, userId, monday, sunday, undefined, firstAggregation, firstActivityFilters);
         weeklyData.push({ weekStart: monday.toISOString(), value });
         weekStart.setDate(weekStart.getDate() + 7);
       }
@@ -339,7 +412,7 @@ router.get('/:id/progress', auth, async (req, res) => {
             let actualValue = null;
             if (isPast && firstCond) {
               actualValue = await getValueForMetric(
-                firstCond.metric, goal, req.user._id, goalStart, stepEnd, firstCond.valueScope, firstCond.aggregation, firstCond.activityFilters
+                firstCond.metric, goal, userId, goalStart, stepEnd, firstCond.valueScope, firstCond.aggregation, firstCond.activityFilters
               );
             }
             return {
@@ -356,17 +429,128 @@ router.get('/:id/progress', auth, async (req, res) => {
       );
     }
 
-    res.json({ conditions: condResults, conditionOperator, met, weeklyData, stepResults });
+  return { conditions: condResults, conditionOperator, met, weeklyData, stepResults };
+}
+
+router.get('/:id/progress', auth, async (req, res) => {
+  try {
+    const goal = await Goal.findOne({ _id: req.params.id, userId: req.user._id });
+    if (!goal) return res.status(404).json({ error: 'Nicht gefunden' });
+    res.json(await computeProgress(goal, req.user._id));
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });
 
-// Strips server-owned fields from a goal payload. Everything else is
-// validated by the Mongoose schema (strict mode drops unknown keys).
+// GET /api/goals/:id/items
+// The entries contributing to the goal's CURRENT interval — makes progress
+// explainable ("which Strava activities / logs / sub-goals count?").
+router.get('/:id/items', auth, async (req, res) => {
+  try {
+    const goal = await Goal.findOne({ _id: req.params.id, userId: req.user._id });
+    if (!goal) return res.status(404).json({ error: 'Nicht gefunden' });
+    const { start, end } = getGoalBounds(goal);
+
+    if (goal.type === 'meta') {
+      const progress = await computeMetaProgress(goal, req.user._id);
+      return res.json({ kind: 'meta', start, end, entries: progress.childResults });
+    }
+
+    if (goal.targetRefModel === 'StravaActivity') {
+      const matches = await getStravaMatches(goal, req.user._id, start, end);
+      return res.json({ kind: 'strava', start, end, entries: matches });
+    }
+
+    const isActivity = goal.targetRefModel === 'ActivityType' || goal.targetRefModel === 'activity';
+    if (isActivity) {
+      const typeFilter = await buildActivityMatchQuery(goal);
+      if (!typeFilter) return res.json({ kind: 'activity', start, end, entries: [] });
+      const logs = await ActivityLog.find({
+        userId: req.user._id, ...typeFilter, date: { $gte: start, $lte: end },
+      }).sort({ date: -1 }).limit(100).lean();
+      return res.json({
+        kind: 'activity',
+        start,
+        end,
+        entries: logs.map(l => ({
+          id: String(l._id), date: l.date, name: l.activityType,
+          duration: l.duration, distance: l.distance,
+        })),
+      });
+    }
+
+    // Habit goal
+    const logs = await HabitLog.find({
+      userId: req.user._id, habitId: goal.targetRef, date: { $gte: start, $lte: end },
+    }).sort({ date: -1 }).limit(100).lean();
+    return res.json({
+      kind: 'habit',
+      start,
+      end,
+      entries: logs.map(l => ({ id: String(l._id), date: l.date, value: l.value })),
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Strips server-owned fields from a goal payload. parentGoalId is managed
+// exclusively through the parent's childGoalIds (single-parent invariant).
+// Everything else is validated by the Mongoose schema (strict mode drops
+// unknown keys).
 function safeGoalBody(body) {
-  const { userId: _u, _id: _i, __v: _v, createdAt: _c, ...safe } = body;
+  const { userId: _u, _id: _i, __v: _v, createdAt: _c, parentGoalId: _p, childGoalIds: _cg, ...safe } = body;
   return safe;
+}
+
+function httpError(status, message) {
+  const err = new Error(message);
+  err.status = status;
+  return err;
+}
+
+// Validates the requested children of a meta goal: they must be the user's
+// own active goals, not meta themselves (one level only), and either free or
+// already attached to this meta goal (single-parent invariant).
+async function validateMetaChildren(childGoalIds, userId, metaGoalId = null) {
+  const ids = [...new Set((childGoalIds || []).map(String))];
+  if (ids.some(id => !mongoose.Types.ObjectId.isValid(id))) {
+    throw httpError(400, 'Ungültige Unterziel-Referenz.');
+  }
+  const children = await Goal.find({ _id: { $in: ids }, userId, isActive: true });
+  if (children.length !== ids.length) throw httpError(404, 'Unterziel nicht gefunden');
+  for (const child of children) {
+    if (child.type === 'meta') {
+      throw httpError(400, `"${child.name}" ist selbst ein Gesamtziel und kann kein Unterziel sein.`);
+    }
+    if (child.parentGoalId && String(child.parentGoalId) !== String(metaGoalId)) {
+      throw httpError(400, `"${child.name}" ist bereits Unterziel eines anderen Gesamtziels.`);
+    }
+  }
+  return ids;
+}
+
+// Applies the child set of a meta goal: detaches removed children, attaches
+// the requested ones.
+async function applyMetaChildren(metaGoalId, ids, userId) {
+  await Goal.updateMany(
+    { userId, parentGoalId: metaGoalId, _id: { $nin: ids } },
+    { $set: { parentGoalId: null } }
+  );
+  await Goal.updateMany(
+    { _id: { $in: ids }, userId },
+    { $set: { parentGoalId: metaGoalId } }
+  );
+}
+
+// A goal may only reference the user's own training types.
+async function assertOwnTrainingType(body, userId) {
+  if (!body.trainingTypeId) return;
+  if (!mongoose.Types.ObjectId.isValid(body.trainingTypeId)) {
+    throw httpError(400, 'Ungültige Trainingstyp-Referenz.');
+  }
+  const exists = await TrainingType.exists({ _id: body.trainingTypeId, userId });
+  if (!exists) throw httpError(404, 'Trainingstyp nicht gefunden');
 }
 
 // A goal may only reference the user's own activity types, or the user's own
@@ -409,7 +593,38 @@ function assertValidStravaCriteria(body) {
 router.post('/', auth, async (req, res) => {
   try {
     const body = safeGoalBody(req.body);
+
+    // Meta goals: server-owned target fields; children are validated before
+    // the goal exists and attached right after.
+    if (body.type === 'meta') {
+      const targetValue = +body.targetValue;
+      if (!Number.isInteger(targetValue) || targetValue < 1) {
+        throw httpError(400, 'Zielwert muss eine ganze Zahl ≥ 1 sein.');
+      }
+      const childIds = await validateMetaChildren(req.body.childGoalIds, req.user._id);
+      if (childIds.length === 0) throw httpError(400, 'Ein Gesamtziel braucht mindestens ein Unterziel.');
+      if (targetValue > childIds.length) {
+        throw httpError(400, `Zielwert (${targetValue}) kann nicht größer sein als die Anzahl der Unterziele (${childIds.length}).`);
+      }
+
+      const goal = await Goal.create({
+        name: body.name,
+        description: body.description,
+        type: 'meta',
+        targetRef: 'meta',
+        targetRefModel: 'Goal',
+        condition: 'min',
+        metric: 'count',
+        targetValue,
+        unitSymbol: 'Ziele',
+        userId: req.user._id,
+      });
+      await applyMetaChildren(goal._id, childIds, req.user._id);
+      return res.status(201).json(await enrichGoal(goal, req.user._id));
+    }
+
     await assertOwnTargetRef(body, req.user._id);
+    await assertOwnTrainingType(body, req.user._id);
     assertValidStravaCriteria(body);
     const goal = await Goal.create({ ...body, userId: req.user._id });
     res.status(201).json(await enrichGoal(goal, req.user._id));
@@ -420,8 +635,47 @@ router.post('/', auth, async (req, res) => {
 
 router.put('/:id', auth, async (req, res) => {
   try {
+    const existing = await Goal.findOne({ _id: req.params.id, userId: req.user._id });
+    if (!existing) return res.status(404).json({ error: 'Nicht gefunden' });
+
     const body = safeGoalBody(req.body);
+
+    // A goal never changes its nature between meta and regular.
+    if (body.type !== undefined && (body.type === 'meta') !== (existing.type === 'meta')) {
+      throw httpError(400, 'Der Zieltyp kann nicht zwischen Gesamtziel und normalem Ziel wechseln.');
+    }
+
+    if (existing.type === 'meta') {
+      let childIds = null;
+      if (req.body.childGoalIds !== undefined) {
+        childIds = await validateMetaChildren(req.body.childGoalIds, req.user._id, existing._id);
+        if (childIds.length === 0) throw httpError(400, 'Ein Gesamtziel braucht mindestens ein Unterziel.');
+      }
+      const childCount = childIds !== null
+        ? childIds.length
+        : await Goal.countDocuments({ userId: req.user._id, parentGoalId: existing._id, isActive: true });
+      const targetValue = body.targetValue !== undefined ? +body.targetValue : existing.targetValue;
+      if (!Number.isInteger(targetValue) || targetValue < 1 || targetValue > childCount) {
+        throw httpError(400, `Zielwert muss zwischen 1 und ${childCount} (Anzahl der Unterziele) liegen.`);
+      }
+
+      const update = {
+        ...(body.name !== undefined ? { name: body.name } : {}),
+        ...(body.description !== undefined ? { description: body.description } : {}),
+        ...(body.isActive !== undefined ? { isActive: body.isActive } : {}),
+        targetValue,
+      };
+      const goal = await Goal.findOneAndUpdate(
+        { _id: existing._id, userId: req.user._id },
+        { $set: update },
+        { new: true }
+      );
+      if (childIds !== null) await applyMetaChildren(goal._id, childIds, req.user._id);
+      return res.json(await enrichGoal(goal, req.user._id));
+    }
+
     await assertOwnTargetRef(body, req.user._id);
+    await assertOwnTrainingType(body, req.user._id);
     assertValidStravaCriteria(body);
     const goal = await Goal.findOneAndUpdate(
       { _id: req.params.id, userId: req.user._id },
@@ -437,7 +691,14 @@ router.put('/:id', auth, async (req, res) => {
 
 router.delete('/:id', auth, async (req, res) => {
   try {
-    await Goal.findOneAndDelete({ _id: req.params.id, userId: req.user._id });
+    const deleted = await Goal.findOneAndDelete({ _id: req.params.id, userId: req.user._id });
+    // Children of a deleted meta goal become free-standing goals again.
+    if (deleted?.type === 'meta') {
+      await Goal.updateMany(
+        { userId: req.user._id, parentGoalId: deleted._id },
+        { $set: { parentGoalId: null } }
+      );
+    }
     res.json({ success: true });
   } catch (err) {
     res.status(500).json({ error: err.message });
