@@ -317,4 +317,125 @@ router.delete('/habits/:id', auth, async (req, res) => {
   }
 });
 
+// Planned trainings (criteria-based, fulfilled by synced activities)
+
+const TrainingPlan = require('../models/TrainingPlan');
+const TrainingType = require('../models/TrainingType');
+const trainingCriteria = require('../services/trainingCriteria');
+
+// GET /api/planner/trainings?startDate&endDate
+// Fulfilment is never stored: a plan counts as completed when a synced
+// activity of the same LOCAL calendar day matches its criteria (saved
+// training type or ad-hoc criteria map). Late syncs and deleted activities
+// therefore stay correct automatically.
+router.get('/trainings', auth, async (req, res) => {
+  try {
+    const { startDate, endDate } = req.query;
+    const query = { userId: req.user._id };
+    if (startDate || endDate) {
+      query.scheduledDate = {};
+      if (startDate) query.scheduledDate.$gte = new Date(startDate);
+      if (endDate) {
+        const end = new Date(endDate);
+        end.setUTCHours(23, 59, 59, 999);
+        query.scheduledDate.$lte = end;
+      }
+    }
+
+    const plans = await TrainingPlan.find(query)
+      .populate('trainingTypeId', 'name criteria')
+      .sort({ scheduledDate: 1 });
+
+    const results = [];
+    for (const plan of plans) {
+      const obj = plan.toObject();
+      const map = obj.trainingTypeId ? (obj.trainingTypeId.criteria || {}) : (obj.criteria || {});
+      const dayStr = new Date(obj.scheduledDate).toISOString().slice(0, 10);
+      const matches = await trainingCriteria.findMatchesOnDay(req.user._id, map, dayStr);
+      obj.trainingTypeName = obj.trainingTypeId?.name || null;
+      obj.trainingTypeId = obj.trainingTypeId?._id || null;
+      obj.completed = matches.length > 0;
+      obj.fulfilledBy = matches[0] || null;
+      results.push(obj);
+    }
+    res.json(results);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Shared validation: a plan needs a training type (own!) or ad-hoc criteria.
+async function resolveTrainingBody(body, userId) {
+  const { trainingTypeId, criteria } = body;
+  if (trainingTypeId) {
+    const exists = await TrainingType.exists({ _id: trainingTypeId, userId });
+    if (!exists) {
+      const err = new Error('Trainingstyp nicht gefunden');
+      err.status = 404;
+      throw err;
+    }
+    return { trainingTypeId, criteria: null };
+  }
+  if (criteria == null) {
+    const err = new Error('Trainingstyp oder Kriterien erforderlich.');
+    err.status = 400;
+    throw err;
+  }
+  const { valid, errors } = trainingCriteria.validateCriteriaMap(criteria);
+  if (!valid) {
+    const err = new Error(`Ungültige Kriterien: ${errors.join('; ')}`);
+    err.status = 400;
+    throw err;
+  }
+  return { trainingTypeId: null, criteria };
+}
+
+router.post('/trainings', auth, async (req, res) => {
+  try {
+    const { scheduledDate, notes } = req.body;
+    if (!scheduledDate) return res.status(400).json({ error: 'Datum erforderlich.' });
+    const target = await resolveTrainingBody(req.body, req.user._id);
+    const plan = await TrainingPlan.create({
+      userId: req.user._id,
+      ...target,
+      scheduledDate: new Date(scheduledDate),
+      notes: notes || '',
+    });
+    res.status(201).json(plan);
+  } catch (err) {
+    res.status(err.status || 400).json({ error: err.message });
+  }
+});
+
+router.put('/trainings/:id', auth, async (req, res) => {
+  try {
+    const update = {};
+    if (req.body.scheduledDate !== undefined) update.scheduledDate = new Date(req.body.scheduledDate);
+    if (req.body.notes !== undefined) update.notes = req.body.notes || '';
+    if (req.body.trainingTypeId !== undefined || req.body.criteria !== undefined) {
+      Object.assign(update, await resolveTrainingBody(req.body, req.user._id));
+    }
+    const plan = await TrainingPlan.findOneAndUpdate(
+      { _id: req.params.id, userId: req.user._id },
+      { $set: update },
+      { new: true }
+    );
+    if (!plan) return res.status(404).json({ error: 'Nicht gefunden' });
+    res.json(plan);
+  } catch (err) {
+    res.status(err.status || 400).json({ error: err.message });
+  }
+});
+
+router.delete('/trainings/:id', auth, async (req, res) => {
+  try {
+    const result = await TrainingPlan.findOneAndDelete({ _id: req.params.id, userId: req.user._id });
+    if (!result) return res.status(404).json({ error: 'Nicht gefunden' });
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 module.exports = router;
+

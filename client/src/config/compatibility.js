@@ -3,4 +3,5 @@
 // v4: habit weekday schedules (scheduleDays in /habits/definitions + settings)
 // v5: planner copy-week endpoint (POST /planner/copy-week)
 // v6: Strava integration (/strava endpoints, periodic-strava goals)
-export const REQUIRED_API_VERSION = 6;
+// v7: meta goals + goal items, training types (/training-types, /planner/trainings)
+export const REQUIRED_API_VERSION = 7;

@@ -24,7 +24,7 @@ export const handlers = [
   http.get('/api', () => {
     return HttpResponse.json({
       version: '1.0.0+test123',
-      apiVersion: 6,
+      apiVersion: 7,
       emergencyMode: false,
       updateFailed: false,
     });
@@ -40,6 +40,12 @@ export const handlers = [
   }),
   http.get('/api/strava/activities', () => {
     return HttpResponse.json({ activities: [], total: 0 });
+  }),
+  http.get('/api/training-types', () => {
+    return HttpResponse.json([]);
+  }),
+  http.get('/api/planner/trainings', () => {
+    return HttpResponse.json([]);
   }),
 
   // Cached update check (drives the sidebar badge).
