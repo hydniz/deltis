@@ -30,11 +30,13 @@ const trainingPlan = {
   ],
 };
 
-function useHandlers({ trainings = [trainingPlan] } = {}) {
+function useHandlers({ trainings = [trainingPlan], activityTotal = 0, stravaTotal = 0 } = {}) {
   server.use(
     http.get('/api/habits/definitions', () => HttpResponse.json([])),
     http.get('/api/habits/logs', () => HttpResponse.json([])),
-    http.get('/api/activities', () => HttpResponse.json({ activities: [] })),
+    http.get('/api/habits/due', () => HttpResponse.json([])),
+    http.get('/api/activities', () => HttpResponse.json({ activities: [], total: activityTotal })),
+    http.get('/api/strava/activities', () => HttpResponse.json({ activities: [], total: stravaTotal })),
     http.get('/api/planner', () => HttpResponse.json([])),
     http.get('/api/planner/habits', () => HttpResponse.json([])),
     http.get('/api/planner/trainings', () => HttpResponse.json(trainings)),
@@ -70,6 +72,14 @@ describe('Dashboard – planned trainings', () => {
     await waitFor(() => expect(screen.getByText('Zone 2')).toBeInTheDocument());
     expect(screen.getByText('0/1')).toBeInTheDocument();
     expect(screen.queryByText('Erledigt')).not.toBeInTheDocument();
+  });
+
+  it('counts integration activities into the weekly stat', async () => {
+    useHandlers({ activityTotal: 3, stravaTotal: 2 });
+    render(<MemoryRouter><Dashboard /></MemoryRouter>);
+
+    await waitFor(() => expect(screen.getByText('5')).toBeInTheDocument());
+    expect(screen.getByText('Aktivitäten · 2 aus Strava')).toBeInTheDocument();
   });
 
   it('keeps working when the trainings endpoint fails', async () => {

@@ -8,4 +8,6 @@
 //     copy-week, goal heatmaps (/goals/:id/heatmap)
 // v9: personal habit library (soft delete/trash, /habits/catalog, inline
 //     settings on create), meta goal child previews
-export const REQUIRED_API_VERSION = 9;
+// v10: due-habit engine (/habits/due, interval + event-trigger schedules),
+//      planner provenance (plan source field)
+export const REQUIRED_API_VERSION = 10;

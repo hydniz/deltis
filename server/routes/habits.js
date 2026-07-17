@@ -59,6 +59,11 @@ router.get('/definitions', auth, async (req, res) => {
         // One-off schedule: habit is only due on this local date (YYYY-MM-DD).
         // Takes precedence over scheduleDays; null = not date-bound.
         scheduleDate: typeof s.scheduleDate === 'string' ? s.scheduleDate : null,
+        // Extended schedule (interval / event trigger) — see services/habitSchedule.js
+        scheduleMode: typeof s.scheduleMode === 'string' ? s.scheduleMode : null,
+        scheduleIntervalDays: Number.isInteger(s.scheduleIntervalDays) ? s.scheduleIntervalDays : null,
+        scheduleAnchorDate: typeof s.scheduleAnchorDate === 'string' ? s.scheduleAnchorDate : null,
+        scheduleTrigger: s.scheduleTrigger || null,
         // Daily completion target: a day only counts as fulfilled when the
         // logged value satisfies condition+value ('none' = any log counts).
         targetCondition: ['min', 'max', 'exact'].includes(s.targetCondition) ? s.targetCondition : 'none',
@@ -123,11 +128,34 @@ router.put('/selection', auth, async (req, res) => {
   }
 });
 
+// Valid schedule trigger payload → normalized object, or null.
+// Direction rules keep the semantics honest: a Strava sport can only have
+// HAPPENED ('after'), a training type is only meaningful as PLANNED
+// ('before'); habits and activity types support both.
+function sanitizeScheduleTrigger(raw) {
+  if (!raw || typeof raw !== 'object') return null;
+  const kind = ['habit', 'activityType', 'stravaSport', 'trainingType'].includes(raw.kind) ? raw.kind : null;
+  if (!kind) return null;
+  let direction = raw.direction === 'before' ? 'before' : 'after';
+  if (kind === 'stravaSport') direction = 'after';
+  if (kind === 'trainingType') direction = 'before';
+  const offsetDays = Math.min(Math.max(parseInt(raw.offsetDays, 10) || 0, 0), 30);
+  if (kind === 'stravaSport') {
+    const sport = typeof raw.sport === 'string' ? raw.sport.trim().slice(0, 50) : '';
+    return sport ? { kind, direction, offsetDays, sport } : null;
+  }
+  if (!mongoose.isValidObjectId(raw.refId)) return null;
+  return { kind, direction, offsetDays, refId: String(raw.refId) };
+}
+
 // Normalizes the per-user settings payload (schedule, missing-day mode,
 // completion target) — shared by PUT /settings/:id and the inline settings
 // of POST /definitions.
 function sanitizeHabitSettings(body, habitType) {
-  const { missingDayMode, defaultValue, scheduleDays, scheduleDate, targetCondition, targetValue } = body;
+  const {
+    missingDayMode, defaultValue, scheduleDays, scheduleDate, targetCondition, targetValue,
+    scheduleMode, scheduleIntervalDays, scheduleAnchorDate, scheduleTrigger,
+  } = body;
   const mode = ['none', 'default'].includes(missingDayMode) ? missingDayMode : 'none';
   // Sanitize schedule: unique integer weekdays 0–6, sorted; [] = every day.
   const days = Array.isArray(scheduleDays)
@@ -137,6 +165,23 @@ function sanitizeHabitSettings(body, habitType) {
   const dateOnly = typeof scheduleDate === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(scheduleDate)
     ? scheduleDate
     : null;
+  // Extended schedule: explicit mode plus interval/trigger config. An
+  // invalid combination falls back to the legacy derivation (date > days >
+  // daily) so old clients keep working unchanged.
+  const intervalDays = Number.isInteger(+scheduleIntervalDays) && +scheduleIntervalDays >= 1 && +scheduleIntervalDays <= 365
+    ? +scheduleIntervalDays
+    : null;
+  const anchorDate = typeof scheduleAnchorDate === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(scheduleAnchorDate)
+    ? scheduleAnchorDate
+    : null;
+  const trigger = sanitizeScheduleTrigger(scheduleTrigger);
+  let schedMode = ['daily', 'weekly', 'date', 'interval', 'trigger'].includes(scheduleMode) ? scheduleMode : null;
+  if (schedMode === 'interval' && !intervalDays) schedMode = null;
+  if (schedMode === 'trigger' && !trigger) schedMode = null;
+  if (schedMode === 'date' && !dateOnly) schedMode = null;
+  if (!schedMode) {
+    schedMode = dateOnly ? 'date' : days.length ? 'weekly' : 'daily';
+  }
   // Completion target: only known conditions with a sane numeric value —
   // boolean habits have no numeric target at all.
   const condition = habitType !== 'boolean' && ['min', 'max', 'exact'].includes(targetCondition)
@@ -151,8 +196,15 @@ function sanitizeHabitSettings(body, habitType) {
   return {
     missingDayMode: mode,
     defaultValue: defVal,
-    scheduleDays: days,
-    scheduleDate: dateOnly,
+    scheduleMode: schedMode,
+    scheduleDays: schedMode === 'weekly' ? days : [],
+    scheduleDate: schedMode === 'date' ? dateOnly : null,
+    scheduleIntervalDays: schedMode === 'interval' ? intervalDays : null,
+    // Anchor defaults to today so "alle N Tage" starts counting immediately.
+    scheduleAnchorDate: schedMode === 'interval'
+      ? (anchorDate || new Date().toISOString().slice(0, 10))
+      : null,
+    scheduleTrigger: schedMode === 'trigger' ? trigger : null,
     targetCondition: tValue > 0 || condition === 'max' ? condition : 'none',
     targetValue: tValue,
   };
@@ -336,6 +388,23 @@ router.put('/settings/:id', auth, async (req, res) => {
     res.json({ success: true });
   } catch (err) {
     res.status(400).json({ error: err.message });
+  }
+});
+
+// Due habits: which selected habits are scheduled on which days of the
+// range, and why (daily / weekdays / date / interval / event trigger).
+// Powers the implicit habit entries in the planner and the dashboard.
+router.get('/due', auth, async (req, res) => {
+  try {
+    const habitSchedule = require('../services/habitSchedule');
+    const today = new Date().toISOString().slice(0, 10);
+    const dateRe = /^\d{4}-\d{2}-\d{2}$/;
+    const start = dateRe.test(req.query.startDate) ? req.query.startDate : today;
+    const end = dateRe.test(req.query.endDate) ? req.query.endDate : start;
+    if (end < start) return res.status(400).json({ error: 'endDate liegt vor startDate.' });
+    res.json(await habitSchedule.dueHabitsForRange(req.user._id, start, end));
+  } catch (err) {
+    res.status(500).json({ error: err.message });
   }
 });
 

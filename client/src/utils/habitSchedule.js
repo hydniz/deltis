@@ -30,11 +30,46 @@ export function formatScheduleDays(days = []) {
   return WEEKDAYS.filter(w => days.includes(w.value)).map(w => w.label).join(' · ');
 }
 
-// Human-readable schedule label: 'nur am 20. Juli', 'Mo · Mi · Fr' or ''.
+// Human-readable schedule label: 'nur am 20. Juli', 'Mo · Mi · Fr',
+// 'alle 3 Tage', 'nach: Running' … or '' for daily.
 export function formatScheduleBadge(habit) {
+  if (habit.scheduleMode === 'interval' && habit.scheduleIntervalDays) {
+    return `alle ${habit.scheduleIntervalDays} Tage`;
+  }
+  if (habit.scheduleMode === 'trigger' && habit.scheduleTrigger) {
+    const t = habit.scheduleTrigger;
+    const name = t.sport || t.refName || 'Ereignis';
+    return t.direction === 'before' ? `vor: ${name}` : `nach: ${name}`;
+  }
   if (habit.scheduleDate) {
     return `nur am ${format(parseISO(habit.scheduleDate), 'd. MMMM', { locale: de })}`;
   }
   if (habit.scheduleDays?.length) return formatScheduleDays(habit.scheduleDays);
+  return '';
+}
+
+// Explains a due-reason from GET /api/habits/due — the "Warum steht das
+// heute im Planer?" text.
+export function formatDueReason(reason) {
+  if (!reason) return '';
+  if (reason.kind === 'daily') return 'Steht täglich an.';
+  if (reason.kind === 'weekly') return `Geplante Wochentage: ${formatScheduleDays(reason.days)}.`;
+  if (reason.kind === 'date') {
+    return `Einmalig geplant für den ${format(parseISO(reason.date), 'd. MMMM', { locale: de })}.`;
+  }
+  if (reason.kind === 'interval') {
+    return `Alle ${reason.intervalDays} Tage fällig (gezählt ab ${format(parseISO(reason.anchorDate), 'd. MMMM', { locale: de })}).`;
+  }
+  if (reason.kind === 'trigger') {
+    const date = format(parseISO(reason.sourceDate), 'd. MMMM', { locale: de });
+    if (reason.direction === 'before') {
+      return reason.offsetDays === 0
+        ? `Weil „${reason.sourceName}“ heute geplant ist.`
+        : `Weil am ${date} „${reason.sourceName}“ geplant ist (${reason.offsetDays} ${reason.offsetDays === 1 ? 'Tag' : 'Tage'} vorher).`;
+    }
+    return reason.offsetDays === 0
+      ? `Weil an diesem Tag „${reason.sourceName}“ gemacht wurde.`
+      : `Weil am ${date} „${reason.sourceName}“ gemacht wurde (${reason.offsetDays} ${reason.offsetDays === 1 ? 'Tag' : 'Tage'} danach).`;
+  }
   return '';
 }

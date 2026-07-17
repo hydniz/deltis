@@ -164,8 +164,8 @@ function PlanRow({ label, meta, completed, color }) {
 export default function Dashboard() {
   const { user } = useAuth();
   const [data, setData] = useState({
-    definitions: [], habitLogs: [], activities: [],
-    activityPlans: [], habitPlans: [], trainingPlans: [], weight: null, goals: [],
+    definitions: [], habitLogs: [], activities: [], activityTotal: 0, stravaTotal: 0,
+    activityPlans: [], habitPlans: [], trainingPlans: [], dueToday: null, weight: null, goals: [],
   });
   const [loading, setLoading] = useState(true);
   // Stable for the whole browser-tab session; rotates in a new tab,
@@ -181,18 +181,28 @@ export default function Dashboard() {
     const dayEnd = endOfDay(new Date()).toISOString();
     try {
       const dayParam = format(new Date(), 'yyyy-MM-dd');
-      const [defsRes, logsRes, actRes, planRes, habitPlanRes, trainingPlanRes, weightRes, goalRes] = await Promise.all([
+      const [defsRes, logsRes, actRes, stravaRes, planRes, habitPlanRes, trainingPlanRes, dueRes, weightRes, goalRes] = await Promise.all([
         api.get('/habits/definitions'),
         api.get('/habits/logs', { params: { startDate: dayStart, endDate: dayEnd } }),
         api.get('/activities', {
           params: { startDate: weekStart.toISOString(), endDate: weekEnd.toISOString(), limit: 10 }
         }),
+        // Integration activities count towards "this week" too — a missing
+        // integration simply yields zero.
+        api.get('/strava/activities', {
+          params: { startDate: format(weekStart, 'yyyy-MM-dd'), endDate: format(weekEnd, 'yyyy-MM-dd'), limit: 1 },
+        }).catch(() => ({ data: { activities: [], total: 0 } })),
         api.get('/planner', { params: { startDate: dayStart, endDate: dayEnd } }),
         api.get('/planner/habits', { params: { startDate: dayStart, endDate: dayEnd } }),
         // Planned trainings are keyed by calendar day, not timestamps —
         // missing integration simply yields an empty list.
         api.get('/planner/trainings', { params: { startDate: dayParam, endDate: dayParam } })
           .catch(() => ({ data: [] })),
+        // Due habits incl. extended schedules (interval, event triggers) —
+        // the server knows why something is due; fall back to the local
+        // schedule check when the endpoint is unavailable.
+        api.get('/habits/due', { params: { startDate: dayParam, endDate: dayParam } })
+          .catch(() => ({ data: null })),
         api.get('/weight', { params: { limit: 1 } }),
         api.get('/goals'),
       ]);
@@ -200,9 +210,12 @@ export default function Dashboard() {
         definitions: defsRes.data,
         habitLogs: logsRes.data,
         activities: actRes.data.activities || [],
+        activityTotal: actRes.data.total ?? (actRes.data.activities || []).length,
+        stravaTotal: stravaRes.data.total ?? 0,
         activityPlans: planRes.data,
         habitPlans: habitPlanRes.data,
         trainingPlans: trainingPlanRes.data,
+        dueToday: dueRes.data,
         weight: weightRes.data[0] || null,
         goals: goalRes.data || [],
       });
@@ -246,7 +259,11 @@ export default function Dashboard() {
   const getLog = (habitId) =>
     data.habitLogs.find(l => l.habitId?._id === habitId || l.habitId === habitId);
 
-  const dueHabits = data.definitions.filter(d => d.selected && isDueOn(d));
+  // Due habits: server-computed when available (knows interval + trigger
+  // schedules), otherwise the local check for the basic modes.
+  const dueIds = data.dueToday === null ? null : new Set(data.dueToday.map(d => d.habitId));
+  const dueHabits = data.definitions.filter(d => d.selected
+    && (dueIds ? dueIds.has(d._id) : isDueOn(d)));
   const loggedCount = dueHabits.filter(h => {
     const log = getLog(h._id);
     return log && meetsTarget(h, log.value);
@@ -287,8 +304,8 @@ export default function Dashboard() {
           <Stat
             icon={Dumbbell}
             label="Diese Woche"
-            value={data.activities.length}
-            sub="Aktivitäten"
+            value={data.activityTotal + data.stravaTotal}
+            sub={data.stravaTotal > 0 ? `Aktivitäten · ${data.stravaTotal} aus Strava` : 'Aktivitäten'}
             tone="clay"
             to="/activities"
           />
