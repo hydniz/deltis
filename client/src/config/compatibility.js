@@ -14,4 +14,5 @@
 //      return interval tiles for periodic goals
 // v12: weight goal on the profile (weightGoal on PUT/GET /auth/me), /weight
 //      limit returns the newest entries
-export const REQUIRED_API_VERSION = 12;
+// v13: daily check-in times on the profile (checkinTimes on /auth/me)
+export const REQUIRED_API_VERSION = 13;

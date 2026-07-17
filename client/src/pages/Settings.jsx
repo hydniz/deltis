@@ -6,6 +6,7 @@ import api from '../utils/api';
 import {
   Check, LogOut, User, Save, Download, Upload, AtSign, Lock, Server, Monitor,
   Settings as SettingsIcon, Sun, Moon, MonitorSmartphone, SunMoon, UserRound, Plug, Database,
+  Sparkles,
 } from 'lucide-react';
 import {
   PageHeader, Button, Field, Input, Select, PasswordInput, Alert, TONE_BUBBLE,
@@ -349,6 +350,29 @@ function AccountSection() {
     }
   }, [user]);
 
+  // Check-in reminder times (HH:MM). Saved separately from the profile form.
+  const [checkinTimes, setCheckinTimes] = useState(user?.checkinTimes || []);
+  const [checkinSaving, setCheckinSaving] = useState(false);
+  const [checkinSaved, setCheckinSaved] = useState(false);
+  useEffect(() => { if (user) setCheckinTimes(user.checkinTimes || []); }, [user]);
+
+  const handleSaveCheckin = async (e) => {
+    e.preventDefault();
+    setCheckinSaving(true);
+    try {
+      const res = await api.put('/auth/me', {
+        checkinTimes: checkinTimes.filter(Boolean),
+      });
+      updateUser(res.data);
+      setCheckinSaved(true);
+      setTimeout(() => setCheckinSaved(false), 2000);
+    } catch (err) {
+      alert('Fehler beim Speichern: ' + (err.response?.data?.error || err.message));
+    } finally {
+      setCheckinSaving(false);
+    }
+  };
+
   const handleSaveProfile = async (e) => {
     e.preventDefault();
     setSaving(true);
@@ -412,6 +436,49 @@ function AccountSection() {
             <Button type="submit" icon={saved ? Check : Save} loading={saving}>
               {saved ? 'Gespeichert!' : 'Speichern'}
             </Button>
+          </form>
+        </SettingsCard>
+
+        {/* Daily check-in reminder times */}
+        <SettingsCard icon={Sparkles} tone="sage" title="Täglicher Check-in">
+          <form onSubmit={handleSaveCheckin} className="space-y-3">
+            <p className="text-xs text-ink-400">
+              Beim ersten Öffnen der App nach einer dieser Uhrzeiten fragt dich
+              ein kurzer Fragebogen nach den noch offenen Gewohnheiten des Tages
+              (überspringbar).
+            </p>
+            {checkinTimes.map((t, i) => (
+              <div key={i} className="flex items-center gap-2">
+                <Input
+                  type="time"
+                  value={t}
+                  onChange={e => setCheckinTimes(ts => ts.map((v, j) => j === i ? e.target.value : v))}
+                  className="!w-32"
+                  required
+                />
+                <button
+                  type="button"
+                  onClick={() => setCheckinTimes(ts => ts.filter((_, j) => j !== i))}
+                  className="text-xs font-semibold text-red-500 hover:text-red-600 transition-colors"
+                >
+                  Entfernen
+                </button>
+              </div>
+            ))}
+            {checkinTimes.length < 6 && (
+              <button
+                type="button"
+                onClick={() => setCheckinTimes(ts => [...ts, '20:00'])}
+                className="text-xs font-semibold text-brand-600 hover:text-brand-700 transition-colors"
+              >
+                + Uhrzeit hinzufügen
+              </button>
+            )}
+            <div>
+              <Button type="submit" icon={checkinSaved ? Check : Save} loading={checkinSaving}>
+                {checkinSaved ? 'Gespeichert!' : 'Speichern'}
+              </Button>
+            </div>
           </form>
         </SettingsCard>
 

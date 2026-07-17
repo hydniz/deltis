@@ -417,3 +417,28 @@ describe('setup rate limiting', () => {
     expect(lastStatus).toBe(429);
   });
 });
+
+describe('PUT /api/auth/me – check-in times', () => {
+  it('stores deduplicated sorted HH:MM times and rejects garbage', async () => {
+    const { token } = await createUser();
+
+    const ok = await request(app).put('/api/auth/me').set(authHeader(token)).send({
+      checkinTimes: ['20:00', '08:30', '20:00'],
+    });
+    expect(ok.status).toBe(200);
+    expect(ok.body.checkinTimes).toEqual(['08:30', '20:00']);
+
+    // Clearing works with an empty array
+    const cleared = await request(app).put('/api/auth/me').set(authHeader(token)).send({
+      checkinTimes: [],
+    });
+    expect(cleared.body.checkinTimes).toEqual([]);
+
+    for (const bad of [['25:00'], ['8:30'], ['abc'], 'nope', [1, 2]]) {
+      const res = await request(app).put('/api/auth/me').set(authHeader(token)).send({
+        checkinTimes: bad,
+      });
+      expect(res.status).toBe(400);
+    }
+  });
+});
