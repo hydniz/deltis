@@ -52,52 +52,32 @@ export default function Modal({
     return () => window.removeEventListener('keydown', onKey);
   }, [onClose]);
 
-  // Swipe-down to close (touch devices): dragging the sheet downwards — from
-  // the header/handle, or from the body while it is scrolled to the top —
-  // follows the finger and closes past a small threshold. Upward drags and
-  // scrolling inside the body keep working normally.
-  const sheetRef = useRef(null);
-  const bodyRef = useRef(null);
-  const drag = useRef({ active: false, startY: 0, delta: 0 });
+  // Freeze the page while the modal is open: the background must not scroll
+  // along with gestures inside the sheet, and Chrome's pull-to-refresh must
+  // not fire on a downward swipe. Restores the previous values on unmount,
+  // which also keeps stacked modals (zIndex prop) correct.
+  useEffect(() => {
+    const body = document.body.style;
+    const prev = { overflow: body.overflow, overscroll: body.overscrollBehaviorY };
+    body.overflow = 'hidden';
+    body.overscrollBehaviorY = 'none';
+    return () => {
+      body.overflow = prev.overflow;
+      body.overscrollBehaviorY = prev.overscroll;
+    };
+  }, []);
 
-  const onTouchStart = (e) => {
-    const body = bodyRef.current;
-    const fromBody = body && body.contains(e.target);
-    if (fromBody && body.scrollTop > 0) return; // inner scroll wins
-    drag.current = { active: true, startY: e.touches[0].clientY, delta: 0 };
-  };
-  const onTouchMove = (e) => {
-    if (!drag.current.active || !sheetRef.current) return;
-    const el = sheetRef.current;
-    const delta = e.touches[0].clientY - drag.current.startY;
-    drag.current.delta = Math.max(0, delta);
-    // The entrance animation (anim-modal, fill-mode both) would override the
-    // inline transform — disable it once the finger takes over.
-    el.style.animation = 'none';
-    el.style.transition = 'none';
-    el.style.transform = drag.current.delta > 0
-      ? `translateY(${drag.current.delta}px)`
-      : '';
-  };
-  const onTouchEnd = () => {
-    if (!drag.current.active) return;
-    const el = sheetRef.current;
-    drag.current.active = false;
-    if (!el) return;
-    if (drag.current.delta > 90) {
-      // Material-style dismiss: continue the finger's motion off-screen,
-      // then actually close.
-      el.style.transition = 'transform 180ms cubic-bezier(0.4, 0, 1, 1)';
-      el.style.transform = 'translateY(110%)';
-      setTimeout(() => onClose?.(), 170);
-      return;
-    }
-    // Below the threshold: spring back into place.
-    el.style.transition = 'transform 200ms ease';
-    el.style.transform = '';
-    setTimeout(() => {
-      if (el) { el.style.transition = ''; el.style.animation = ''; }
-    }, 220);
+  // Swipe-down on the handle/header closes the sheet — a plain gesture
+  // without following the finger (the drag-transform variant fought the
+  // browser's own scrolling and jittered). Content scrolling in the body
+  // never triggers it.
+  const touchStartY = useRef(null);
+  const onHeaderTouchStart = (e) => { touchStartY.current = e.touches[0].clientY; };
+  const onHeaderTouchEnd = (e) => {
+    if (touchStartY.current == null) return;
+    const delta = e.changedTouches[0].clientY - touchStartY.current;
+    touchStartY.current = null;
+    if (delta > 60) onClose?.();
   };
 
   return createPortal(
@@ -106,21 +86,27 @@ export default function Modal({
       onMouseDown={e => { if (e.target === e.currentTarget) onClose?.(); }}
     >
       <div
-        ref={sheetRef}
         role="dialog"
         aria-modal="true"
         className={`bg-surface w-full ${SIZES[size]} rounded-t-3xl sm:rounded-3xl shadow-pop flex flex-col anim-modal`}
         style={{ maxHeight: '92dvh' }}
-        onTouchStart={onTouchStart}
-        onTouchMove={onTouchMove}
-        onTouchEnd={onTouchEnd}
-        onTouchCancel={onTouchEnd}
       >
-        {/* Drag handle – mobile only */}
-        <div className="w-10 h-1 bg-ink-200 rounded-full mx-auto mt-3 sm:hidden flex-shrink-0" />
+        {/* Drag handle – mobile only; swiping down here closes too */}
+        <div
+          className="w-10 h-1 bg-ink-200 rounded-full mx-auto mt-3 sm:hidden flex-shrink-0"
+          data-testid="sheet-handle"
+          style={{ touchAction: 'none' }}
+          onTouchStart={onHeaderTouchStart}
+          onTouchEnd={onHeaderTouchEnd}
+        />
 
-        {/* Header */}
-        <div className="flex items-center justify-between px-5 sm:px-6 pt-4 pb-3.5 border-b hairline flex-shrink-0">
+        {/* Header — swipe-down here closes the sheet */}
+        <div
+          className="flex items-center justify-between px-5 sm:px-6 pt-4 pb-3.5 border-b hairline flex-shrink-0"
+          style={{ touchAction: 'none' }}
+          onTouchStart={onHeaderTouchStart}
+          onTouchEnd={onHeaderTouchEnd}
+        >
           <div className="flex items-center gap-3 min-w-0">
             {Icon && (
               <div className="w-9 h-9 rounded-full bg-brand-50 text-brand-600 flex items-center justify-center flex-shrink-0">
@@ -146,7 +132,7 @@ export default function Modal({
         </div>
 
         {/* Scrollable body */}
-        <div ref={bodyRef} className="flex-1 overflow-y-auto px-5 sm:px-6 py-5 overscroll-contain">
+        <div className="flex-1 overflow-y-auto px-5 sm:px-6 py-5 overscroll-contain">
           {children}
         </div>
 
