@@ -1,5 +1,15 @@
 import '@testing-library/jest-dom';
 
+// jsdom has no ResizeObserver; recharts' ResponsiveContainer requires one.
+// A no-op stub is enough — chart dimensions are irrelevant in unit tests.
+if (typeof globalThis.ResizeObserver === 'undefined') {
+  globalThis.ResizeObserver = class {
+    observe() {}
+    unobserve() {}
+    disconnect() {}
+  };
+}
+
 // Ensure localStorage is available in the jsdom test environment.
 // Node.js 22+ exposes an experimental global `localStorage` that requires a
 // CLI flag and is not backed by jsdom — we replace it unconditionally with an

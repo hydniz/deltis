@@ -10,9 +10,10 @@ import {
 } from 'lucide-react';
 import {
   PageHeader, Button, Field, Input, Select, Textarea, Chip, chipColorFor,
-  Modal, PageLoader, ProgressBar,
+  Modal, PageLoader, ProgressBar, Segmented,
 } from '../components/ui';
 import PlannerHeatmap from '../components/PlannerHeatmap';
+import StravaCriteriaBuilder, { normalizeCriteria, criteriaSummary, emptyGroup } from '../components/StravaCriteriaBuilder';
 
 // Strava brand colour — marks synced activities so their origin is obvious
 const STRAVA_ORANGE = '#FC4C02';
@@ -76,8 +77,8 @@ function CustomFieldInput({ field, value, onChange }) {
 
 // Add plan (activity or habit)
 
-function AddPlanModal({ date, days, activityTypes, habits, onSave, onClose }) {
-  const [mode, setMode] = useState(activityTypes.length > 0 ? 'activity' : 'habit');
+function AddPlanModal({ date, days, activityTypes, habits, trainingTypes = [], trainingAvailable = false, onSave, onClose }) {
+  const [mode, setMode] = useState(activityTypes.length > 0 ? 'activity' : habits.length > 0 ? 'habit' : 'training');
 
   // Days of the week the plan is created for (multi-select, clicked day preselected)
   const [selectedDates, setSelectedDates] = useState([format(date, 'yyyy-MM-dd')]);
@@ -103,6 +104,12 @@ function AddPlanModal({ date, days, activityTypes, habits, onSave, onClose }) {
     notes: '',
   });
   const selectedHabit = habits.find(h => h._id === habitForm.habitId);
+
+  // Training form (criteria-based, auto-fulfilled by synced activities)
+  const [trainingMode, setTrainingMode] = useState(trainingTypes.length > 0 ? 'type' : 'custom');
+  const [trainingTypeId, setTrainingTypeId] = useState(trainingTypes[0]?._id || '');
+  const [trainingCriteria, setTrainingCriteria] = useState(emptyGroup());
+  const [trainingNotes, setTrainingNotes] = useState('');
 
   const [saving, setSaving] = useState(false);
 
@@ -144,6 +151,27 @@ function AddPlanModal({ date, days, activityTypes, habits, onSave, onClose }) {
       onSave();
     } catch (err) {
       alert('Fehler: ' + err.message);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleSubmitTraining = async (e) => {
+    e.preventDefault();
+    if (selectedDates.length === 0) return;
+    const useType = trainingMode === 'type' && trainingTypeId;
+    const criteria = useType ? undefined : { strava: normalizeCriteria(trainingCriteria) };
+    setSaving(true);
+    try {
+      await Promise.all(selectedDates.map(scheduledDate => api.post('/planner/trainings', {
+        scheduledDate,
+        trainingTypeId: useType ? trainingTypeId : undefined,
+        criteria,
+        notes: trainingNotes || undefined,
+      })));
+      onSave();
+    } catch (err) {
+      alert('Fehler: ' + (err.response?.data?.error || err.message));
     } finally {
       setSaving(false);
     }
@@ -215,6 +243,19 @@ function AddPlanModal({ date, days, activityTypes, habits, onSave, onClose }) {
             <Sparkles size={13} /> Gewohnheit
           </button>
         )}
+        {trainingAvailable && (
+          <button
+            type="button"
+            onClick={() => setMode('training')}
+            className={`flex-1 py-2.5 rounded-xl border text-sm font-semibold flex items-center justify-center gap-1.5 transition-colors ${
+              mode === 'training'
+                ? 'border-ocher-400 bg-ocher-100/60 text-ocher-700'
+                : 'border-paper-200 bg-paper-50 text-ink-400 hover:text-ink-600'
+            }`}
+          >
+            <Activity size={13} /> Training
+          </button>
+        )}
       </div>
 
       {mode === 'activity' && activityTypes.length > 0 && (
@@ -269,6 +310,47 @@ function AddPlanModal({ date, days, activityTypes, habits, onSave, onClose }) {
           {dayChips}
           <Field label="Notizen" optional>
             <Textarea rows={2} value={habitForm.notes} onChange={e => setHab('notes', e.target.value)} placeholder="Erinnerung, Kontext…" />
+          </Field>
+        </form>
+      )}
+
+      {mode === 'training' && (
+        <form id="add-form" onSubmit={handleSubmitTraining} className="space-y-4">
+          <p className="text-xs text-ink-400 -mt-1">
+            Ein geplantes Training wird automatisch als erledigt markiert, sobald an dem Tag
+            eine passende Aktivität synchronisiert wird (z.&nbsp;B. aus Strava).
+          </p>
+          {trainingTypes.length > 0 && (
+            <Field label="Was zählt als Training?">
+              <Segmented
+                value={trainingMode}
+                onChange={setTrainingMode}
+                options={[
+                  { value: 'type', label: 'Trainingstyp' },
+                  { value: 'custom', label: 'Eigene Kriterien' },
+                ]}
+              />
+            </Field>
+          )}
+          {trainingMode === 'type' && trainingTypes.length > 0 ? (
+            <Field
+              label="Trainingstyp"
+              hint={criteriaSummary(trainingTypes.find(t => t._id === trainingTypeId)?.criteria?.strava)}
+            >
+              <Select value={trainingTypeId} onChange={e => setTrainingTypeId(e.target.value)}>
+                {trainingTypes.map(t => <option key={t._id} value={t._id}>{t.name}</option>)}
+              </Select>
+            </Field>
+          ) : (
+            <StravaCriteriaBuilder
+              criteria={trainingCriteria}
+              onChange={setTrainingCriteria}
+              sportTypes={[]}
+            />
+          )}
+          {dayChips}
+          <Field label="Notizen" optional>
+            <Textarea rows={2} value={trainingNotes} onChange={e => setTrainingNotes(e.target.value)} placeholder="z.B. locker bleiben" />
           </Field>
         </form>
       )}
@@ -459,6 +541,11 @@ function EditPlanModal({ plan, kind, onSave, onClose }) {
           notes: form.notes || null,
           customValues,
         });
+      } else if (kind === 'training') {
+        await api.put(`/planner/trainings/${plan._id}`, {
+          scheduledDate: form.scheduledDate,
+          notes: form.notes || null,
+        });
       } else {
         await api.put(`/planner/habits/${plan._id}`, {
           scheduledDate: form.scheduledDate,
@@ -477,7 +564,11 @@ function EditPlanModal({ plan, kind, onSave, onClose }) {
     <Modal
       onClose={onClose}
       title="Plan bearbeiten"
-      subtitle={isActivity ? (typeConfig.label || plan.activityType) : (plan.habitId?.name || plan.habitName)}
+      subtitle={isActivity
+        ? (typeConfig.label || plan.activityType)
+        : kind === 'training'
+          ? (plan.trainingTypeName || 'Training')
+          : (plan.habitId?.name || plan.habitName)}
       icon={Pencil}
       footer={
         <>
@@ -530,6 +621,9 @@ export default function Planner() {
   const [plans, setPlans] = useState([]);
   const [habitPlans, setHabitPlans] = useState([]);
   const [stravaActivities, setStravaActivities] = useState([]);
+  const [trainingPlans, setTrainingPlans] = useState([]);
+  const [trainingTypes, setTrainingTypes] = useState([]);
+  const [stravaConfigured, setStravaConfigured] = useState(false);
   const [activityTypes, setActivityTypes] = useState([]);
   const [habits, setHabits] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -548,11 +642,13 @@ export default function Planner() {
   const load = useCallback(async () => {
     try {
       const params = { startDate: format(weekStart, 'yyyy-MM-dd'), endDate: format(weekEnd, 'yyyy-MM-dd') };
-      const [plansRes, habitPlansRes, typesRes, habitsRes, stravaRes] = await Promise.all([
+      const [plansRes, habitPlansRes, typesRes, habitsRes, trainingPlansRes, trainingTypesRes, stravaRes] = await Promise.all([
         api.get('/planner', { params }),
         api.get('/planner/habits', { params }),
         api.get('/activity-types'),
         api.get('/habits/definitions'),
+        api.get('/planner/trainings', { params }).catch(() => ({ data: [] })),
+        api.get('/training-types').catch(() => ({ data: [] })),
         // Synced Strava activities of the visible week (read-only context).
         // The server filters on the UTC start time — fetch with a one-day
         // buffer on both sides and match the LOCAL date per day below.
@@ -569,6 +665,8 @@ export default function Planner() {
       setHabitPlans(habitPlansRes.data);
       setActivityTypes(typesRes.data);
       setHabits(habitsRes.data.filter(h => h.selected));
+      setTrainingPlans(trainingPlansRes.data);
+      setTrainingTypes(trainingTypesRes.data);
       setStravaActivities(stravaRes.data.activities || []);
     } catch (err) {
       console.error(err);
@@ -579,6 +677,13 @@ export default function Planner() {
 
   useEffect(() => { setLoading(true); load(); }, [load]);
   useEffect(() => { setCopyInfo(null); }, [weekStart]);
+
+  // Whether the "Training" planning mode is offered at all
+  useEffect(() => {
+    api.get('/strava/status')
+      .then(res => setStravaConfigured(Boolean(res.data.configured)))
+      .catch(() => {});
+  }, []);
 
   const handleCopyWeek = async () => {
     setCopying(true);
@@ -625,7 +730,7 @@ export default function Planner() {
   };
 
   const today = new Date();
-  const allPlans = [...plans, ...habitPlans];
+  const allPlans = [...plans, ...habitPlans, ...trainingPlans];
   const doneCount = allPlans.filter(p => p.completed).length;
   const totalCount = allPlans.length;
 
@@ -688,14 +793,15 @@ export default function Planner() {
             const dayDate = format(day, 'yyyy-MM-dd');
             const dayPlans = plans.filter(p => (p.scheduledDate || '').slice(0, 10) === dayDate);
             const dayHabitPlans = habitPlans.filter(p => (p.scheduledDate || '').slice(0, 10) === dayDate);
+            const dayTrainings = trainingPlans.filter(p => (p.scheduledDate || '').slice(0, 10) === dayDate);
             // startDateLocal carries the athlete's local wall time — the date
             // the activity belongs to from the user's perspective.
             const dayStrava = stravaActivities.filter(a =>
               ((a.startDateLocal || a.startDate) || '').slice(0, 10) === dayDate
             );
             const isToday_ = isSameDay(day, today);
-            const totalItems = dayPlans.length + dayHabitPlans.length;
-            const doneItems = [...dayPlans, ...dayHabitPlans].filter(p => p.completed).length;
+            const totalItems = dayPlans.length + dayHabitPlans.length + dayTrainings.length;
+            const doneItems = [...dayPlans, ...dayHabitPlans, ...dayTrainings].filter(p => p.completed).length;
             const isPast = isBefore(day, startOfDay(today));
 
             return (
@@ -840,6 +946,60 @@ export default function Planner() {
                     </div>
                   ))}
 
+                  {/* Planned trainings — auto-fulfilled by matching synced activities */}
+                  {dayTrainings.map(plan => (
+                    <div
+                      key={plan._id}
+                      className={`rounded-xl border p-2 border-ocher-200 bg-ocher-100/60 ${plan.completed ? 'opacity-55' : ''}`}
+                    >
+                      <div className="flex items-start justify-between gap-1">
+                        <span
+                          className="flex-shrink-0 mt-0.5"
+                          title={plan.completed ? 'Durch Aktivität erfüllt' : 'Wird automatisch erfüllt, sobald eine passende Aktivität synchronisiert wird'}
+                        >
+                          {plan.completed
+                            ? <CheckCircle2 size={14} className="text-emerald-600 anim-check" />
+                            : <Circle size={14} className="text-ocher-400" />
+                          }
+                        </span>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-1">
+                            <Activity size={10} className="text-ocher-600 flex-shrink-0" />
+                            <p className={`text-xs font-semibold leading-tight truncate ${plan.completed ? 'line-through text-ink-400' : 'text-ocher-700'}`}>
+                              {plan.trainingTypeName || 'Training (eigene Kriterien)'}
+                            </p>
+                          </div>
+                          {plan.completed && plan.fulfilledBy && (
+                            <p className="text-xs text-ink-500 mt-0.5 truncate flex items-center gap-1">
+                              <Activity size={9} style={{ color: STRAVA_ORANGE }} className="flex-shrink-0" />
+                              {plan.fulfilledBy.name}
+                            </p>
+                          )}
+                          {plan.notes && !plan.completed && (
+                            <p className="text-xs text-ink-400 mt-0.5 truncate">{plan.notes}</p>
+                          )}
+                          {isPast && !plan.completed && (
+                            <p className="text-[10px] font-semibold text-ocher-600 mt-0.5">Überfällig</p>
+                          )}
+                        </div>
+                        <button
+                          onClick={() => setEditing({ plan, kind: 'training' })}
+                          aria-label="Plan bearbeiten"
+                          className="flex-shrink-0 text-ink-300 hover:text-brand-600 transition-colors p-1"
+                        >
+                          <Pencil size={12} />
+                        </button>
+                        <button
+                          onClick={() => api.delete(`/planner/trainings/${plan._id}`).then(load)}
+                          aria-label="Plan löschen"
+                          className="flex-shrink-0 text-ink-300 hover:text-red-600 transition-colors p-1 -mr-1"
+                        >
+                          <Trash2 size={12} />
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+
                   {/* Synced Strava activities — read-only, clearly marked as
                       external data (not part of the plan progress) */}
                   {dayStrava.map(activity => (
@@ -891,6 +1051,8 @@ export default function Planner() {
           days={days}
           activityTypes={activityTypes}
           habits={habits}
+          trainingTypes={trainingTypes}
+          trainingAvailable={stravaConfigured || trainingTypes.length > 0}
           onSave={() => { setAddFor(null); load(); }}
           onClose={() => setAddFor(null)}
         />

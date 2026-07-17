@@ -7,6 +7,7 @@ import { de } from 'date-fns/locale';
 import { Activity, Clock, Route, Heart, Mountain } from 'lucide-react';
 import api from '../utils/api';
 import { Chip, EmptyState, PageLoader, Button } from './ui';
+import StravaActivityDetailModal from './StravaActivityDetailModal';
 
 const STRAVA_ORANGE = '#FC4C02';
 
@@ -17,7 +18,7 @@ function formatDuration(seconds) {
   return h > 0 ? `${h} h ${m} min` : `${m} min`;
 }
 
-function StravaActivityCard({ activity }) {
+function StravaActivityCard({ activity, onOpen }) {
   const date = activity.startDateLocal || activity.startDate;
   const stats = [
     { icon: Clock, value: formatDuration(activity.movingTime) },
@@ -27,7 +28,13 @@ function StravaActivityCard({ activity }) {
   ].filter(s => s.value);
 
   return (
-    <div className="card p-4 flex items-start gap-3.5 border-l-4" style={{ borderLeftColor: STRAVA_ORANGE }}>
+    <button
+      type="button"
+      onClick={onOpen}
+      className="card p-4 w-full text-left flex items-start gap-3.5 border-l-4 transition-shadow hover:shadow-card-hover cursor-pointer"
+      style={{ borderLeftColor: STRAVA_ORANGE }}
+      title="Details anzeigen"
+    >
       <div className="flex-shrink-0 mt-0.5">
         <Chip color="clay">{activity.sportType || activity.type || 'Aktivität'}</Chip>
       </div>
@@ -45,7 +52,7 @@ function StravaActivityCard({ activity }) {
           ))}
         </div>
       </div>
-    </div>
+    </button>
   );
 }
 
@@ -56,6 +63,7 @@ export default function StravaActivityList({ connected }) {
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState('');
   const [page, setPage] = useState(0);
+  const [detailId, setDetailId] = useState(null);
   const limit = 20;
 
   useEffect(() => {
@@ -128,8 +136,14 @@ export default function StravaActivityList({ connected }) {
         <PageLoader />
       ) : (
         <div className="space-y-2.5 anim-list">
-          {activities.map(a => <StravaActivityCard key={a._id} activity={a} />)}
+          {activities.map(a => (
+            <StravaActivityCard key={a._id} activity={a} onOpen={() => setDetailId(a._id)} />
+          ))}
         </div>
+      )}
+
+      {detailId && (
+        <StravaActivityDetailModal activityId={detailId} onClose={() => setDetailId(null)} />
       )}
 
       {total > limit && (
