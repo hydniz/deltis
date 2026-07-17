@@ -6,13 +6,16 @@ import {
 import { de } from 'date-fns/locale';
 import {
   ChevronLeft, ChevronRight, Plus, CheckCircle2, Circle, Trash2,
-  Dumbbell, Sparkles, CalendarDays, Pencil, Copy,
+  Dumbbell, Sparkles, CalendarDays, Pencil, Copy, Activity,
 } from 'lucide-react';
 import {
   PageHeader, Button, Field, Input, Select, Textarea, Chip, chipColorFor,
   Modal, PageLoader, ProgressBar,
 } from '../components/ui';
 import PlannerHeatmap from '../components/PlannerHeatmap';
+
+// Strava brand colour — marks synced activities so their origin is obvious
+const STRAVA_ORANGE = '#FC4C02';
 
 // Card tints per activity type — light pastel surfaces matching the chip palette
 const CARD_COLORS = [
@@ -526,6 +529,7 @@ export default function Planner() {
   const [weekStart, setWeekStart] = useState(() => startOfWeek(new Date(), { weekStartsOn: 1 }));
   const [plans, setPlans] = useState([]);
   const [habitPlans, setHabitPlans] = useState([]);
+  const [stravaActivities, setStravaActivities] = useState([]);
   const [activityTypes, setActivityTypes] = useState([]);
   const [habits, setHabits] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -544,16 +548,28 @@ export default function Planner() {
   const load = useCallback(async () => {
     try {
       const params = { startDate: format(weekStart, 'yyyy-MM-dd'), endDate: format(weekEnd, 'yyyy-MM-dd') };
-      const [plansRes, habitPlansRes, typesRes, habitsRes] = await Promise.all([
+      const [plansRes, habitPlansRes, typesRes, habitsRes, stravaRes] = await Promise.all([
         api.get('/planner', { params }),
         api.get('/planner/habits', { params }),
         api.get('/activity-types'),
         api.get('/habits/definitions'),
+        // Synced Strava activities of the visible week (read-only context).
+        // The server filters on the UTC start time — fetch with a one-day
+        // buffer on both sides and match the LOCAL date per day below.
+        // Missing integration/connection simply yields an empty list.
+        api.get('/strava/activities', {
+          params: {
+            startDate: format(addDays(weekStart, -1), 'yyyy-MM-dd'),
+            endDate: format(addDays(weekEnd, 2), 'yyyy-MM-dd'),
+            limit: 100,
+          },
+        }).catch(() => ({ data: { activities: [] } })),
       ]);
       setPlans(plansRes.data);
       setHabitPlans(habitPlansRes.data);
       setActivityTypes(typesRes.data);
       setHabits(habitsRes.data.filter(h => h.selected));
+      setStravaActivities(stravaRes.data.activities || []);
     } catch (err) {
       console.error(err);
     } finally {
@@ -672,6 +688,11 @@ export default function Planner() {
             const dayDate = format(day, 'yyyy-MM-dd');
             const dayPlans = plans.filter(p => (p.scheduledDate || '').slice(0, 10) === dayDate);
             const dayHabitPlans = habitPlans.filter(p => (p.scheduledDate || '').slice(0, 10) === dayDate);
+            // startDateLocal carries the athlete's local wall time — the date
+            // the activity belongs to from the user's perspective.
+            const dayStrava = stravaActivities.filter(a =>
+              ((a.startDateLocal || a.startDate) || '').slice(0, 10) === dayDate
+            );
             const isToday_ = isSameDay(day, today);
             const totalItems = dayPlans.length + dayHabitPlans.length;
             const doneItems = [...dayPlans, ...dayHabitPlans].filter(p => p.completed).length;
@@ -819,7 +840,37 @@ export default function Planner() {
                     </div>
                   ))}
 
-                  {totalItems === 0 && (
+                  {/* Synced Strava activities — read-only, clearly marked as
+                      external data (not part of the plan progress) */}
+                  {dayStrava.map(activity => (
+                    <div
+                      key={activity._id}
+                      className="rounded-xl border hairline bg-paper-50 p-2 border-l-4"
+                      style={{ borderLeftColor: STRAVA_ORANGE }}
+                      title="Von Strava synchronisiert"
+                    >
+                      <div className="flex items-start gap-1.5">
+                        <Activity size={12} style={{ color: STRAVA_ORANGE }} className="flex-shrink-0 mt-0.5" />
+                        <div className="flex-1 min-w-0">
+                          <p className="text-xs font-semibold leading-tight text-ink-800 truncate">
+                            {activity.name || activity.sportType || 'Aktivität'}
+                          </p>
+                          <p className="text-xs text-ink-500 mt-0.5">
+                            {[
+                              activity.sportType,
+                              activity.movingTime ? `${Math.round(activity.movingTime / 60)} min` : null,
+                              activity.distance ? `${(activity.distance / 1000).toFixed(1)} km` : null,
+                            ].filter(Boolean).join(' · ')}
+                          </p>
+                          <p className="text-[10px] font-semibold mt-0.5" style={{ color: STRAVA_ORANGE }}>
+                            Strava
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+
+                  {totalItems === 0 && dayStrava.length === 0 && (
                     <p className="text-xs text-ink-200 text-center py-2">Frei</p>
                   )}
                 </div>

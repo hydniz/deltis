@@ -138,14 +138,30 @@ describe('StravaCriteriaBuilder component', () => {
     expect(normalized().rules[0].values).toEqual(['Ride']);
   });
 
-  it('adds custom sport types via free text', async () => {
+  it('adds custom sport types via free text (with explanatory hint)', async () => {
     const user = userEvent.setup();
     render(<Harness />);
 
     await user.click(screen.getByRole('button', { name: /Sportart/ }));
-    await user.type(screen.getByPlaceholderText(/Andere Sportart/), 'Pickleball');
+    expect(screen.getByText(/genau so ein, wie Strava sie/)).toBeInTheDocument();
+    await user.type(screen.getByPlaceholderText(/Weitere Sportart/), 'Pickleball');
     await user.click(screen.getByRole('button', { name: /Hinzufügen/ }));
     expect(normalized().rules[0].values).toEqual(['Pickleball']);
+  });
+
+  it('collapses the sport quick picks behind a show-all toggle', async () => {
+    const user = userEvent.setup();
+    render(<Harness />);
+
+    await user.click(screen.getByRole('button', { name: /Sportart/ }));
+    // Collapsed: 12 quick picks, the rest behind the toggle
+    expect(screen.queryByRole('button', { name: 'Golf' })).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: /Alle \d+ Sportarten anzeigen/ }));
+    expect(screen.getByRole('button', { name: 'Golf' })).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: 'Weniger anzeigen' }));
+    expect(screen.queryByRole('button', { name: 'Golf' })).not.toBeInTheDocument();
   });
 
   it('adds a metric range rule with all backend metrics available', async () => {

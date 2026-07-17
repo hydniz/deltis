@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
+import { Link } from 'react-router-dom';
 import api from '../utils/api';
 import { format, parseISO } from 'date-fns';
 import { de } from 'date-fns/locale';
@@ -907,8 +908,11 @@ function CreateGoalModal({ activityTypes, habits, strava, onSave, onClose, onTar
           {isStravaGoal && (<>
             {!strava?.connected && (
               <Alert tone="warning">
-                Du hast noch kein Strava-Konto verbunden. Verbinde es in den Einstellungen,
-                damit der Fortschritt gemessen werden kann.
+                Du hast noch kein Strava-Konto verbunden — ohne Verbindung kann der
+                Fortschritt dieses Ziels nicht gemessen werden.{' '}
+                <Link to="/settings" className="underline font-semibold whitespace-nowrap">
+                  Jetzt in den Einstellungen verbinden →
+                </Link>
               </Alert>
             )}
             <StravaCriteriaBuilder
