@@ -11,6 +11,12 @@ const userSchema = new mongoose.Schema({
   isAdmin: { type: Boolean, default: false },
   adminSecretHash: { type: String, select: false },
   weightUnit: { type: String, default: 'kg' },
+  // Optional weight goal: target value + date, shown on the weight page
+  // (reference line + remaining delta). Null = no goal set.
+  weightGoal: {
+    weight: { type: Number, default: null },
+    date: { type: Date, default: null },
+  },
   // Incremented on every password change/reset. The JWT carries the value it
   // was issued with (`sv` claim); a mismatch invalidates the session, so a
   // stolen cookie dies the moment the password is changed.

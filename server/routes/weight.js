@@ -15,8 +15,11 @@ router.get('/', auth, async (req, res) => {
       if (endDate) query.date.$lte = new Date(endDate);
     }
 
-    const logs = await WeightLog.find(query).sort({ date: 1 }).limit(+limit);
-    res.json(logs);
+    // Most recent `limit` entries, returned in chronological order — with a
+    // plain ascending sort `?limit=1` would return the OLDEST entry, which
+    // is exactly the "current weight is wrong" bug the dashboard had.
+    const logs = await WeightLog.find(query).sort({ date: -1 }).limit(+limit);
+    res.json(logs.reverse());
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

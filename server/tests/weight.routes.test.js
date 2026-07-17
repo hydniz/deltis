@@ -101,3 +101,50 @@ describe('DELETE /api/weight/:id', () => {
     expect(stillExists).not.toBeNull();
   });
 });
+
+describe('GET /api/weight with limit', () => {
+  it('returns the MOST RECENT entries in chronological order', async () => {
+    const { token, user } = await createUser();
+    const WeightLog = require('../models/WeightLog');
+    await WeightLog.create({ userId: user._id, date: new Date('2026-07-01'), weight: 80, unit: 'kg' });
+    await WeightLog.create({ userId: user._id, date: new Date('2026-07-10'), weight: 78, unit: 'kg' });
+    await WeightLog.create({ userId: user._id, date: new Date('2026-07-15'), weight: 77, unit: 'kg' });
+
+    // limit=1 → the newest entry, NOT the oldest (dashboard "current weight")
+    const latest = await request(app).get('/api/weight?limit=1').set(authHeader(token));
+    expect(latest.body).toHaveLength(1);
+    expect(latest.body[0].weight).toBe(77);
+
+    // limit=2 → the two newest, oldest first (chart order)
+    const two = await request(app).get('/api/weight?limit=2').set(authHeader(token));
+    expect(two.body.map(l => l.weight)).toEqual([78, 77]);
+  });
+});
+
+describe('weight goal on the profile', () => {
+  it('saves, returns and clears the goal', async () => {
+    const { token } = await createUser();
+
+    const set = await request(app).put('/api/auth/me').set(authHeader(token)).send({
+      weightGoal: { weight: 72, date: '2026-09-30' },
+    });
+    expect(set.status).toBe(200);
+    expect(set.body.weightGoal.weight).toBe(72);
+    expect(set.body.weightGoal.date).toContain('2026-09-30');
+
+    const cleared = await request(app).put('/api/auth/me').set(authHeader(token)).send({
+      weightGoal: null,
+    });
+    expect(cleared.body.weightGoal.weight).toBeNull();
+  });
+
+  it('rejects invalid goal values', async () => {
+    const { token } = await createUser();
+    expect((await request(app).put('/api/auth/me').set(authHeader(token)).send({
+      weightGoal: { weight: -5 },
+    })).status).toBe(400);
+    expect((await request(app).put('/api/auth/me').set(authHeader(token)).send({
+      weightGoal: { weight: 72, date: 'kein-datum' },
+    })).status).toBe(400);
+  });
+});

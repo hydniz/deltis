@@ -12,4 +12,6 @@
 //      planner provenance (plan source field)
 // v11: due entries carry a target-aware `fulfilled` flag, goal heatmaps
 //      return interval tiles for periodic goals
-export const REQUIRED_API_VERSION = 11;
+// v12: weight goal on the profile (weightGoal on PUT/GET /auth/me), /weight
+//      limit returns the newest entries
+export const REQUIRED_API_VERSION = 12;

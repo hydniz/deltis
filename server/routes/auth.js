@@ -176,8 +176,8 @@ router.get('/me', auth, (req, res) => {
 
 router.put('/me', auth, async (req, res) => {
   try {
-    const { name, weightUnit } = req.body;
-    // Whitelist + validate: only these two profile fields are user-editable.
+    const { name, weightUnit, weightGoal } = req.body;
+    // Whitelist + validate: only these profile fields are user-editable.
     const update = {};
     if (name !== undefined) {
       if (typeof name !== 'string' || !name.trim() || name.trim().length > 60) {
@@ -190,6 +190,25 @@ router.put('/me', auth, async (req, res) => {
         return res.status(400).json({ error: 'Ungültige Gewichtseinheit.' });
       }
       update.weightUnit = weightUnit;
+    }
+    if (weightGoal !== undefined) {
+      // null clears the goal; otherwise weight is required, date optional.
+      if (weightGoal === null) {
+        update.weightGoal = { weight: null, date: null };
+      } else {
+        const w = +weightGoal.weight;
+        if (!Number.isFinite(w) || w <= 0 || w > 1000) {
+          return res.status(400).json({ error: 'Ungültiges Zielgewicht.' });
+        }
+        let d = null;
+        if (weightGoal.date) {
+          d = new Date(weightGoal.date);
+          if (isNaN(d.getTime())) {
+            return res.status(400).json({ error: 'Ungültiges Zieldatum.' });
+          }
+        }
+        update.weightGoal = { weight: w, date: d };
+      }
     }
     const user = await User.findByIdAndUpdate(
       req.user._id,
