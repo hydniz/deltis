@@ -17,6 +17,12 @@ beforeAll(async () => {
   app = buildApp();
   process.env.STRAVA_CLIENT_ID = '12345';
   process.env.STRAVA_CLIENT_SECRET = 'test-secret';
+  // Fast wait/poll for POST /sync's job-queue wait (see routes/strava.js) —
+  // otherwise the "times out, still pending" test would take real seconds.
+  // Poll is deliberately much shorter than wait so the "plugin responds"
+  // test has a wide margin under full-suite load (avoids timing flakiness).
+  process.env.STRAVA_SYNC_WAIT_MS = '1200';
+  process.env.STRAVA_SYNC_POLL_MS = '20';
 });
 
 afterEach(async () => {
@@ -31,6 +37,8 @@ afterAll(async () => {
   delete process.env.STRAVA_CLIENT_SECRET;
   delete process.env.PUBLIC_BASE_URL;
   delete process.env.STRAVA_WEBHOOK_VERIFY_TOKEN;
+  delete process.env.STRAVA_SYNC_WAIT_MS;
+  delete process.env.STRAVA_SYNC_POLL_MS;
   await stopDb();
 });
 
@@ -160,10 +168,9 @@ describe('GET /api/strava/callback', () => {
     expect(res.headers.location).toContain('strava=scope');
   });
 
-  it('creates the connection, kicks off the initial sync and redirects with success', async () => {
+  it('creates the connection, requests the initial sync and redirects with success', async () => {
     const { user } = await createUser();
     jest.spyOn(global, 'fetch').mockResolvedValue(tokenExchangeResponse());
-    const initialSync = jest.spyOn(strava, 'runInitialSync').mockResolvedValue({ synced: 0, failed: 0 });
 
     const res = await request(app)
       .get(`/api/strava/callback?state=${signState(user._id)}&code=abc&scope=read,activity:read_all`);
@@ -175,19 +182,21 @@ describe('GET /api/strava/callback', () => {
     expect(connection.athleteId).toBe(4711);
     expect(connection.accessToken).toBe('new-access');
     expect(connection.scope).toBe('read,activity:read_all');
-    expect(initialSync).toHaveBeenCalledTimes(1);
+    // The actual Strava sync happens in the strava-integration plugin's poll
+    // loop (see docs/plugins/MANIFEST.md) — core only flags the request.
+    expect(connection.syncRequestedAt).not.toBeNull();
   });
 
-  it('does not restart the initial sync when reconnecting', async () => {
+  it('does not re-request the initial sync when reconnecting', async () => {
     const { user } = await createUser();
     await createConnection(user._id, { initialSyncDone: true });
     jest.spyOn(global, 'fetch').mockResolvedValue(tokenExchangeResponse());
-    const initialSync = jest.spyOn(strava, 'runInitialSync').mockResolvedValue({ synced: 0, failed: 0 });
 
     const res = await request(app)
       .get(`/api/strava/callback?state=${signState(user._id)}&code=abc&scope=read,activity:read_all`);
     expect(res.headers.location).toContain('strava=success');
-    expect(initialSync).not.toHaveBeenCalled();
+    const connection = await StravaConnection.findOne({ userId: user._id });
+    expect(connection.syncRequestedAt).toBeNull();
   });
 
   it('rejects a Strava account that is already linked to another user', async () => {
@@ -219,20 +228,57 @@ describe('POST /api/strava/sync', () => {
     expect(res.status).toBe(404);
   });
 
-  it('runs a sync and throttles the second attempt', async () => {
+  it('throttles a second sync request within the cooldown window', async () => {
     const { token, user } = await createUser();
     await createConnection(user._id);
-    const sync = jest.spyOn(strava, 'syncConnection').mockResolvedValue({ synced: 2, failed: 0 });
 
     const first = await request(app).post('/api/strava/sync').set(authHeader(token));
     expect(first.status).toBe(200);
-    expect(first.body.synced).toBe(2);
     expect(first.body.connection.accessToken).toBeUndefined();
-    expect(sync).toHaveBeenCalledTimes(1);
 
     const second = await request(app).post('/api/strava/sync').set(authHeader(token));
     expect(second.status).toBe(429);
-    expect(sync).toHaveBeenCalledTimes(1);
+  });
+
+  it('reports pending when the plugin does not respond within the wait window', async () => {
+    const { token, user } = await createUser();
+    await createConnection(user._id);
+
+    const res = await request(app).post('/api/strava/sync').set(authHeader(token));
+    expect(res.status).toBe(200);
+    expect(res.body.pending).toBe(true);
+    expect(res.body.synced).toBe(0);
+
+    const connection = await StravaConnection.findOne({ userId: user._id });
+    expect(connection.syncRequestedAt).not.toBeNull();
+  });
+});
+
+// Direct unit tests of the job-queue wait helper — deterministic (no HTTP
+// layer, no racing a live request's own DB round-trip against a wall-clock
+// delay) while still exercising exactly the logic POST /sync depends on.
+describe('waitForSyncResult (unit)', () => {
+  it('resolves once lastSyncAt catches up to requestedAt, reporting the synced/failed counts', async () => {
+    const { user } = await createUser();
+    await createConnection(user._id);
+    const requestedAt = new Date();
+
+    const resultPromise = stravaRouter._waitForSyncResult(user._id, requestedAt);
+    await StravaConnection.updateOne(
+      { userId: user._id },
+      { lastSyncAt: new Date(requestedAt.getTime() + 1), lastSyncSyncedCount: 3, lastSyncFailedCount: 1 }
+    );
+
+    await expect(resultPromise).resolves.toEqual({ synced: 3, failed: 1, pending: false });
+  });
+
+  it('does not resolve on a lastSyncAt that predates the request (stale from an earlier sync)', async () => {
+    const { user } = await createUser();
+    await createConnection(user._id, { lastSyncAt: new Date(Date.now() - 60000), lastSyncSyncedCount: 9 });
+    const requestedAt = new Date();
+
+    const result = await stravaRouter._waitForSyncResult(user._id, requestedAt);
+    expect(result).toEqual({ synced: 0, failed: 0, pending: true });
   });
 });
 

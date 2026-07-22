@@ -84,10 +84,11 @@ must still separately grant it before it can touch *their* data (see
 | `ui:dashboard-widget` | Contribute a widget to the dashboard (rendered in a sandboxed iframe, never with direct DOM/session access to the main app). |
 | `ui:settings-panel` | Contribute a panel under Settings → Integrations. |
 | `ui:goal-criteria-provider` | Offer custom conditions in the goal-creation flow (the same seam Strava's criteria builder already uses today). |
-| `background:cron` | Run on a recurring schedule inside the plugin's own container. |
+| `background:cron` | Run on a recurring schedule inside the plugin's own container. `GET /granted-users` on the Host API lists every user who granted this plugin, so a cron-style plugin can iterate all of them without Deltis ever calling into the plugin (there is no inbound channel to a plugin container — see "The Strava plugin" below for how a real one uses this). |
 | `background:webhook-receiver` | Receive webhooks from an external service (the plugin's own container exposes the receiver — Deltis does not proxy arbitrary inbound traffic to it). |
 | `notifications:send` | Send the granting user a notification. |
 | `network:<domain>` | Outbound network access to exactly `<domain>` (e.g. `network:api.strava.com`). One capability per distinct host — there is no wildcard. |
+| `strava:sync` | Integration-specific: read/write the granting user's `StravaConnection`/`StravaActivity` (which stay core-owned — the goal-criteria engine reads them directly) via dedicated routes, and request a short-lived, already-refreshed Strava access token. The plugin never sees the long-lived refresh token. See "The Strava plugin" below. |
 
 ## Two-level consent
 
@@ -136,6 +137,42 @@ a new plugin version — this is what "written in the repo" compatibility
 tracking means in practice: the manifest in *your* repo is the record of
 what you actually tested.
 
+## The Strava plugin: a worked example
+
+[`deltis-strava-integration`](https://github.com/hydniz/deltis-strava-integration)
+is the first real plugin, and the pattern it uses is worth calling out
+because it solves a problem every `background:cron` plugin will hit: **there
+is no inbound channel into a plugin container** — a plugin only ever reaches
+out to the Host API, Deltis never calls into it. So how does a webhook, an
+OAuth callback, or a "sync now" button (all of which arrive on the *core*
+server, tied to its fixed public domain) hand work to a plugin?
+
+**Answer: a job-queue field, polled frequently.** `StravaConnection` (still a
+core-owned collection — see below) has a `syncRequestedAt` timestamp. Core
+sets it whenever something should be synced (new connection, webhook event,
+manual sync) but never calls Strava's API itself. The plugin polls
+`GET /granted-users` + `GET /strava/connection` every ~15 seconds (cheap —
+just a Mongo read via the Host API) and does the actual Strava API work only
+for connections where `syncRequestedAt` is newer than `lastSyncAt`, reporting
+back via `POST /strava/sync-result`. This trades instant sync for "within
+~15 seconds," which is a non-issue for a personal tool and avoids needing
+the plugin container to be reachable from the internet at all.
+
+**Why `StravaConnection`/`StravaActivity` stay core-owned collections**
+instead of moving into the plugin's own storage: `server/routes/goals.js`'s
+criteria engine (`services/stravaCriteria.js`, `services/trainingCriteria.js`)
+reads `StravaActivity` directly and synchronously while evaluating goal
+progress — sport-type filters, HR-zone-percentage rules over raw heart-rate
+streams, etc. Moving that data out from under it would either break existing
+Strava-criteria goals or require re-implementing that whole evaluation
+engine inside the plugin. Instead, only the repeated "call Strava's API on a
+timer" work — the part with by far the most ongoing third-party exposure —
+moved out; the OAuth token exchange (tied to the fixed callback domain) and
+the goal-evaluation logic that depends on this data stayed untouched in
+core. Not every future integration will have this constraint — one without
+a pre-existing core-side data dependency can own its data entirely in its
+own storage.
+
 ## Runtime & isolation
 
 A plugin runs as its own Docker container on an isolated bridge network
@@ -158,11 +195,16 @@ granted capabilities on every request.
   `activities:read/write`, `goals:read` and a narrow `goals:write` — creates
   only the same single-condition "common case" goal the web/Android basic
   create form supports, not the full meta-goal/Strava-criteria/multi-condition
-  surface — `planner:read/write`, `weight:read/write`, `user:read`) plus
-  `notifications:send` (accepted but not yet delivered to any device — no
-  push backend exists yet for web/Android). The `ui:*`/`background:*`
-  capabilities still have no Host API route — there is nothing to call for
-  them until the sandboxed-UI and scheduling infrastructure exists.
+  surface — `planner:read/write`, `weight:read/write`, `user:read`, `strava:sync`)
+  plus `notifications:send` (accepted but not yet delivered to any device —
+  no push backend exists yet for web/Android). The `ui:*` capabilities still
+  have no Host API route — there is nothing to call for them until the
+  sandboxed-UI infrastructure exists. `background:cron` now has a working
+  entry point (`GET /granted-users`, see "The Strava plugin" above);
+  `background:webhook-receiver` still has none — a plugin needing real
+  inbound webhooks of its own would need its own public exposure, which
+  requires reverse-proxy/DNS changes outside the scope of any single plugin
+  install.
 - **No frontend plugin-management UI yet** — installing/granting currently
   requires calling `/api/plugins/*` directly. The consent screen, sandboxed
   iframe rendering for `ui:*` capabilities, and the Android-side experience

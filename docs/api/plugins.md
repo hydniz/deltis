@@ -91,6 +91,7 @@ target user hasn't granted this plugin.
 
 | Method & path | Capability required | Notes |
 |---|---|---|
+| `GET /granted-users` | none (valid plugin auth only) | `[{userId}]` — every user who granted *this* plugin. The entry point for a `background:cron` plugin to iterate its users without any inbound channel into the plugin. |
 | `GET /habits` | `habits:read` | Excludes soft-deleted (trashed) habits. |
 | `POST /habits` | `habits:write` | Body: `name`, `unitSymbol` (required), `type` (`amount`\|`duration`\|`boolean`, default `amount`). |
 | `POST /habits/logs` | `habits:write` | Body: `habitId`, `date`, `value` (required). `404` if `habitId` doesn't belong to the granting user. |
@@ -104,6 +105,10 @@ target user hasn't granted this plugin.
 | `POST /weight` | `weight:write` | Body: `date`, `weight` (required), `unit` (default `kg`). |
 | `GET /user` | `user:read` | Returns `{ id, name, username }` only — never the password hash or any other secret. |
 | `POST /notifications` | `notifications:send` | Body: `{ title }`. Accepted (`202`) but not yet delivered to any device — no push backend exists yet. |
+| `GET /strava/connection` | `strava:sync` | Returns `{ connected, athleteId, accessToken, scope, syncRequestedAt, lastSyncAt, initialSyncDone }` for the granting user — `accessToken` is freshly refreshed by core if needed; the plugin never sees the refresh token. `{ connected: false }` if the user has no Strava connection. |
+| `POST /strava/sync-result` | `strava:sync` | Body: `{ synced, failed, error? }` — records the outcome of a sync, sets `lastSyncAt`/`initialSyncDone`. |
+| `POST /strava/activities` | `strava:sync` | Body: `{ detail, zones?, streams? }` (`detail.id` required) — upserts into `StravaActivity`, keyed by `(userId, stravaId)`. |
+| `DELETE /strava/activities/:stravaId` | `strava:sync` | Removes one synced activity for the granting user. |
 
-The `ui:*`/`background:*` capabilities still have no Host API route — see
+The `ui:*` capabilities still have no Host API route — see
 [`docs/plugins/MANIFEST.md`](../plugins/MANIFEST.md) "Known limitations".

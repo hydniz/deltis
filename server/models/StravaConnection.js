@@ -21,8 +21,17 @@ const stravaConnectionSchema = new mongoose.Schema({
   // 7-day backfill after the first connect
   initialSyncDone: { type: Boolean, default: false },
 
+  // Job-queue handoff to the strava-integration plugin (server/routes/
+  // pluginHostApi.js "strava:sync" capability): core sets syncRequestedAt
+  // whenever a sync should happen (new connection, webhook event, manual
+  // "sync now") — the actual Strava API call happens in the plugin's own
+  // poll loop, which reports back via lastSyncAt/lastSyncSyncedCount/
+  // lastSyncFailedCount. A sync is "done" once lastSyncAt >= syncRequestedAt.
+  syncRequestedAt: { type: Date, default: null },
   lastSyncAt: { type: Date, default: null },
   lastSyncError: { type: String, default: null },
+  lastSyncSyncedCount: { type: Number, default: 0 },
+  lastSyncFailedCount: { type: Number, default: 0 },
 
   createdAt: { type: Date, default: Date.now },
 });

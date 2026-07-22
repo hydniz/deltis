@@ -9,6 +9,8 @@ const ActivityLog = require('../models/ActivityLog');
 const ActivityPlan = require('../models/ActivityPlan');
 const Goal = require('../models/Goal');
 const WeightLog = require('../models/WeightLog');
+const StravaConnection = require('../models/StravaConnection');
+const StravaActivity = require('../models/StravaActivity');
 
 let app;
 const RAW_TOKEN = 'a'.repeat(64);
@@ -557,5 +559,211 @@ describe('unexpected database failures surface as 5xx, never crash the process',
       .set({ ...pluginAuthHeader(), 'X-Plugin-User-Id': user._id.toString() })
       .send({ date: '2026-07-22', weight: 80 });
     expect(res.status).toBe(400);
+  });
+});
+
+describe('GET /granted-users', () => {
+  it('lists only users who granted this specific plugin', async () => {
+    await installPlugin(['strava:sync']);
+    const { user: granted } = await createUser();
+    const { user: notGranted } = await createUser();
+    await PluginUserGrant.create({ pluginId: 'strava-integration', userId: granted._id, capabilities: ['strava:sync'], enabled: true });
+    await PluginUserGrant.create({ pluginId: 'strava-integration', userId: notGranted._id, capabilities: ['strava:sync'], enabled: false });
+
+    const res = await request(app).get('/api/plugin-host/v1/granted-users').set(pluginAuthHeader());
+    expect(res.status).toBe(200);
+    expect(res.body.map(g => g.userId)).toEqual([granted._id.toString()]);
+  });
+
+  it('500s when the lookup fails', async () => {
+    await installPlugin(['strava:sync']);
+    jest.spyOn(PluginUserGrant, 'find').mockReturnValue({ select: () => Promise.reject(new Error('db down')) });
+    const res = await request(app).get('/api/plugin-host/v1/granted-users').set(pluginAuthHeader());
+    expect(res.status).toBe(500);
+  });
+});
+
+describe('Strava sync (strava:sync capability)', () => {
+  async function grantedUser(capabilities = ['strava:sync']) {
+    await installPlugin(capabilities);
+    const { user } = await createUser();
+    await PluginUserGrant.create({ pluginId: 'strava-integration', userId: user._id, capabilities, enabled: true });
+    return user;
+  }
+
+  it('reports connected:false for a user with no Strava connection', async () => {
+    const user = await grantedUser();
+    const res = await request(app).get('/api/plugin-host/v1/strava/connection')
+      .set({ ...pluginAuthHeader(), 'X-Plugin-User-Id': user._id.toString() });
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual({ connected: false });
+  });
+
+  it('returns a fresh access token and never the refresh token', async () => {
+    const user = await grantedUser();
+    await StravaConnection.create({
+      userId: user._id, athleteId: 4711, accessToken: 'access-tok', refreshToken: 'refresh-tok',
+      expiresAt: new Date(Date.now() + 3600000), scope: 'read,activity:read_all',
+    });
+
+    const res = await request(app).get('/api/plugin-host/v1/strava/connection')
+      .set({ ...pluginAuthHeader(), 'X-Plugin-User-Id': user._id.toString() });
+    expect(res.status).toBe(200);
+    expect(res.body).toMatchObject({ connected: true, athleteId: 4711, accessToken: 'access-tok', initialSyncDone: false });
+    expect(JSON.stringify(res.body)).not.toContain('refresh-tok');
+  });
+
+  it('500s when the connection lookup fails', async () => {
+    const user = await grantedUser();
+    jest.spyOn(StravaConnection, 'findOne').mockReturnValue({ select: () => Promise.reject(new Error('db down')) });
+    const res = await request(app).get('/api/plugin-host/v1/strava/connection')
+      .set({ ...pluginAuthHeader(), 'X-Plugin-User-Id': user._id.toString() });
+    expect(res.status).toBe(500);
+  });
+
+  it('records a sync result and marks the initial sync done', async () => {
+    const user = await grantedUser();
+    await StravaConnection.create({
+      userId: user._id, athleteId: 4711, accessToken: 'a', refreshToken: 'r',
+      expiresAt: new Date(Date.now() + 3600000),
+    });
+
+    const res = await request(app).post('/api/plugin-host/v1/strava/sync-result')
+      .set({ ...pluginAuthHeader(), 'X-Plugin-User-Id': user._id.toString() })
+      .send({ synced: 3, failed: 1 });
+    expect(res.status).toBe(200);
+
+    const connection = await StravaConnection.findOne({ userId: user._id });
+    expect(connection.lastSyncSyncedCount).toBe(3);
+    expect(connection.lastSyncFailedCount).toBe(1);
+    expect(connection.lastSyncError).toBeNull();
+    expect(connection.initialSyncDone).toBe(true);
+  });
+
+  it('records a sync error', async () => {
+    const user = await grantedUser();
+    await StravaConnection.create({
+      userId: user._id, athleteId: 4711, accessToken: 'a', refreshToken: 'r',
+      expiresAt: new Date(Date.now() + 3600000), initialSyncDone: true,
+    });
+
+    await request(app).post('/api/plugin-host/v1/strava/sync-result')
+      .set({ ...pluginAuthHeader(), 'X-Plugin-User-Id': user._id.toString() })
+      .send({ synced: 0, failed: 1, error: 'Rate Limit Exceeded' });
+
+    const connection = await StravaConnection.findOne({ userId: user._id });
+    expect(connection.lastSyncError).toBe('Rate Limit Exceeded');
+  });
+
+  it('records a fully successful sync with zero failures', async () => {
+    const user = await grantedUser();
+    await StravaConnection.create({
+      userId: user._id, athleteId: 4711, accessToken: 'a', refreshToken: 'r', expiresAt: new Date(Date.now() + 3600000),
+    });
+
+    await request(app).post('/api/plugin-host/v1/strava/sync-result')
+      .set({ ...pluginAuthHeader(), 'X-Plugin-User-Id': user._id.toString() })
+      .send({ synced: 5, failed: 0 });
+
+    const connection = await StravaConnection.findOne({ userId: user._id });
+    expect(connection.lastSyncSyncedCount).toBe(5);
+    expect(connection.lastSyncFailedCount).toBe(0);
+    expect(connection.lastSyncError).toBeNull();
+  });
+
+  it('404s a sync-result for a user with no connection', async () => {
+    const user = await grantedUser();
+    const res = await request(app).post('/api/plugin-host/v1/strava/sync-result')
+      .set({ ...pluginAuthHeader(), 'X-Plugin-User-Id': user._id.toString() })
+      .send({ synced: 0, failed: 0 });
+    expect(res.status).toBe(404);
+  });
+
+  it('500s when saving the sync result fails', async () => {
+    const user = await grantedUser();
+    await StravaConnection.create({
+      userId: user._id, athleteId: 4711, accessToken: 'a', refreshToken: 'r', expiresAt: new Date(Date.now() + 3600000),
+    });
+    jest.spyOn(StravaConnection, 'findOne').mockRejectedValue(new Error('db down'));
+    const res = await request(app).post('/api/plugin-host/v1/strava/sync-result')
+      .set({ ...pluginAuthHeader(), 'X-Plugin-User-Id': user._id.toString() })
+      .send({ synced: 0, failed: 0 });
+    expect(res.status).toBe(500);
+  });
+
+  it('upserts a synced activity without creating duplicates', async () => {
+    const user = await grantedUser();
+    await StravaConnection.create({
+      userId: user._id, athleteId: 4711, accessToken: 'a', refreshToken: 'r', expiresAt: new Date(Date.now() + 3600000),
+    });
+
+    const detail = (extra = {}) => ({
+      id: 99, name: 'Lauf', sport_type: 'Run', type: 'Run', start_date: '2026-07-20T06:00:00Z',
+      moving_time: 1800, distance: 5000, ...extra,
+    });
+
+    await request(app).post('/api/plugin-host/v1/strava/activities')
+      .set({ ...pluginAuthHeader(), 'X-Plugin-User-Id': user._id.toString() })
+      .send({ detail: detail() });
+    const res = await request(app).post('/api/plugin-host/v1/strava/activities')
+      .set({ ...pluginAuthHeader(), 'X-Plugin-User-Id': user._id.toString() })
+      .send({ detail: detail({ name: 'Umbenannt' }), zones: [{ type: 'heartrate' }], streams: { heartrate: { data: [140] } } });
+
+    expect(res.status).toBe(201);
+    const docs = await StravaActivity.find({ userId: user._id });
+    expect(docs).toHaveLength(1);
+    expect(docs[0].name).toBe('Umbenannt');
+    expect(docs[0].athleteId).toBe(4711);
+    expect(docs[0].zones[0].type).toBe('heartrate');
+  });
+
+  it('stores start_date_local when provided and defaults a missing name to empty string', async () => {
+    const user = await grantedUser();
+    await StravaConnection.create({
+      userId: user._id, athleteId: 4711, accessToken: 'a', refreshToken: 'r', expiresAt: new Date(Date.now() + 3600000),
+    });
+
+    const res = await request(app).post('/api/plugin-host/v1/strava/activities')
+      .set({ ...pluginAuthHeader(), 'X-Plugin-User-Id': user._id.toString() })
+      .send({ detail: { id: 100, start_date: '2026-07-20T06:00:00Z', start_date_local: '2026-07-20T08:00:00Z' } });
+
+    expect(res.status).toBe(201);
+    expect(res.body.name).toBe('');
+    expect(new Date(res.body.startDateLocal).toISOString()).toBe('2026-07-20T08:00:00.000Z');
+  });
+
+  it('rejects an activity write with no detail.id', async () => {
+    const user = await grantedUser();
+    const res = await request(app).post('/api/plugin-host/v1/strava/activities')
+      .set({ ...pluginAuthHeader(), 'X-Plugin-User-Id': user._id.toString() })
+      .send({ detail: { name: 'x' } });
+    expect(res.status).toBe(400);
+  });
+
+  it('400s when the activity upsert fails', async () => {
+    const user = await grantedUser();
+    jest.spyOn(StravaActivity, 'findOneAndUpdate').mockRejectedValue(new Error('invalid'));
+    const res = await request(app).post('/api/plugin-host/v1/strava/activities')
+      .set({ ...pluginAuthHeader(), 'X-Plugin-User-Id': user._id.toString() })
+      .send({ detail: { id: 1, name: 'x' } });
+    expect(res.status).toBe(400);
+  });
+
+  it('deletes a synced activity', async () => {
+    const user = await grantedUser();
+    await StravaActivity.create({ userId: user._id, stravaId: 42, athleteId: 4711, startDate: new Date() });
+
+    const res = await request(app).delete('/api/plugin-host/v1/strava/activities/42')
+      .set({ ...pluginAuthHeader(), 'X-Plugin-User-Id': user._id.toString() });
+    expect(res.status).toBe(200);
+    expect(await StravaActivity.findOne({ userId: user._id, stravaId: 42 })).toBeNull();
+  });
+
+  it('500s when the activity delete fails', async () => {
+    const user = await grantedUser();
+    jest.spyOn(StravaActivity, 'deleteOne').mockRejectedValue(new Error('db down'));
+    const res = await request(app).delete('/api/plugin-host/v1/strava/activities/42')
+      .set({ ...pluginAuthHeader(), 'X-Plugin-User-Id': user._id.toString() });
+    expect(res.status).toBe(500);
   });
 });
