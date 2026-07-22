@@ -23,6 +23,7 @@
 | Training Types | [training-types.md](training-types.md) | `/api/training-types` |
 | Data (export/import) | [data.md](data.md) | `/api/data` |
 | Admin | [admin.md](admin.md) | `/api/admin` |
+| Plugins | [plugins.md](plugins.md) | `/api/plugins`, `/api/plugin-host/v1` |
 
 ---
 
@@ -75,7 +76,8 @@ Returns the running versions. No authentication required.
 ```json
 {
   "version": "0.3.0",
-  "apiVersion": 1
+  "apiVersion": 1,
+  "pluginHostApiVersion": 1
 }
 ```
 
@@ -83,6 +85,7 @@ Returns the running versions. No authentication required.
 |---|---|---|
 | `version` | string | App version string (`semver[-stage][+commit]`) |
 | `apiVersion` | integer | API contract version (see compatibility rules below) |
+| `pluginHostApiVersion` | integer | Plugin Host API version — see [`docs/plugins/MANIFEST.md`](../plugins/MANIFEST.md#compatibility-checking) |
 
 ---
 

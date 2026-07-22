@@ -53,6 +53,26 @@ beforeAll((done) => {
         return res.end(JSON.stringify({ Id: 'newc0ffee' }));
       }
 
+      if (req.url === '/networks/known-net') {
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        return res.end(JSON.stringify({ Id: 'net-known', Name: 'known-net' }));
+      }
+
+      if (req.url === '/networks/missing-net') {
+        res.writeHead(404, { 'Content-Type': 'application/json' });
+        return res.end(JSON.stringify({ message: 'network missing-net not found' }));
+      }
+
+      if (req.url === '/networks/create') {
+        res.writeHead(201, { 'Content-Type': 'application/json' });
+        return res.end(JSON.stringify({ Id: 'net-new' }));
+      }
+
+      if (req.url === '/networks/net-new/connect') {
+        res.writeHead(200);
+        return res.end();
+      }
+
       // start / stop / rename / remove → 204 empty
       res.writeHead(204);
       res.end();
@@ -114,5 +134,25 @@ describe('dockerClient', () => {
   it('selfContainerId falls back to the hostname', () => {
     expect(typeof docker.selfContainerId()).toBe('string');
     expect(docker.selfContainerId().length).toBeGreaterThan(0);
+  });
+
+  it('inspects an existing network', async () => {
+    const net = await docker.inspectNetwork('known-net');
+    expect(net.Name).toBe('known-net');
+  });
+
+  it('throws with the daemon message when a network is missing', async () => {
+    await expect(docker.inspectNetwork('missing-net')).rejects.toThrow(/network missing-net not found/);
+  });
+
+  it('creates a network and connects a container with aliases', async () => {
+    const net = await docker.createNetwork('plugins-net', { internal: true });
+    expect(net.Id).toBe('net-new');
+    await docker.connectNetwork('net-new', 'newc0ffee', ['deltis-app']);
+
+    const call = seen.find(s => s.url === '/networks/create');
+    expect(JSON.parse(call.body)).toEqual({ Name: 'plugins-net', Driver: 'bridge', Internal: true });
+    const connectCall = seen.find(s => s.url === '/networks/net-new/connect');
+    expect(JSON.parse(connectCall.body)).toEqual({ Container: 'newc0ffee', EndpointConfig: { Aliases: ['deltis-app'] } });
   });
 });

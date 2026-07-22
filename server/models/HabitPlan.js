@@ -13,7 +13,8 @@ const habitPlanSchema = new mongoose.Schema({
   loggedValue: { type: Number },
   notes: { type: String },
   // Provenance: how this entry got into the planner ("Warum steht das hier?")
-  source: { type: String, enum: ["manual", "copy-week"], default: "manual" },
+  // "plugin" = written by an installed plugin via the Plugin Host API.
+  source: { type: String, enum: ["manual", "copy-week", "plugin"], default: "manual" },
   createdAt: { type: Date, default: Date.now }
 });
 

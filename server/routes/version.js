@@ -23,10 +23,15 @@ const router = express.Router();
 router.get('/', (_req, res) => {
   const serverState = require('../utils/serverState');
   const updateState = require('../utils/updateState');
+  const { PLUGIN_HOST_API_VERSION } = require('../services/pluginCompatibility');
   const phase = updateState.read().phase || 'idle';
   res.json({
     version: displayVersion,
     apiVersion: API_VERSION,
+    // Discoverable the same way apiVersion is — a plugin can check this
+    // against its manifest's compatibility.minHostApiVersion before relying
+    // on Plugin Host API behaviour (see docs/plugins/MANIFEST.md).
+    pluginHostApiVersion: PLUGIN_HOST_API_VERSION,
     setupMode: serverState.setupMode,
     // Booleans only – details are admin-authenticated (/api/admin/update/status).
     emergencyMode: !!serverState.emergencyMode,

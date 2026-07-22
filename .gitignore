@@ -1,6 +1,7 @@
 node_modules/
 client/node_modules/
 client/dist/
+coverage/
 .env
 .env.production
 .env.*.local

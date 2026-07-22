@@ -51,6 +51,8 @@ function buildApp() {
   app.use('/api/activity-types', require('../../routes/activityTypes'));
   app.use('/api/training-types', require('../../routes/trainingTypes'));
   app.use('/api/strava', require('../../routes/strava'));
+  app.use('/api/plugins', require('../../routes/plugins'));
+  app.use('/api/plugin-host/v1', require('../../routes/pluginHostApi'));
 
   return app;
 }
