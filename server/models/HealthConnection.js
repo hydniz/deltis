@@ -5,15 +5,34 @@ const mongoose = require('mongoose');
 
 // Health Connect record types Deltis can consume. The user picks a subset —
 // nothing is read without an explicit opt-in.
+//
+// Every entry here MUST have somewhere to go. Advertising a type the sync
+// endpoint silently drops would be worse than not offering it: the app would
+// ask the user for a permission, report success, and discard the data.
+//
+//   exercise       ExerciseSessionRecord  → HealthActivity (a stored session)
+//   weight         WeightRecord           → WeightLog (merged, see docs/HEALTH.md)
+//   heartRate      HeartRateRecord        → HR samples ON a session, which is
+//                                           what the heart-rate criteria need
+//   steps          StepsRecord            ┐ aggregated ONTO a session; there is
+//   activeCalories ActiveCaloriesBurned…  ├ no standalone daily series yet, so
+//   distance       DistanceRecord         ┘ these only enrich `exercise`
+//
+// Standalone daily series (sleep, resting HR, body fat, water, …) need a
+// generic user-defined measurement model, which Deltis does not have yet —
+// so `sleep` is deliberately NOT offered rather than accepted and dropped.
 const SUPPORTED_TYPES = [
-  'exercise',       // ExerciseSessionRecord  → HealthActivity
-  'weight',         // WeightRecord           → WeightLog
-  'steps',          // StepsRecord
-  'heartRate',      // HeartRateRecord (samples attached to sessions)
-  'sleep',          // SleepSessionRecord
-  'activeCalories', // ActiveCaloriesBurnedRecord
-  'distance',       // DistanceRecord
+  'exercise',
+  'weight',
+  'heartRate',
+  'steps',
+  'activeCalories',
+  'distance',
 ];
+
+// Types that only make sense together with exercise sessions — the UI shows
+// them as enrichments rather than as independent sources.
+const SESSION_ONLY_TYPES = ['heartRate', 'steps', 'activeCalories', 'distance'];
 
 // Never read data written by an app Deltis already ingests server-side —
 // that is duplicate prevention layer 1 (see docs/HEALTH.md).
@@ -56,6 +75,7 @@ healthConnectionSchema.statics.clampBackfillDays = function (value) {
 };
 
 healthConnectionSchema.statics.SUPPORTED_TYPES = SUPPORTED_TYPES;
+healthConnectionSchema.statics.SESSION_ONLY_TYPES = SESSION_ONLY_TYPES;
 healthConnectionSchema.statics.MIN_BACKFILL_DAYS = MIN_BACKFILL_DAYS;
 healthConnectionSchema.statics.MAX_BACKFILL_DAYS = MAX_BACKFILL_DAYS;
 healthConnectionSchema.statics.DEFAULT_BACKFILL_DAYS = DEFAULT_BACKFILL_DAYS;

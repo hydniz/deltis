@@ -25,7 +25,7 @@ What the app needs before reading anything from Health Connect.
   "excludedOrigins": ["com.strava"],
   "lastSyncAt": "2026-07-23T20:00:00.000Z",
   "lastSyncCounts": { "activities": 12, "weights": { "imported": 3 } },
-  "supportedTypes": ["exercise", "weight", "steps", "heartRate", "sleep", "activeCalories", "distance"],
+  "supportedTypes": ["exercise", "weight", "heartRate", "steps", "activeCalories", "distance"],
   "minBackfillDays": 7,
   "maxBackfillDays": 365
 }
