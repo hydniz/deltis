@@ -1,8 +1,8 @@
 {
   "name": "deltis-backend",
-  "version": "0.5.20",
+  "version": "0.7.1",
   "stage": "",
-  "apiVersion": 13,
+  "apiVersion": 14,
   "scripts": {
     "dev": "concurrently \"nodemon server/index.js\" \"npm run dev --prefix client\"",
     "server:dev": "nodemon server/index.js",
