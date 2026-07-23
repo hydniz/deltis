@@ -7,6 +7,7 @@
 // keys. Adding an integration = adding one INTEGRATIONS entry; models, goals
 // and planner pass the map through untouched.
 const stravaCriteria = require('./stravaCriteria');
+const healthCriteria = require('./healthCriteria');
 
 // Normalized match shape returned by every integration:
 //   { integration, id, name, sportType, date (local), movingTime (s),
@@ -30,6 +31,38 @@ const INTEGRATIONS = {
         integration: 'strava',
         id: String(a._id),
         name: a.name || a.sportType || 'Aktivität',
+        sportType: a.sportType,
+        date: a.startDateLocal || a.startDate,
+        movingTime: a.movingTime || 0,
+        distance: a.distance || 0,
+        averageHeartrate: a.averageHeartrate,
+      }));
+    },
+  },
+
+  health: {
+    label: 'Health Connect',
+    validate: tree => healthCriteria.validateCriteria(tree),
+    async findMatches(userId, tree, start, end) {
+      const HealthActivity = require('../models/HealthActivity');
+      // `canonical: true` is what makes counting exactly-once: a session that
+      // duplicates a Strava activity (or another health source) is stored but
+      // flagged, and must never contribute to habits, goals or the planner.
+      // See docs/HEALTH.md.
+      const activities = await HealthActivity.find({
+        userId,
+        canonical: true,
+        startDate: { $gte: start, $lte: end },
+      }).select('-raw').lean();
+
+      const matching = tree
+        ? activities.filter(a => healthCriteria.evaluateActivity(a, tree))
+        : activities;
+
+      return matching.map(a => ({
+        integration: 'health',
+        id: String(a._id),
+        name: a.title || a.sportType || 'Aktivität',
         sportType: a.sportType,
         date: a.startDateLocal || a.startDate,
         movingTime: a.movingTime || 0,

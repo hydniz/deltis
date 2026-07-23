@@ -32,6 +32,7 @@ function buildApp() {
   const app = express();
   app.disable('x-powered-by');
   app.use(require('../../middleware/securityHeaders'));
+  app.use('/api/health/sync', express.json({ limit: '5mb' }));
   app.use(express.json());
   app.use(cookieParser());
   app.use(require('../../middleware/sanitizeBody'));
@@ -51,6 +52,7 @@ function buildApp() {
   app.use('/api/activity-types', require('../../routes/activityTypes'));
   app.use('/api/training-types', require('../../routes/trainingTypes'));
   app.use('/api/strava', require('../../routes/strava'));
+  app.use('/api/health', require('../../routes/health'));
 
   return app;
 }

@@ -17,3 +17,6 @@ deltis-deploy.tar.gz
 TODO.md
 .claude/
 .run.pid
+
+# Test coverage output
+coverage/
