@@ -18,11 +18,6 @@ const activityLogSchema = new mongoose.Schema({
   distance: { type: Number },   // kilometres
   notes: { type: String },
   customValues: { type: mongoose.Schema.Types.Mixed, default: {} },
-  // Provenance: null/absent = logged manually by the user; "plugin:<id>" =
-  // written by an installed plugin via the Plugin Host API (see
-  // routes/pluginHostApi.js) — shown in the UI so it's always clear what a
-  // plugin has touched.
-  source: { type: String, default: null },
   createdAt: { type: Date, default: Date.now }
 });
 

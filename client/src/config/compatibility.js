@@ -15,4 +15,7 @@
 // v12: weight goal on the profile (weightGoal on PUT/GET /auth/me), /weight
 //      limit returns the newest entries
 // v13: daily check-in times on the profile (checkinTimes on /auth/me)
-export const REQUIRED_API_VERSION = 13;
+// v14: plugin/add-on platform reverted — /api/plugins, /api/plugin-host/v1
+//      and the pluginHostApiVersion field on GET /api/ are gone again;
+//      Strava sync is built into core again (no plugin required)
+export const REQUIRED_API_VERSION = 14;

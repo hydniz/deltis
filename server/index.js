@@ -94,8 +94,6 @@ app.use('/api/goals', require('./routes/goals'));
 app.use('/api/activity-types', require('./routes/activityTypes'));
 app.use('/api/training-types', require('./routes/trainingTypes'));
 app.use('/api/strava', require('./routes/strava'));
-app.use('/api/plugins', require('./routes/plugins'));
-app.use('/api/plugin-host/v1', require('./routes/pluginHostApi'));
 
 if (process.env.NODE_ENV === 'production') {
   app.use(express.static(path.join(__dirname, '../client/dist')));
@@ -263,18 +261,6 @@ async function start() {
     if (markers.length > 0) {
       logger.error('security', 'Ransom marker databases detected', { markers });
     }
-
-    // Re-check every installed plugin's declared compatibility against this
-    // (possibly just-updated) core version — a plugin that was fine at
-    // install time can go stale purely because the core moved on, so this
-    // has to run on every boot, not only at install time.
-    const PluginInstall = require('./models/PluginInstall');
-    const pluginCompatibility = require('./services/pluginCompatibility');
-    for (const install of await PluginInstall.find({})) {
-      for (const warning of pluginCompatibility.checkCompatibility(install.manifest)) {
-        logger.warn('plugins', `Kompatibilitätswarnung für "${install.pluginId}": ${warning}`);
-      }
-    }
   } catch (err) {
     bootError = err;
     if (MIGRATION_ERROR_CODES.has(err.code)) {
@@ -309,6 +295,10 @@ async function start() {
 
   // Periodic "new release available?" check for the admin UI badge.
   require('./routes/update').startBackgroundChecks();
+
+  // Strava polling fallback — each tick checks config/credentials itself,
+  // so starting it unconditionally is safe even when Strava is unconfigured.
+  require('./services/stravaPoller').start();
 }
 
 start().catch(err => {

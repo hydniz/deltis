@@ -19,8 +19,7 @@ const activityPlanSchema = new mongoose.Schema({
   notes: { type: String },
   customValues: { type: mongoose.Schema.Types.Mixed, default: {} },
   // Provenance: how this entry got into the planner ("Warum steht das hier?")
-  // "plugin" = written by an installed plugin via the Plugin Host API.
-  source: { type: String, enum: ["manual", "copy-week", "plugin"], default: "manual" },
+  source: { type: String, enum: ["manual", "copy-week"], default: "manual" },
   createdAt: { type: Date, default: Date.now }
 });
 

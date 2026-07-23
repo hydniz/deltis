@@ -7,14 +7,6 @@ webhook (instant) and/or polling (fallback); on first connect the last
 week"* with their own criteria (sport types, duration, heart-rate ranges,
 Strava HR zones, …).
 
-**Architecture note**: the actual Strava-API polling now happens in the
-separate [`deltis-strava-integration`](https://github.com/hydniz/deltis-strava-integration)
-plugin, not in this server's process — see
-[`docs/plugins/MANIFEST.md`](plugins/MANIFEST.md) "The Strava plugin". The
-setup steps below (Strava application, callback domain, credentials,
-webhook subscription) are unchanged; only `STRAVA_POLL_INTERVAL_MINUTES`
-below is now vestigial (the plugin has its own interval instead).
-
 ---
 
 ## 1. Create the Strava API application
@@ -44,8 +36,8 @@ STRAVA_CLIENT_ID=12345
 STRAVA_CLIENT_SECRET=xxxxxxxxxxxxxxxx
 # Public URL of the instance — required for OAuth redirects and webhooks
 PUBLIC_BASE_URL=https://deltis.jlno.de
-# Vestigial (see the architecture note above) — the strava-integration
-# plugin's own SYNC_TICK_INTERVAL_MS controls polling now, not this.
+# Polling interval in minutes (0 = disabled). With an active webhook a large
+# interval (e.g. 360) as safety net is enough.
 STRAVA_POLL_INTERVAL_MINUTES=15
 # Auto-generated when the webhook subscription is created — only set manually
 # if you want a fixed value:
