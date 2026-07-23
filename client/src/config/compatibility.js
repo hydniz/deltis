@@ -18,4 +18,7 @@
 // v14: plugin/add-on platform reverted — /api/plugins, /api/plugin-host/v1
 //      and the pluginHostApiVersion field on GET /api/ are gone again;
 //      Strava sync is built into core again (no plugin required)
-export const REQUIRED_API_VERSION = 14;
+// v15: Health Connect integration (/api/health endpoints, `health` entry in
+//      the training-criteria integration registry, source/sourceId on weight
+//      log entries)
+export const REQUIRED_API_VERSION = 15;

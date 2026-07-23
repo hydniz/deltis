@@ -283,6 +283,24 @@ async function syncConnectionSince(connection, afterDate) {
   conn.lastSyncAt = new Date();
   conn.lastSyncError = firstError;
   await conn.save();
+
+  // Deduplication runs in both directions: an activity that has just arrived
+  // from Strava supersedes the Health Connect session describing the same
+  // workout (docs/HEALTH.md). Best-effort — a reconciliation failure must
+  // never fail an otherwise successful sync.
+  if (synced > 0) {
+    try {
+      const activityMerge = require('./activityMerge');
+      await activityMerge.reconcileUser(conn.userId, {
+        start: new Date(afterDate.getTime() - 24 * 60 * 60 * 1000),
+        end: new Date(Date.now() + 24 * 60 * 60 * 1000),
+      });
+    } catch (err) {
+      require('../utils/logger').warn(
+        'strava', `Health-Reconciliation nach Sync fehlgeschlagen: ${err.message}`);
+    }
+  }
+
   return { synced, failed };
 }
 
