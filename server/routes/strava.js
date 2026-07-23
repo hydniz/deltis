@@ -189,7 +189,21 @@ router.delete('/connection', auth, async (req, res) => {
       purged = result.deletedCount || 0;
     }
 
-    res.json({ success: true, purged });
+    // Health Connect sessions that were flagged as duplicates of a Strava
+    // activity must come back now that Strava is gone — otherwise they stay
+    // invisible to habits, goals and the planner forever. Deliberately runs
+    // over the FULL history, not a recent window: the affected records can be
+    // arbitrarily old. Best effort — disconnecting must still succeed.
+    let promoted = 0;
+    try {
+      const activityMerge = require('../services/activityMerge');
+      ({ promoted } = await activityMerge.reconcileUser(req.user._id));
+    } catch (err) {
+      require('../utils/logger').warn(
+        'strava', `Health-Reconciliation nach Trennung fehlgeschlagen: ${err.message}`);
+    }
+
+    res.json({ success: true, purged, promoted });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

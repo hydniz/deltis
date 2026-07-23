@@ -31,6 +31,16 @@ function publicConnection(connection) {
   };
 }
 
+// Which origins the app must skip, derived from what Deltis ACTUALLY ingests
+// server-side right now. A static list is a data-loss bug: a user who records
+// with Strava but never linked it to Deltis would have every GPS activity
+// dropped on the device and imported from nowhere.
+async function effectiveExcludedOrigins(userId) {
+  const StravaConnection = require('../models/StravaConnection');
+  const linked = await StravaConnection.exists({ userId });
+  return linked ? [...HealthConnection.DEFAULT_EXCLUDED_ORIGINS] : [];
+}
+
 function sanitizeTypes(value, fallback) {
   if (!Array.isArray(value)) return fallback;
   const allowed = value.filter(t => HealthConnection.SUPPORTED_TYPES.includes(t));
@@ -41,6 +51,7 @@ function sanitizeTypes(value, fallback) {
 // back, and which writing apps to skip so Deltis never sees a record twice.
 router.get('/config', auth, async (req, res) => {
   try {
+    const excludedOrigins = await effectiveExcludedOrigins(req.user._id);
     const connection = await HealthConnection.findOne({ userId: req.user._id });
     if (!connection) {
       return res.json({
@@ -48,12 +59,12 @@ router.get('/config', auth, async (req, res) => {
         supportedTypes: HealthConnection.SUPPORTED_TYPES,
         enabledTypes: [],
         backfillDays: HealthConnection.DEFAULT_BACKFILL_DAYS,
-        excludedOrigins: HealthConnection.DEFAULT_EXCLUDED_ORIGINS,
+        excludedOrigins,
         minBackfillDays: HealthConnection.MIN_BACKFILL_DAYS,
         maxBackfillDays: HealthConnection.MAX_BACKFILL_DAYS,
       });
     }
-    res.json(publicConnection(connection));
+    res.json({ ...publicConnection(connection), excludedOrigins });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -192,7 +203,7 @@ router.post('/sync', auth, async (req, res) => {
 
     // Defence in depth: the app is asked to skip these origins, but a record
     // from an already-ingested source is rejected here as well.
-    const excluded = new Set(connection.excludedOrigins || []);
+    const excluded = new Set(await effectiveExcludedOrigins(req.user._id));
     const accepted = activities.filter(isValidRecord)
       .filter(record => !excluded.has(String(record.dataOrigin || '')));
     const rejected = activities.length - accepted.length;
@@ -212,8 +223,11 @@ router.post('/sync', auth, async (req, res) => {
 
     let weightResult = { imported: 0, skipped: 0, collapsed: 0 };
     if (connection.enabledTypes.includes('weight')) {
+      // Health Connect reports kilograms, so the stored value IS kilograms.
+      // Labelling it with the user's display unit would show a kg number as
+      // pounds; converting for display is the read path's job.
       weightResult = await healthWeight.mergeWeightRecords(req.user._id, weights, {
-        unit: req.user.weightUnit || 'kg',
+        unit: 'kg',
       });
     }
 

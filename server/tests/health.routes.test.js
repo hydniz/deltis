@@ -3,6 +3,7 @@ const { startDb, stopDb, clearDb, buildApp, createUser, authHeader } = require('
 const HealthConnection = require('../models/HealthConnection');
 const HealthActivity = require('../models/HealthActivity');
 const StravaActivity = require('../models/StravaActivity');
+const StravaConnection = require('../models/StravaConnection');
 const WeightLog = require('../models/WeightLog');
 
 let app;
@@ -49,7 +50,20 @@ describe('GET /api/health/config', () => {
     expect(res.status).toBe(200);
     expect(res.body.connected).toBe(false);
     expect(res.body.minBackfillDays).toBe(7);
-    // Strava is excluded by default so its records never arrive twice.
+    // Nothing is excluded while no Strava account is linked — excluding a
+    // source Deltis does NOT ingest would drop the data entirely.
+    expect(res.body.excludedOrigins).toEqual([]);
+  });
+
+  it('excludes Strava only once a Strava account is actually linked', async () => {
+    const { token, user } = await createUser();
+    await StravaConnection.create({
+      userId: user._id, athleteId: 4711,
+      accessToken: 'a', refreshToken: 'r',
+      expiresAt: new Date(Date.now() + 3600000),
+    });
+
+    const res = await request(app).get('/api/health/config').set(authHeader(token));
     expect(res.body.excludedOrigins).toContain('com.strava');
   });
 
@@ -208,6 +222,11 @@ describe('POST /api/health/sync', () => {
 
   it('drops records written by an excluded origin', async () => {
     const { token, user } = await createUser();
+    await StravaConnection.create({
+      userId: user._id, athleteId: 4711,
+      accessToken: 'a', refreshToken: 'r',
+      expiresAt: new Date(Date.now() + 3600000),
+    });
     await connect(token);
 
     const res = await request(app).post('/api/health/sync').set(authHeader(token))
@@ -216,6 +235,20 @@ describe('POST /api/health/sync', () => {
     expect(res.body.activities).toBe(0);
     expect(res.body.rejectedOrigins).toBe(1);
     expect(await HealthActivity.countDocuments({ userId: user._id })).toBe(0);
+  });
+
+  // The data-loss case: someone records with Strava but never linked it to
+  // Deltis. Their workouts arrive from nowhere else, so they must be kept.
+  it('keeps Strava-written records when Strava is not linked to Deltis', async () => {
+    const { token, user } = await createUser();
+    await connect(token);
+
+    const res = await request(app).post('/api/health/sync').set(authHeader(token))
+      .send({ activities: [session({ dataOrigin: 'com.strava' })] });
+
+    expect(res.body.activities).toBe(1);
+    expect(res.body.rejectedOrigins).toBe(0);
+    expect(await HealthActivity.countDocuments({ userId: user._id })).toBe(1);
   });
 
   it('ignores malformed records', async () => {

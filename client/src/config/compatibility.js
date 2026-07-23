@@ -18,7 +18,11 @@
 // v14: plugin/add-on platform reverted — /api/plugins, /api/plugin-host/v1
 //      and the pluginHostApiVersion field on GET /api/ are gone again;
 //      Strava sync is built into core again (no plugin required)
-// v15: Health Connect integration (/api/health endpoints, `health` entry in
-//      the training-criteria integration registry, source/sourceId on weight
-//      log entries)
-export const REQUIRED_API_VERSION = 15;
+// v15 (backend only): Health Connect integration (/api/health endpoints,
+//      `health` entry in the training-criteria integration registry,
+//      source/sourceId on weight log entries). The web client consumes NONE
+//      of this yet — it is used by the Android companion app — so per the
+//      bump rules in CLAUDE.md this stays at 14. Raising it would show every
+//      user the amber incompatibility banner for a feature the web UI cannot
+//      use. Bump it when the web settings screen actually calls /api/health.
+export const REQUIRED_API_VERSION = 14;

@@ -32,6 +32,7 @@ function buildApp() {
   const app = express();
   app.disable('x-powered-by');
   app.use(require('../../middleware/securityHeaders'));
+  app.use('/api/health/sync', express.json({ limit: '5mb' }));
   app.use(express.json());
   app.use(cookieParser());
   app.use(require('../../middleware/sanitizeBody'));

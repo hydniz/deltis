@@ -245,7 +245,7 @@ describe('DELETE /api/strava/connection', () => {
 
     const res = await request(app).delete('/api/strava/connection').set(authHeader(token));
     expect(res.status).toBe(200);
-    expect(res.body).toEqual({ success: true, purged: 0 });
+    expect(res.body).toEqual({ success: true, purged: 0, promoted: 0 });
     expect(await StravaConnection.countDocuments({})).toBe(0);
     expect(await StravaActivity.countDocuments({ userId: user._id })).toBe(1); // kept
   });

@@ -97,7 +97,10 @@ const RICHNESS_FIELDS = [
 function richness(doc) {
   let score = RICHNESS_FIELDS.reduce(
     (sum, field) => sum + (doc?.[field] != null && doc[field] !== 0 ? 1 : 0), 0);
-  if (doc?.streams?.heartrate?.data?.length) score += 2;
+  // Heart-rate detail is worth more than a plain field, but the streams
+  // themselves are deliberately not loaded here — `hasHeartrate` (Strava) or a
+  // stream that happens to be present is enough of a hint.
+  if (doc?.hasHeartrate || doc?.streams?.heartrate?.data?.length) score += 2;
   return score;
 }
 
@@ -161,9 +164,20 @@ async function reconcileUser(userId, { start, end, originPriorities = {} } = {})
   if (end) window.$lte = new Date(end);
   const dateFilter = Object.keys(window).length ? { startDate: window } : {};
 
+  // Both sides are projected and lean: the raw payloads and heart-rate streams
+  // are large (a year of sessions is >100 MB) and reconciliation needs none of
+  // them beyond a richness hint, so loading full documents here would drag the
+  // whole window into memory.
   const [healthDocs, stravaDocs] = await Promise.all([
-    HealthActivity.find({ userId, ...dateFilter }),
-    StravaActivity.find({ userId, ...dateFilter }).select('-detail -zones').lean(),
+    HealthActivity.find({ userId, ...dateFilter })
+      .select('startDate endDate exerciseType sportType dataOrigin distance movingTime ' +
+        'averageHeartrate maxHeartrate totalElevationGain calories steps averageSpeed ' +
+        'canonical superseded')
+      .lean(),
+    StravaActivity.find({ userId, ...dateFilter })
+      .select('startDate elapsedTime movingTime sportType type distance averageHeartrate ' +
+        'maxHeartrate totalElevationGain calories averageSpeed hasHeartrate isManual')
+      .lean(),
   ]);
 
   const healthRecords = healthDocs.map(doc => toHealthRecord(doc, originPriorities));

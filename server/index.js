@@ -35,6 +35,12 @@ app.use(cors({
   credentials: true,
 }));
 app.use(cookieParser());
+// Health Connect uploads carry heart-rate sample arrays and are pushed in
+// pages of up to a few hundred sessions, which blows straight past the 100 kB
+// default — a single one-hour run sampled at 1 Hz is already ~160 kB. This
+// parser runs first for that one path; the global parser below then no-ops
+// because the body is already parsed.
+app.use('/api/health/sync', express.json({ limit: '5mb' }));
 app.use(express.json());
 app.use(require('./middleware/sanitizeBody'));
 // Detailed activity log (info level, NDJSON in backups/logs/, 7-day
