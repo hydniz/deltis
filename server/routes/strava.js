@@ -44,29 +44,6 @@ function frontendRedirect(pathAndQuery) {
 const MANUAL_SYNC_COOLDOWN_MS = 60 * 1000;
 const lastManualSync = new Map();
 
-// The manual "sync now" button sets syncRequestedAt and waits briefly for
-// the strava-integration plugin's poll loop to pick it up and report back
-// (server/routes/pluginHostApi.js "strava:sync" capability) — preserving the
-// old synchronous {synced, failed} response contract even though the actual
-// Strava API call now happens in the plugin, not here. Read from
-// process.env on every call (not module-level consts) so tests can shorten
-// both for a fast, deterministic wait — see server/tests/strava.routes.test.js.
-function manualSyncWaitMs() { return parseInt(process.env.STRAVA_SYNC_WAIT_MS, 10) || 10000; }
-function manualSyncPollMs() { return parseInt(process.env.STRAVA_SYNC_POLL_MS, 10) || 300; }
-
-async function waitForSyncResult(userId, requestedAt) {
-  const deadline = Date.now() + manualSyncWaitMs();
-  const pollMs = manualSyncPollMs();
-  while (Date.now() < deadline) {
-    const conn = await StravaConnection.findOne({ userId });
-    if (conn?.lastSyncAt && conn.lastSyncAt.getTime() >= requestedAt.getTime()) {
-      return { synced: conn.lastSyncSyncedCount || 0, failed: conn.lastSyncFailedCount || 0, pending: false };
-    }
-    await new Promise(resolve => setTimeout(resolve, pollMs));
-  }
-  return { synced: 0, failed: 0, pending: true };
-}
-
 // User endpoints
 
 // GET /api/strava/status — integration state for the settings page.
@@ -151,12 +128,12 @@ router.get('/callback', async (req, res) => {
       { upsert: true, new: true, setDefaultsOnInsert: true }
     ).select('+accessToken +refreshToken');
 
-    // 7-day backfill: request it and let the plugin's poll loop pick it up —
-    // the user gets redirected immediately and the settings page shows the
-    // sync state once it lands.
+    // 7-day backfill in the background — the user gets redirected immediately
+    // and the settings page shows the sync state.
     if (!connection.initialSyncDone) {
-      connection.syncRequestedAt = new Date();
-      await connection.save();
+      strava.runInitialSync(connection).catch(err => {
+        console.error(`✗ Strava-Erstsynchronisation fehlgeschlagen: ${err.message}`);
+      });
     }
 
     return redirect('success');
@@ -179,11 +156,7 @@ router.post('/sync', auth, async (req, res) => {
     if (!connection) return res.status(404).json({ error: 'Kein Strava-Konto verbunden.' });
 
     lastManualSync.set(key, Date.now());
-    const requestedAt = new Date();
-    connection.syncRequestedAt = requestedAt;
-    await connection.save();
-
-    const result = await waitForSyncResult(req.user._id, requestedAt);
+    const result = await strava.syncConnection(connection);
     const fresh = await StravaConnection.findOne({ userId: req.user._id });
     res.json({ ...result, connection: fresh ? fresh.toJSON() : null });
   } catch (err) {
@@ -380,6 +353,5 @@ router.delete('/admin/subscription/:id', auth, adminOnly, async (req, res) => {
 
 // For tests
 router._resetManualSyncThrottle = () => lastManualSync.clear();
-router._waitForSyncResult = waitForSyncResult;
 
 module.exports = router;

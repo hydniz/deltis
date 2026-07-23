@@ -24,20 +24,11 @@ const UI_CAPABILITIES = ['ui:dashboard-widget', 'ui:settings-panel', 'ui:goal-cr
 const BACKGROUND_CAPABILITIES = ['background:cron', 'background:webhook-receiver'];
 const NOTIFICATION_CAPABILITIES = ['notifications:send'];
 
-// Capabilities tied to one specific first-party integration's own data model
-// (too special-purpose to generalize into DATA_CAPABILITIES) — currently
-// only Strava's, since its StravaConnection/StravaActivity documents (OAuth
-// tokens, HR-zone streams) predate the plugin platform and stay core-owned;
-// the plugin syncs them through this capability's Host API routes instead of
-// via the generic activities:* capabilities. See docs/plugins/MANIFEST.md.
-const INTEGRATION_CAPABILITIES = ['strava:sync'];
-
 const FIXED_CAPABILITIES = [
   ...DATA_CAPABILITIES,
   ...UI_CAPABILITIES,
   ...BACKGROUND_CAPABILITIES,
   ...NOTIFICATION_CAPABILITIES,
-  ...INTEGRATION_CAPABILITIES,
 ];
 
 // network:<domain> — one capability per distinct outbound host.
@@ -136,7 +127,6 @@ module.exports = {
   UI_CAPABILITIES,
   BACKGROUND_CAPABILITIES,
   NOTIFICATION_CAPABILITIES,
-  INTEGRATION_CAPABILITIES,
   FIXED_CAPABILITIES,
   isValidCapability,
   validateManifest,

@@ -21,7 +21,6 @@ const DESCRIPTIONS = {
   'background:cron': 'Führt regelmäßig im Hintergrund Aufgaben aus.',
   'background:webhook-receiver': 'Empfängt Webhooks von einem externen Dienst.',
   'notifications:send': 'Kann dir Benachrichtigungen schicken.',
-  'strava:sync': 'Synchronisiert deine Strava-Aktivitäten (liest/schreibt nur über die vom Server verwaltete Verbindung, sieht nie dein Strava-Passwort).',
 };
 
 function describeCapability(capability) {

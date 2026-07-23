@@ -190,17 +190,10 @@ const DEFINITIONS = {
     expose: 'never',
     default: '',
   },
-  // Vestigial since the strava-integration plugin extraction: the in-process
-  // poller this used to configure was removed (server/services/stravaPoller.js
-  // is gone) — actual sync polling now happens in the plugin's own container
-  // on its own SYNC_TICK_INTERVAL_MS env var, not this setting. Kept
-  // read-only-in-effect (still editable, still shown in the admin overview)
-  // so nothing breaks for operators who already had it configured, but it no
-  // longer does anything. See docs/plugins/MANIFEST.md "The Strava plugin".
   STRAVA_POLL_INTERVAL_MINUTES: {
-    label: 'Strava Polling-Intervall (Minuten) — veraltet',
+    label: 'Strava Polling-Intervall (Minuten)',
     group: GROUPS.INTEGRATIONS,
-    description: 'Ohne Wirkung, seit die Strava-Synchronisierung in das strava-integration-Plugin ausgelagert wurde (dessen eigenes SYNC_TICK_INTERVAL_MS zählt). Bleibt vorerst bestehen, um bestehende Konfigurationen nicht zu brechen.',
+    description: 'Wie oft neue Strava-Aktivitäten per Abfrage synchronisiert werden (Fallback ohne Webhook). 0 = Polling deaktiviert. Mit aktivem Webhook genügt ein großes Intervall (z. B. 360).',
     type: 'number',
     editable: true,
     expose: 'plain',

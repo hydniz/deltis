@@ -27,9 +27,6 @@ const ActivityPlan = require('../models/ActivityPlan');
 const Goal = require('../models/Goal');
 const WeightLog = require('../models/WeightLog');
 const User = require('../models/User');
-const StravaConnection = require('../models/StravaConnection');
-const StravaActivity = require('../models/StravaActivity');
-const strava = require('../services/strava');
 
 function requireCapability(capability) {
   return (req, res, next) => {
@@ -58,20 +55,6 @@ async function requireUserGrant(req, res, next) {
 }
 
 router.use(pluginAuth);
-
-// Lists every user who has granted this plugin — the entry point for a
-// background:cron-style plugin (like strava-integration's poll loop) that
-// needs to act across all its users on a timer rather than being told about
-// one user at a time. Doesn't need its own capability: it only ever reveals
-// who has granted *this same* plugin, nothing about other plugins/users.
-router.get('/granted-users', async (req, res) => {
-  try {
-    const grants = await PluginUserGrant.find({ pluginId: req.pluginInstall.pluginId, enabled: true }).select('userId');
-    res.json(grants.map((g) => ({ userId: g.userId })));
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-});
 
 router.get('/habits', requireCapability('habits:read'), requireUserGrant, async (req, res) => {
   try {
@@ -244,118 +227,6 @@ router.post('/notifications', requireCapability('notifications:send'), requireUs
   const { title } = req.body;
   if (!title) return res.status(400).json({ error: 'title ist erforderlich.' });
   res.status(202).json({ accepted: true, delivered: false, note: 'Zustellung noch nicht implementiert.' });
-});
-
-// ── Strava sync (capability: strava:sync) ──────────────────────────────────
-// StravaConnection/StravaActivity stay core-owned collections (the goal
-// criteria engine in routes/goals.js reads them directly) — the plugin only
-// ever reaches them through these routes, never via the generic activities:*
-// capability. Tokens never leave core: this hands the plugin a short-lived,
-// already-refreshed access token, never the long-lived refresh token.
-
-router.get('/strava/connection', requireCapability('strava:sync'), requireUserGrant, async (req, res) => {
-  try {
-    const connection = await StravaConnection.findOne({ userId: req.pluginUserId }).select('+accessToken +refreshToken');
-    if (!connection) return res.json({ connected: false });
-
-    const accessToken = await strava.ensureFreshToken(connection);
-    res.json({
-      connected: true,
-      athleteId: connection.athleteId,
-      accessToken,
-      scope: connection.scope,
-      syncRequestedAt: connection.syncRequestedAt,
-      lastSyncAt: connection.lastSyncAt,
-      initialSyncDone: connection.initialSyncDone,
-    });
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-});
-
-router.post('/strava/sync-result', requireCapability('strava:sync'), requireUserGrant, async (req, res) => {
-  try {
-    const { synced, failed, error } = req.body;
-    const connection = await StravaConnection.findOne({ userId: req.pluginUserId });
-    if (!connection) return res.status(404).json({ error: 'Keine Strava-Verbindung.' });
-
-    connection.lastSyncAt = new Date();
-    connection.lastSyncError = error || null;
-    connection.lastSyncSyncedCount = Number(synced) || 0;
-    connection.lastSyncFailedCount = Number(failed) || 0;
-    if (!connection.initialSyncDone) connection.initialSyncDone = true;
-    await connection.save();
-    res.json({ success: true });
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-});
-
-// Maps a detailed Strava activity onto the promoted top-level fields —
-// mirrors the mapping that used to live in services/strava.js.
-function mapStravaActivityFields(detail) {
-  return {
-    name: detail.name || '',
-    sportType: detail.sport_type || detail.type || '',
-    type: detail.type || '',
-    startDate: detail.start_date ? new Date(detail.start_date) : new Date(),
-    startDateLocal: detail.start_date_local ? new Date(detail.start_date_local) : undefined,
-    timezone: detail.timezone,
-    movingTime: detail.moving_time ?? 0,
-    elapsedTime: detail.elapsed_time ?? 0,
-    distance: detail.distance ?? 0,
-    totalElevationGain: detail.total_elevation_gain ?? 0,
-    averageSpeed: detail.average_speed,
-    maxSpeed: detail.max_speed,
-    averageHeartrate: detail.average_heartrate,
-    maxHeartrate: detail.max_heartrate,
-    averageCadence: detail.average_cadence,
-    averageWatts: detail.average_watts,
-    kilojoules: detail.kilojoules,
-    calories: detail.calories,
-    sufferScore: detail.suffer_score,
-    hasHeartrate: Boolean(detail.has_heartrate),
-    isTrainer: Boolean(detail.trainer),
-    isCommute: Boolean(detail.commute),
-    isManual: Boolean(detail.manual),
-  };
-}
-
-router.post('/strava/activities', requireCapability('strava:sync'), requireUserGrant, async (req, res) => {
-  try {
-    const { detail, zones, streams } = req.body;
-    if (!detail?.id) return res.status(400).json({ error: 'detail.id ist erforderlich.' });
-
-    const connection = await StravaConnection.findOne({ userId: req.pluginUserId });
-    const athleteId = connection?.athleteId;
-
-    const activity = await StravaActivity.findOneAndUpdate(
-      { userId: req.pluginUserId, stravaId: detail.id },
-      {
-        $set: {
-          athleteId,
-          ...mapStravaActivityFields(detail),
-          detail,
-          zones: zones ?? null,
-          streams: streams ?? null,
-          syncedAt: new Date(),
-        },
-      },
-      { upsert: true, new: true, setDefaultsOnInsert: true }
-    );
-    res.status(201).json(activity);
-  } catch (err) {
-    res.status(400).json({ error: err.message });
-  }
-});
-
-router.delete('/strava/activities/:stravaId', requireCapability('strava:sync'), requireUserGrant, async (req, res) => {
-  try {
-    await StravaActivity.deleteOne({ userId: req.pluginUserId, stravaId: req.params.stravaId });
-    res.json({ success: true });
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
 });
 
 module.exports = router;

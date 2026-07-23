@@ -309,6 +309,10 @@ async function start() {
 
   // Periodic "new release available?" check for the admin UI badge.
   require('./routes/update').startBackgroundChecks();
+
+  // Strava polling fallback — each tick checks config/credentials itself,
+  // so starting it unconditionally is safe even when Strava is unconfigured.
+  require('./services/stravaPoller').start();
 }
 
 start().catch(err => {
