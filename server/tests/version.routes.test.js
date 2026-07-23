@@ -29,10 +29,4 @@ describe('GET /api', () => {
     const res = await request(app).get('/api');
     expect(res.body.version.startsWith(version + '+')).toBe(true);
   });
-
-  it('exposes the Plugin Host API version', async () => {
-    const { PLUGIN_HOST_API_VERSION } = require('../services/pluginCompatibility');
-    const res = await request(app).get('/api');
-    expect(res.body.pluginHostApiVersion).toBe(PLUGIN_HOST_API_VERSION);
-  });
 });

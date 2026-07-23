@@ -94,8 +94,6 @@ app.use('/api/goals', require('./routes/goals'));
 app.use('/api/activity-types', require('./routes/activityTypes'));
 app.use('/api/training-types', require('./routes/trainingTypes'));
 app.use('/api/strava', require('./routes/strava'));
-app.use('/api/plugins', require('./routes/plugins'));
-app.use('/api/plugin-host/v1', require('./routes/pluginHostApi'));
 
 if (process.env.NODE_ENV === 'production') {
   app.use(express.static(path.join(__dirname, '../client/dist')));
@@ -262,18 +260,6 @@ async function start() {
     const markers = await warnIfDatabaseCompromised(mongoose.connection);
     if (markers.length > 0) {
       logger.error('security', 'Ransom marker databases detected', { markers });
-    }
-
-    // Re-check every installed plugin's declared compatibility against this
-    // (possibly just-updated) core version — a plugin that was fine at
-    // install time can go stale purely because the core moved on, so this
-    // has to run on every boot, not only at install time.
-    const PluginInstall = require('./models/PluginInstall');
-    const pluginCompatibility = require('./services/pluginCompatibility');
-    for (const install of await PluginInstall.find({})) {
-      for (const warning of pluginCompatibility.checkCompatibility(install.manifest)) {
-        logger.warn('plugins', `Kompatibilitätswarnung für "${install.pluginId}": ${warning}`);
-      }
     }
   } catch (err) {
     bootError = err;

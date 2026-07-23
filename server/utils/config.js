@@ -30,7 +30,6 @@ const GROUPS = {
   SECURITY: 'Sicherheit',
   ACCESS: 'Registrierung & Zugang',
   INTEGRATIONS: 'Integrationen',
-  PLUGINS: 'Add-ons & Plugins',
 };
 
 const DEFINITIONS = {
@@ -207,20 +206,6 @@ const DEFINITIONS = {
     editable: true,
     expose: 'plain',
     default: '0',
-  },
-  // Add-ons & Plugins – every self-hosted instance talks to the same
-  // centrally-managed store for both the verified and the community catalog
-  // (see docs/plugins/MANIFEST.md). Catalog-browsing calls are anonymous —
-  // no instance or user identifying data is sent, only "list plugins" /
-  // "fetch plugin X".
-  PLUGIN_STORE_BASE_URL: {
-    label: 'Plugin-Store URL',
-    group: GROUPS.PLUGINS,
-    description: 'Basis-URL des Deltis Plugin-Stores (verifizierter + Community-Store).',
-    type: 'url',
-    editable: true,
-    expose: 'plain',
-    default: 'https://deltis-store.jlno.de',
   },
 };
 

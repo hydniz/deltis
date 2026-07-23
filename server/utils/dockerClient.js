@@ -132,26 +132,6 @@ function selfContainerId() {
   return process.env.HOSTNAME || os.hostname();
 }
 
-// Networks (used to isolate plugin containers from the app's default
-// network, where MongoDB lives — see services/pluginRuntime.js).
-
-async function inspectNetwork(name) {
-  return request('GET', `/networks/${encodeURIComponent(name)}`);
-}
-
-async function createNetwork(name, { internal = false } = {}) {
-  return request('POST', '/networks/create', { body: { Name: name, Driver: 'bridge', Internal: internal } });
-}
-
-async function connectNetwork(networkIdOrName, containerId, aliases = []) {
-  return request('POST', `/networks/${encodeURIComponent(networkIdOrName)}/connect`, {
-    body: {
-      Container: containerId,
-      EndpointConfig: aliases.length ? { Aliases: aliases } : undefined,
-    },
-  });
-}
-
 module.exports = {
   request,
   ping,
@@ -165,7 +145,4 @@ module.exports = {
   removeContainer,
   listContainers,
   selfContainerId,
-  inspectNetwork,
-  createNetwork,
-  connectNetwork,
 };
