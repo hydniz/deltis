@@ -3,6 +3,7 @@
 const express = require('express');
 const router = express.Router();
 const mongoose = require('mongoose');
+const trainingCriteria = require('../services/trainingCriteria');
 const auth = require('../middleware/auth');
 const HabitDefinition = require('../models/HabitDefinition');
 const HabitLog = require('../models/HabitLog');
@@ -68,6 +69,9 @@ router.get('/definitions', auth, async (req, res) => {
         // logged value satisfies condition+value ('none' = any log counts).
         targetCondition: ['min', 'max', 'exact'].includes(s.targetCondition) ? s.targetCondition : 'none',
         targetValue: Number.isFinite(s.targetValue) ? s.targetValue : 0,
+        // Auto-fill binding: pull the daily value from a metric or matching
+        // activities instead of manual logging (null = manual).
+        autoSource: s.autoSource || null,
       };
     });
 
@@ -154,7 +158,7 @@ function sanitizeScheduleTrigger(raw) {
 function sanitizeHabitSettings(body, habitType) {
   const {
     missingDayMode, defaultValue, scheduleDays, scheduleDate, targetCondition, targetValue,
-    scheduleMode, scheduleIntervalDays, scheduleAnchorDate, scheduleTrigger,
+    scheduleMode, scheduleIntervalDays, scheduleAnchorDate, scheduleTrigger, autoSource,
   } = body;
   const mode = ['none', 'default'].includes(missingDayMode) ? missingDayMode : 'none';
   // Sanitize schedule: unique integer weekdays 0–6, sorted; [] = every day.
@@ -207,7 +211,25 @@ function sanitizeHabitSettings(body, habitType) {
     scheduleTrigger: schedMode === 'trigger' ? trigger : null,
     targetCondition: tValue > 0 || condition === 'max' ? condition : 'none',
     targetValue: tValue,
+    autoSource: sanitizeAutoSource(autoSource),
   };
+}
+
+// Auto-fill binding for a habit: pull its daily value from a metric or from
+// matching Strava/Health activities instead of manual logging. null = off.
+function sanitizeAutoSource(raw) {
+  if (!raw || typeof raw !== 'object') return null;
+  if (raw.kind === 'metric') {
+    if (!mongoose.Types.ObjectId.isValid(raw.metricId)) return null;
+    return { kind: 'metric', metricId: String(raw.metricId) };
+  }
+  if (raw.kind === 'activity') {
+    const { valid } = trainingCriteria.validateCriteriaMap(raw.criteria);
+    if (!valid || raw.criteria == null) return null;
+    const metric = ['count', 'distance', 'duration'].includes(raw.metric) ? raw.metric : 'count';
+    return { kind: 'activity', criteria: raw.criteria, metric };
+  }
+  return null;
 }
 
 router.post('/definitions', auth, async (req, res) => {

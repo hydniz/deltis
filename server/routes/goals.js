@@ -13,6 +13,29 @@ const StravaActivity = require('../models/StravaActivity');
 const stravaCriteria = require('../services/stravaCriteria');
 const TrainingType = require('../models/TrainingType');
 const trainingCriteria = require('../services/trainingCriteria');
+const MetricDefinition = require('../models/MetricDefinition');
+const MetricLog = require('../models/MetricLog');
+const metricAggregate = require('../services/metricAggregate');
+
+// Metric-goal value selectors: how the readings collapse to one number for the
+// interval. 'value' uses the metric's own aggregation; the rest override it.
+const METRIC_SELECTORS = ['value', 'avg', 'sum', 'min', 'max', 'last', 'count', 'days'];
+
+// Progress value for a metric goal: aggregate the metric's readings over the
+// interval per the chosen selector.
+async function getMetricValueForGoal(selector, goal, userId, start, end) {
+  const def = await MetricDefinition.findOne({ _id: goal.targetRef, userId }).lean();
+  if (!def) return 0;
+  const logs = await MetricLog.find({ userId, metricId: goal.targetRef, date: { $gte: start, $lte: end } })
+    .select('date value').lean();
+  if (logs.length === 0) return 0;
+  const round = v => Math.round(v * 100) / 100;
+  const sel = selector && selector !== 'value' ? selector : null;
+  if (sel === 'count') return logs.length;
+  if (sel === 'days') return new Set(logs.map(l => new Date(l.date).toISOString().slice(0, 10))).size;
+  const periodMode = ['avg', 'sum', 'min', 'max', 'last'].includes(sel) ? sel : def.aggregation;
+  return round(metricAggregate.periodValue(logs, def.dayAggregation, periodMode) ?? 0);
+}
 
 // ─Hilfsfunktionen
 
@@ -126,6 +149,9 @@ async function getValueForMetric(metric, goal, userId, start, end, valueScope = 
   if (goal.targetRefModel === 'StravaActivity') {
     return getStravaValueForMetric(metric, goal, userId, start, end, valueScope, aggregation);
   }
+  if (goal.targetRefModel === 'MetricDefinition') {
+    return getMetricValueForGoal(metric, goal, userId, start, end);
+  }
 
   const isActivity = goal.targetRefModel === 'ActivityType' || goal.targetRefModel === 'activity';
   const uid = new mongoose.Types.ObjectId(String(userId));
@@ -206,6 +232,8 @@ function checkMetricValid(metric, customFields = []) {
   if (!metric || metric === 'count' || metric === 'distance' || metric === 'duration' || metric === 'value') {
     return { valid: true };
   }
+  // Metric-goal selectors (avg/sum/min/max/last/days) are always structurally valid.
+  if (METRIC_SELECTORS.includes(metric)) return { valid: true };
   if (metric.startsWith('custom_')) {
     const key = metric.slice(7);
     const exists = customFields.some(f => f.key === key && f.type === 'number');
@@ -245,6 +273,17 @@ async function enrichGoal(goal, userId) {
     obj.targetName = 'Gesamtziel';
     obj.customFields = [];
     obj.childGoals = children.map(c => ({ _id: c._id, name: c.name }));
+    return obj;
+  }
+
+  // Metric goals reference a MetricDefinition; carry its name + unit.
+  if (obj.targetRefModel === 'MetricDefinition') {
+    const def = mongoose.Types.ObjectId.isValid(obj.targetRef)
+      ? await MetricDefinition.findOne({ _id: obj.targetRef, userId }).select('name unit').lean()
+      : null;
+    obj.targetName = def?.name ?? 'Unbekannt';
+    obj.customFields = [];
+    if (!obj.unitSymbol && def?.unit) obj.unitSymbol = def.unit;
     return obj;
   }
 
@@ -524,7 +563,8 @@ router.get('/:id/heatmap', auth, async (req, res) => {
       metric: goal.metric, condition: goal.condition,
       targetValue: goal.targetValue, unitSymbol: goal.unitSymbol,
     };
-    const metric = firstCond.metric || (goal.targetRefModel === 'HabitDefinition' || goal.targetRefModel === 'habit' ? 'value' : 'count');
+    const valueDefault = ['HabitDefinition', 'habit', 'MetricDefinition'].includes(goal.targetRefModel);
+    const metric = firstCond.metric || (valueDefault ? 'value' : 'count');
     const dayOf = (date) => new Date(date).toISOString().slice(0, 10);
     const days = {};
     const add = (date, value) => {
@@ -616,6 +656,14 @@ router.get('/:id/heatmap', auth, async (req, res) => {
       return res.json({ start, end, weeks, metric, unitSymbol: firstCond.unitSymbol, days });
     }
 
+    if (goal.targetRefModel === 'MetricDefinition') {
+      const mLogs = await MetricLog.find({
+        userId: req.user._id, metricId: goal.targetRef, date: { $gte: start, $lte: end },
+      }).select('date value').lean();
+      for (const log of mLogs) add(log.date, metric === 'count' ? 1 : (log.value || 0));
+      return res.json({ start, end, weeks, metric, unitSymbol: firstCond.unitSymbol, days });
+    }
+
     const logs = await HabitLog.find({
       userId: req.user._id, habitId: goal.targetRef, date: { $gte: start, $lte: end },
     }).select('date value').lean();
@@ -699,10 +747,12 @@ async function assertOwnTargetRef(body, userId) {
     _id: targetRef,
     $or: [{ userId }, { userId: null }],
   });
+  const ownMetric = () => MetricDefinition.exists({ _id: targetRef, userId, deletedAt: null });
 
   let ok;
   if (targetRefModel === 'ActivityType') ok = await ownActivityType();
   else if (targetRefModel === 'HabitDefinition') ok = await visibleHabit();
+  else if (targetRefModel === 'MetricDefinition') ok = await ownMetric();
   else ok = (await ownActivityType()) || (await visibleHabit());
 
   if (!ok) {
