@@ -41,6 +41,17 @@ export const handlers = [
   http.get('/api/strava/activities', () => {
     return HttpResponse.json({ activities: [], total: 0 });
   }),
+  http.get('/api/health/config', () => {
+    return HttpResponse.json({
+      connected: false,
+      supportedTypes: ['exercise', 'weight', 'heartRate', 'steps', 'activeCalories', 'distance'],
+      enabledTypes: [],
+      backfillDays: 30,
+      excludedOrigins: [],
+      minBackfillDays: 7,
+      maxBackfillDays: 365,
+    });
+  }),
   http.get('/api/training-types', () => {
     return HttpResponse.json([]);
   }),
