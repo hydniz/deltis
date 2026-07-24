@@ -402,11 +402,20 @@ router.put('/settings/:id', auth, async (req, res) => {
       _id: req.params.id,
       $or: [{ userId: req.user._id }, { userId: null }],
     }).select('type');
+    const settings = sanitizeHabitSettings(req.body, def?.type);
     await UserHabitSettings.findOneAndUpdate(
       { userId: req.user._id },
-      { $set: { [`habitSettings.${req.params.id}`]: sanitizeHabitSettings(req.body, def?.type) } },
+      { $set: { [`habitSettings.${req.params.id}`]: settings } },
       { upsert: true }
     );
+    // Just enabled auto-fill? Backfill recent days from existing data so the
+    // habit fills immediately instead of only on the next sync. Best-effort.
+    if (settings.autoSource) {
+      try {
+        const autoFill = require('../services/autoFillHabits');
+        await autoFill.materialize(req.user._id, autoFill.recentDays(30));
+      } catch { /* non-fatal */ }
+    }
     res.json({ success: true });
   } catch (err) {
     res.status(400).json({ error: err.message });
@@ -468,9 +477,11 @@ router.post('/logs', auth, async (req, res) => {
     if (!habitDef) return res.status(404).json({ error: 'Habit nicht gefunden' });
     const habitVersion = habitDef.version;
 
+    // A manual entry always wins — it also converts an auto-filled day to
+    // 'manual' so the next sync won't overwrite it.
     const log = await HabitLog.findOneAndUpdate(
       { userId: req.user._id, habitId, date: { $gte: startOfDay, $lte: endOfDay } },
-      { userId: req.user._id, habitId, date: startOfDay, value, habitVersion },
+      { userId: req.user._id, habitId, date: startOfDay, value, habitVersion, source: 'manual' },
       { upsert: true, new: true }
     );
 

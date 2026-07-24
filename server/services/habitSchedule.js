@@ -216,7 +216,7 @@ async function dueHabitsForRange(userId, startStr, endStr) {
   const needsTrainingPlans = triggers.some(t => t.kind === 'trainingType');
 
   const [habitLogs, activityLogs, stravaActivities, habitPlans, activityPlans, trainingPlans, activityTypes, trainingTypes] = await Promise.all([
-    HabitLog.find({ userId, date: { $gte: histStart, $lte: histEnd } }).select('habitId date value').lean(),
+    HabitLog.find({ userId, date: { $gte: histStart, $lte: histEnd } }).select('habitId date value source').lean(),
     needsActivityLogs
       ? ActivityLog.find({ userId, date: { $gte: histStart, $lte: histEnd } }).select('activityTypeRef activityType date').lean()
       : [],
@@ -356,7 +356,7 @@ async function dueHabitsForRange(userId, startStr, endStr) {
         logged: !!log || hasAuto,
         loggedValue: effectiveValue,
         auto: hasAuto,
-        source: hasAuto ? autoSourceKindOf(habits, def._id) : (log ? 'manual' : null),
+        source: log ? (log.source || 'manual') : (hasAuto ? autoSourceKindOf(habits, def._id) : null),
         // A day only counts as DONE when the value satisfies the completion
         // target — 0 g logged against a 5 g minimum stays open.
         fulfilled: effectiveValue != null

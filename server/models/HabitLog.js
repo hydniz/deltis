@@ -8,6 +8,9 @@ const habitLogSchema = new mongoose.Schema({
   habitVersion: { type: Number },
   date: { type: Date, required: true },
   value: { type: Number, required: true },
+  // 'manual' = typed by the user (always wins), 'auto' = materialized from a
+  // bound metric or matching activities (see services/autoFillHabits.js).
+  source: { type: String, default: 'manual' },
   createdAt: { type: Date, default: Date.now }
 });
 
