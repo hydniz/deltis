@@ -101,6 +101,7 @@ app.use('/api/activity-types', require('./routes/activityTypes'));
 app.use('/api/training-types', require('./routes/trainingTypes'));
 app.use('/api/strava', require('./routes/strava'));
 app.use('/api/health', require('./routes/health'));
+app.use('/api/metrics', require('./routes/metrics'));
 
 if (process.env.NODE_ENV === 'production') {
   app.use(express.static(path.join(__dirname, '../client/dist')));

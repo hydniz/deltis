@@ -21,6 +21,10 @@
 // v15: Health Connect integration (/api/health endpoints, `health` entry in
 //      the training-criteria integration registry, source/sourceId on weight
 //      log entries).
+// v16: generic user-defined measurements (/api/metrics + MetricDefinition/
+//      MetricLog): any scalar from Health Connect or hand entry (body fat,
+//      resting HR, sleep, blood pressure, hydration, mood, …). Health Connect
+//      now advertises all metric types and /health/sync accepts `metrics[]`.
 //
 // This MUST equal the backend `apiVersion` shipped in the same release: the
 // compatibility check in App.jsx is a strict equality (`backendV ===
@@ -28,4 +32,4 @@
 // raises the amber version-conflict banner for every user of that build.
 // Frontend and backend ship together, so bump this in lockstep with
 // `apiVersion` in the root package.json.
-export const REQUIRED_API_VERSION = 15;
+export const REQUIRED_API_VERSION = 16;
