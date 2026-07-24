@@ -13,6 +13,9 @@ import {
 } from '../components/ui';
 import ActivityTypeWizard from '../components/ActivityTypeWizard';
 import StravaActivityList from '../components/StravaActivityList';
+import HealthActivityList from '../components/HealthActivityList';
+import WeekDivider from '../components/WeekDivider';
+import { markWeekStarts } from '../utils/weekGroups';
 
 // ActivityTypeCard
 
@@ -543,13 +546,22 @@ export default function Activities() {
   const [page, setPage] = useState(0);
   const limit = 20;
 
-  // Strava source toggle — only offered when the integration is in use.
-  const [source, setSource] = useState('manual'); // 'manual' | 'strava'
+  // Source toggle — Strava / Health Connect tabs appear when those
+  // integrations are in use.
+  const [source, setSource] = useState('manual'); // 'manual' | 'strava' | 'health'
   const [stravaStatus, setStravaStatus] = useState(null);
+  const [healthStatus, setHealthStatus] = useState(null);
   useEffect(() => {
     api.get('/strava/status').then(res => setStravaStatus(res.data)).catch(() => {});
+    api.get('/health/config').then(res => setHealthStatus(res.data)).catch(() => {});
   }, []);
   const showStravaTab = Boolean(stravaStatus?.connected || stravaStatus?.activityCount > 0);
+  const showHealthTab = Boolean(healthStatus?.connected);
+  const sourceOptions = [
+    { value: 'manual', label: 'Manuell' },
+    ...(showStravaTab ? [{ value: 'strava', label: 'Strava' }] : []),
+    ...(showHealthTab ? [{ value: 'health', label: 'Health Connect' }] : []),
+  ];
 
   const loadTypes = useCallback(async () => {
     const res = await api.get('/activity-types');
@@ -622,21 +634,20 @@ export default function Activities() {
         )}
       />
 
-      {/* Source toggle — only when the Strava integration is in use */}
-      {showStravaTab && (
+      {/* Source toggle — when Strava or Health Connect is in use */}
+      {sourceOptions.length > 1 && (
         <Segmented
-          className="max-w-xs"
+          className="max-w-md"
           value={source}
           onChange={setSource}
-          options={[
-            { value: 'manual', label: 'Manuell' },
-            { value: 'strava', label: 'Strava' },
-          ]}
+          options={sourceOptions}
         />
       )}
 
       {source === 'strava' ? (
         <StravaActivityList connected={Boolean(stravaStatus?.connected)} />
+      ) : source === 'health' ? (
+        <HealthActivityList connected={Boolean(healthStatus?.connected)} />
       ) : (<>
       {/* Filter chips (horizontally scrollable when many types) + management */}
       <div className="flex items-center gap-2">
@@ -711,13 +722,11 @@ export default function Activities() {
         />
       ) : (
         <div className="space-y-2.5 anim-list">
-          {activities.map(a => (
-            <ActivityCard
-              key={a._id}
-              activity={a}
-              onDelete={handleDelete}
-              onEdit={loadActivities}
-            />
+          {markWeekStarts(activities, a => a.date).map(({ item: a, newWeek, weekLabel }) => (
+            <div key={a._id}>
+              {newWeek && <WeekDivider label={weekLabel} />}
+              <ActivityCard activity={a} onDelete={handleDelete} onEdit={loadActivities} />
+            </div>
           ))}
         </div>
       )}

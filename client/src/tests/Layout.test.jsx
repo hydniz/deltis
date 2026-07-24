@@ -61,6 +61,7 @@ describe('Layout', () => {
     expect(screen.getByText('Habits')).toBeInTheDocument();
     expect(screen.getByText('Mehr')).toBeInTheDocument();
     expect(screen.queryByText('Gewicht')).not.toBeInTheDocument();
+    expect(screen.queryByText('Messwerte')).not.toBeInTheDocument();
     expect(screen.queryByText('Ziele')).not.toBeInTheDocument();
   });
 
@@ -70,6 +71,7 @@ describe('Layout', () => {
     await screen.findByTestId('outlet');
     await user.click(screen.getByText('Mehr'));
     expect(screen.getByText('Gewicht')).toBeInTheDocument();
+    expect(screen.getByText('Messwerte')).toBeInTheDocument();
     expect(screen.getByText('Ziele')).toBeInTheDocument();
 
     // Navigating from the sheet closes it again

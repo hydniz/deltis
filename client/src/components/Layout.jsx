@@ -5,7 +5,7 @@ import UserMenu from './UserMenu';
 import Logo from './Logo';
 import DailyCheckin from './DailyCheckin';
 import {
-  LayoutDashboard, Dumbbell, CalendarDays, Sparkles, Scale, Target,
+  LayoutDashboard, Dumbbell, CalendarDays, Sparkles, Scale, Activity, Target,
   MoreHorizontal,
 } from 'lucide-react';
 
@@ -21,6 +21,7 @@ const mobilePrimary = [
 
 const mobileMore = [
   { to: '/weight', icon: Scale, label: 'Gewicht' },
+  { to: '/metrics', icon: Activity, label: 'Messwerte' },
   { to: '/goals', icon: Target, label: 'Ziele' },
 ];
 
@@ -89,9 +90,12 @@ export default function Layout({ children }) {
         </div>
       </header>
 
-      <main className="lg:pl-64 pb-24 lg:pb-0 min-h-screen">
+      {/* overflow-x-clip: a stray wide child (e.g. a long value row) must never
+          make the whole page scroll sideways on mobile. Internal scrollers keep
+          their own overflow-x-auto. */}
+      <main className="lg:pl-64 pb-24 lg:pb-0 min-h-screen overflow-x-clip">
         {/* Keyed on the path so the entrance replays on every navigation */}
-        <div key={location.pathname} className="max-w-4xl mx-auto px-4 py-6 sm:px-6 lg:px-10 lg:py-10 page-enter">
+        <div key={location.pathname} className="max-w-4xl mx-auto px-4 py-6 sm:px-6 lg:px-10 lg:py-10 page-enter min-w-0">
           {children ?? <Outlet />}
         </div>
       </main>

@@ -8,6 +8,8 @@ import { Activity, Clock, Route, Heart, Mountain } from 'lucide-react';
 import api from '../utils/api';
 import { Chip, EmptyState, PageLoader, Button } from './ui';
 import StravaActivityDetailModal from './StravaActivityDetailModal';
+import WeekDivider from './WeekDivider';
+import { markWeekStarts } from '../utils/weekGroups';
 
 const STRAVA_ORANGE = '#FC4C02';
 
@@ -136,8 +138,11 @@ export default function StravaActivityList({ connected }) {
         <PageLoader />
       ) : (
         <div className="space-y-2.5 anim-list">
-          {activities.map(a => (
-            <StravaActivityCard key={a._id} activity={a} onOpen={() => setDetailId(a._id)} />
+          {markWeekStarts(activities, a => a.startDateLocal || a.startDate).map(({ item: a, newWeek, weekLabel }) => (
+            <div key={a._id}>
+              {newWeek && <WeekDivider label={weekLabel} />}
+              <StravaActivityCard activity={a} onOpen={() => setDetailId(a._id)} />
+            </div>
           ))}
         </div>
       )}

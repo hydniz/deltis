@@ -5,6 +5,7 @@ import { useState, useEffect, useCallback } from 'react';
 import api from '../utils/api';
 import { Plus, Check, Trash2, Pencil, Sparkles, Cloud } from 'lucide-react';
 import { Button, Field, Input, Select, Toggle, Modal, IconButton, Spinner, Alert } from './ui';
+import MetricSourceHelp from './MetricSourceHelp';
 
 const VALUE_TYPES = [
   { value: 'number', label: 'Zahl' },
@@ -117,30 +118,37 @@ export default function ManageMetricsModal({ onClose, onChanged }) {
         ) : metrics.length === 0 ? (
           <p className="text-sm text-ink-400">Noch keine — füge unten welche hinzu.</p>
         ) : (
-          <ul className="space-y-2">
+          <ul className="space-y-2.5">
             {metrics.map(m => (
-              <li key={m._id} className="panel px-3 py-2.5 flex items-center gap-3" data-testid="managed-metric">
+              <li key={m._id} className="panel px-3.5 py-3" data-testid="managed-metric">
                 {editing === m._id ? (
-                  <>
-                    <Input value={editForm.name} onChange={e => setEditForm(f => ({ ...f, name: e.target.value }))} className="flex-1" aria-label="Name" />
-                    <Input value={editForm.unit} onChange={e => setEditForm(f => ({ ...f, unit: e.target.value }))} placeholder="Einheit" className="w-24" aria-label="Einheit" />
-                    <Button size="sm" loading={busy} onClick={() => saveEdit(m._id)}>Sichern</Button>
-                    <Button size="sm" variant="ghost" onClick={() => setEditing(null)}>Abbrechen</Button>
-                  </>
+                  <div className="space-y-3">
+                    <Field label="Bezeichnung">
+                      <Input value={editForm.name} onChange={e => setEditForm(f => ({ ...f, name: e.target.value }))} className="w-full" aria-label="Name" autoFocus />
+                    </Field>
+                    <Field label="Einheit">
+                      <Input value={editForm.unit} onChange={e => setEditForm(f => ({ ...f, unit: e.target.value }))} placeholder="bpm, %, ml …" className="w-full" aria-label="Einheit" />
+                    </Field>
+                    <div className="flex gap-2">
+                      <Button size="sm" loading={busy} onClick={() => saveEdit(m._id)}>Sichern</Button>
+                      <Button size="sm" variant="ghost" onClick={() => setEditing(null)}>Abbrechen</Button>
+                    </div>
+                  </div>
                 ) : (
-                  <>
-                    <span className="flex-1 min-w-0">
-                      <span className="text-sm font-medium text-ink-800">{m.name}</span>
-                      {m.unit && <span className="text-xs text-ink-400"> · {m.unit}</span>}
-                      {m.healthType && <Cloud size={12} className="inline ml-1.5 -mt-0.5 text-sage-500" aria-label="Health Connect" />}
+                  <div className="flex items-center gap-2">
+                    <span className="flex-1 min-w-0 flex items-center gap-1">
+                      <span className="text-sm font-medium text-ink-800 truncate">{m.name}</span>
+                      {m.unit && <span className="text-xs text-ink-400 flex-shrink-0"> · {m.unit}</span>}
+                      {m.healthType && <Cloud size={12} className="text-sage-500 flex-shrink-0" aria-label="Health Connect" />}
+                      <MetricSourceHelp metric={m} size={12} />
                     </span>
-                    <label className="flex items-center gap-1.5 text-xs text-ink-500">
-                      Dashboard
+                    <label className="flex items-center gap-1.5 text-xs text-ink-500 flex-shrink-0">
+                      <span className="hidden sm:inline">Dashboard</span>
                       <Toggle value={!!m.showOnDashboard} onChange={() => toggleDashboard(m)} label={`${m.name} auf dem Dashboard`} />
                     </label>
                     <IconButton icon={Pencil} label="Bearbeiten" onClick={() => startEdit(m)} />
                     <IconButton icon={Trash2} label="Entfernen" onClick={() => remove(m)} />
-                  </>
+                  </div>
                 )}
               </li>
             ))}
@@ -160,6 +168,7 @@ export default function ManageMetricsModal({ onClose, onChanged }) {
               type="button"
               disabled={t.added || busy}
               onClick={() => addFromCatalog(t.key)}
+              title={t.description || undefined}
               className={`text-sm px-3 py-1.5 rounded-full border transition-colors flex items-center gap-1.5 ${
                 t.added
                   ? 'border-emerald-200 bg-emerald-50 text-emerald-700 cursor-default'
