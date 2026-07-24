@@ -12,6 +12,7 @@ import {
   PageHeader, Button, Field, Input, Select, PasswordInput, Alert, TONE_BUBBLE,
 } from '../components/ui';
 import StravaCard from '../components/StravaCard';
+import HealthConnectCard from '../components/HealthConnectCard';
 import TrainingTypesCard from '../components/TrainingTypesCard';
 
 // Sub-sections — each is its own route below /settings.
@@ -558,6 +559,7 @@ function IntegrationsSection() {
   return (
     <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 items-start">
       <StravaCard />
+      <HealthConnectCard />
       <TrainingTypesCard />
     </div>
   );
