@@ -97,6 +97,13 @@ describe('evaluateActivity', () => {
     expect(healthCriteria.evaluateActivity(run, AND({ kind: 'sportType', values: ['ride'] }))).toBe(false);
   });
 
+  it('evaluates power criteria on a health session', () => {
+    const ride = { ...run, exerciseType: 'EXERCISE_TYPE_BIKING', sportType: 'ride', averageWatts: 220, maxWatts: 500, averageCadence: 90 };
+    expect(healthCriteria.evaluateActivity(ride, AND({ kind: 'metricRange', metric: 'averageWatts', min: 200 }))).toBe(true);
+    expect(healthCriteria.evaluateActivity(ride, AND({ kind: 'metricRange', metric: 'averageWatts', min: 300 }))).toBe(false);
+    expect(healthCriteria.evaluateActivity(ride, AND({ kind: 'metricRange', metric: 'averageCadence', min: 80 }))).toBe(true);
+  });
+
   it('evaluates metric ranges in user-facing units', () => {
     expect(healthCriteria.evaluateActivity(
       run, AND({ kind: 'metricRange', metric: 'distance', min: 5 }))).toBe(true);   // km

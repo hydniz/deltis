@@ -30,6 +30,9 @@ const METRICS = {
   maxHeartrate:       { label: 'Max. Herzfrequenz',   unit: 'bpm',  get: a => a.maxHeartrate ?? null },
   calories:           { label: 'Kalorien',            unit: 'kcal', get: a => a.calories ?? null },
   steps:              { label: 'Schritte',            unit: '',     get: a => a.steps ?? null },
+  averageWatts:       { label: 'Ø Leistung',          unit: 'W',    get: a => a.averageWatts ?? null },
+  maxWatts:           { label: 'Max. Leistung',       unit: 'W',    get: a => a.maxWatts ?? null },
+  averageCadence:     { label: 'Ø Trittfrequenz',     unit: '/min', get: a => a.averageCadence ?? null },
 };
 
 function isFiniteNumber(v) {

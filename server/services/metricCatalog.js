@@ -46,9 +46,32 @@ const HEALTH_METRICS = {
   totalCalories: { name: 'Gesamtkalorien', unit: 'kcal', valueType: 'number', dayAgg: 'sum', agg: 'avg', direction: 'none', min: 0, max: 30000, icon: 'Flame', color: 'ocher' },
   floorsClimbed: { name: 'Etagen', unit: '', valueType: 'number', dayAgg: 'sum', agg: 'avg', direction: 'up', min: 0, max: 10000, icon: 'TrendingUp', color: 'sage' },
 
-  // Sleep & nutrition
+  // Metabolism
+  basalMetabolicRate: { name: 'Grundumsatz', unit: 'kcal', valueType: 'number', dayAgg: 'last', agg: 'avg', direction: 'none', min: 0, max: 10000, icon: 'Flame', color: 'ocher' },
+  bodyWaterMass: { name: 'Körperwasser', unit: 'kg', valueType: 'number', dayAgg: 'last', agg: 'avg', direction: 'none', min: 0, max: 200, icon: 'Droplet', color: 'sage' },
+  elevationGained: { name: 'Höhenmeter (Tag)', unit: 'm', valueType: 'number', dayAgg: 'sum', agg: 'sum', direction: 'up', min: 0, max: 100000, icon: 'TrendingUp', color: 'sage' },
+  wheelchairPushes: { name: 'Rollstuhl-Stöße', unit: '', valueType: 'number', dayAgg: 'sum', agg: 'avg', direction: 'up', min: 0, max: 200000, icon: 'Activity', color: 'brand' },
+
+  // Sleep — total plus the individual stages
   sleepDuration: { name: 'Schlafdauer', unit: 'h', valueType: 'duration', dayAgg: 'sum', agg: 'avg', direction: 'up', min: 0, max: 24, icon: 'Moon', color: 'ocher' },
+  sleepDeep: { name: 'Tiefschlaf', unit: 'h', valueType: 'duration', dayAgg: 'sum', agg: 'avg', direction: 'up', min: 0, max: 24, icon: 'Moon', color: 'stone' },
+  sleepRem: { name: 'REM-Schlaf', unit: 'h', valueType: 'duration', dayAgg: 'sum', agg: 'avg', direction: 'up', min: 0, max: 24, icon: 'Moon', color: 'stone' },
+  sleepLight: { name: 'Leichtschlaf', unit: 'h', valueType: 'duration', dayAgg: 'sum', agg: 'avg', direction: 'none', min: 0, max: 24, icon: 'Moon', color: 'stone' },
+  sleepAwake: { name: 'Wachzeit (nachts)', unit: 'h', valueType: 'duration', dayAgg: 'sum', agg: 'avg', direction: 'down', min: 0, max: 24, icon: 'Moon', color: 'ocher' },
+
+  // Nutrition — from NutritionRecord; one metric per nutrient the user cares about
+  nutritionEnergy: { name: 'Kalorienzufuhr', unit: 'kcal', valueType: 'number', dayAgg: 'sum', agg: 'avg', direction: 'none', min: 0, max: 20000, icon: 'Utensils', color: 'ocher' },
+  protein: { name: 'Protein', unit: 'g', valueType: 'number', dayAgg: 'sum', agg: 'avg', direction: 'up', min: 0, max: 2000, icon: 'Utensils', color: 'ocher' },
+  carbs: { name: 'Kohlenhydrate', unit: 'g', valueType: 'number', dayAgg: 'sum', agg: 'avg', direction: 'none', min: 0, max: 3000, icon: 'Utensils', color: 'ocher' },
+  fat: { name: 'Fett', unit: 'g', valueType: 'number', dayAgg: 'sum', agg: 'avg', direction: 'none', min: 0, max: 2000, icon: 'Utensils', color: 'ocher' },
+  sugar: { name: 'Zucker', unit: 'g', valueType: 'number', dayAgg: 'sum', agg: 'avg', direction: 'down', min: 0, max: 2000, icon: 'Utensils', color: 'ocher' },
+  fiber: { name: 'Ballaststoffe', unit: 'g', valueType: 'number', dayAgg: 'sum', agg: 'avg', direction: 'up', min: 0, max: 500, icon: 'Utensils', color: 'sage' },
+  sodium: { name: 'Natrium', unit: 'mg', valueType: 'number', dayAgg: 'sum', agg: 'avg', direction: 'down', min: 0, max: 100000, icon: 'Utensils', color: 'rose' },
   hydration: { name: 'Wasser', unit: 'ml', valueType: 'number', dayAgg: 'sum', agg: 'avg', direction: 'up', min: 0, max: 20000, icon: 'Droplet', color: 'sage' },
+
+  // Cycle tracking (opt-in). Categorical Health Connect values are mapped to a
+  // small numeric scale so they fit the metric model.
+  menstruationFlow: { name: 'Menstruationsstärke', unit: '', valueType: 'scale', scaleMax: 3, dayAgg: 'max', agg: 'max', direction: 'none', min: 0, max: 3, icon: 'Droplet', color: 'rose' },
 };
 
 // Templates with no Health Connect source — offered in the catalog for manual
@@ -57,7 +80,6 @@ const EXTRA_CATALOG = {
   mood: { name: 'Stimmung', unit: '', valueType: 'scale', scaleMax: 5, dayAgg: 'avg', agg: 'avg', direction: 'up', min: 1, max: 5, icon: 'Smile', color: 'ocher' },
   energy: { name: 'Energielevel', unit: '', valueType: 'scale', scaleMax: 5, dayAgg: 'avg', agg: 'avg', direction: 'up', min: 1, max: 5, icon: 'Zap', color: 'ocher' },
   stress: { name: 'Stress', unit: '', valueType: 'scale', scaleMax: 5, dayAgg: 'avg', agg: 'avg', direction: 'down', min: 1, max: 5, icon: 'Activity', color: 'rose' },
-  calorieIntake: { name: 'Kalorienzufuhr', unit: 'kcal', valueType: 'number', dayAgg: 'sum', agg: 'avg', direction: 'none', min: 0, max: 20000, icon: 'Utensils', color: 'ocher' },
   waistCircumference: { name: 'Bauchumfang', unit: 'cm', valueType: 'number', dayAgg: 'last', agg: 'avg', direction: 'down', min: 20, max: 250, icon: 'Ruler', color: 'stone' },
 };
 

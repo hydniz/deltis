@@ -453,6 +453,33 @@ describe('metric ingestion', () => {
     expect(res.body.metricTargets[0].healthType).toBe('bodyFat');
   });
 
+  it('stores power and cadence on an exercise session', async () => {
+    const { token, user } = await createUser();
+    await connect(token, { enabledTypes: ['exercise'] });
+
+    await request(app).post('/api/health/sync').set(authHeader(token))
+      .send({ activities: [session({ avgWatts: 210, maxWatts: 480, avgCadence: 88 })] });
+
+    const stored = await HealthActivity.findOne({ userId: user._id });
+    expect(stored.averageWatts).toBe(210);
+    expect(stored.maxWatts).toBe(480);
+    expect(stored.averageCadence).toBe(88);
+  });
+
+  it('routes a nutrition record to its metric', async () => {
+    const { token, user } = await createUser();
+    await connect(token, { enabledTypes: ['protein'] });
+
+    const res = await request(app).post('/api/health/sync').set(authHeader(token)).send({
+      metrics: [{ type: 'protein', id: 'p-2026-05-01', time: '2026-05-01T12:00:00.000Z', value: 140 }],
+    });
+
+    expect(res.body.metrics.imported).toBe(1);
+    const def = await MetricDefinition.findOne({ userId: user._id, healthType: 'protein' });
+    expect(def.name).toBe('Protein');
+    expect(await MetricLog.countDocuments({ userId: user._id, metricId: def._id })).toBe(1);
+  });
+
   it('routes metric records to the matching metric on sync', async () => {
     const { token, user } = await createUser();
     await connect(token, { enabledTypes: ['restingHeartRate'] });

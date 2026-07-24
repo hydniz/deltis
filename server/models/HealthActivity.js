@@ -42,6 +42,9 @@ const healthActivitySchema = new mongoose.Schema({
   maxSpeed: { type: Number },                 // m/s
   averageHeartrate: { type: Number },         // bpm
   maxHeartrate: { type: Number },             // bpm
+  averageWatts: { type: Number },             // W (from PowerRecord over the session)
+  maxWatts: { type: Number },                 // W
+  averageCadence: { type: Number },           // rpm / steps-per-min
   steps: { type: Number },
   calories: { type: Number },                 // kcal, total
   activeCalories: { type: Number },           // kcal
