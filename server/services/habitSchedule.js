@@ -26,6 +26,10 @@ const ActivityPlan = require('../models/ActivityPlan');
 const TrainingPlan = require('../models/TrainingPlan');
 const ActivityType = require('../models/ActivityType');
 const TrainingType = require('../models/TrainingType');
+const MetricDefinition = require('../models/MetricDefinition');
+const MetricLog = require('../models/MetricLog');
+const metricAggregate = require('../services/metricAggregate');
+const trainingCriteria = require('../services/trainingCriteria');
 
 const MAX_OFFSET_DAYS = 30;
 const MAX_RANGE_DAYS = 62;
@@ -87,6 +91,83 @@ function daySetBy(docs, pick, match) {
   return map;
 }
 
+// Normalizes a per-habit auto-fill binding. `metric` pulls the day value of a
+// MetricDefinition; `activity` counts/sums matching Strava/Health activities.
+function normalizeAutoSource(raw) {
+  if (!raw || typeof raw !== 'object') return null;
+  if (raw.kind === 'metric' && raw.metricId) {
+    return { kind: 'metric', metricId: String(raw.metricId) };
+  }
+  if (raw.kind === 'activity' && raw.criteria && typeof raw.criteria === 'object') {
+    const metric = ['count', 'distance', 'duration'].includes(raw.metric) ? raw.metric : 'count';
+    return { kind: 'activity', criteria: raw.criteria, metric };
+  }
+  return null;
+}
+
+// Derives auto-fill values for every auto-bound habit across the visible days.
+// Metric habits read MetricLog (collapsed per day by the metric's aggregation);
+// activity habits read matching activities via the training-criteria registry.
+async function computeAutoValues(userId, habits, days) {
+  const out = new Map(); // `habitId|day` -> value
+  if (days.length === 0) return out;
+  const rangeStart = new Date(`${days[0]}T00:00:00.000Z`);
+  const rangeEnd = new Date(`${days[days.length - 1]}T23:59:59.999Z`);
+
+  // --- metric-bound habits ---
+  const metricHabits = habits.filter(h => h.autoSource?.kind === 'metric');
+  if (metricHabits.length) {
+    const metricIds = [...new Set(metricHabits.map(h => h.autoSource.metricId))];
+    const [defs, logs] = await Promise.all([
+      MetricDefinition.find({ userId, _id: { $in: metricIds } }).select('dayAggregation').lean(),
+      MetricLog.find({ userId, metricId: { $in: metricIds }, date: { $gte: rangeStart, $lte: rangeEnd } })
+        .select('metricId date value').lean(),
+    ]);
+    const dayAggById = new Map(defs.map(d => [String(d._id), d.dayAggregation || 'last']));
+    const byMetricDay = new Map(); // `metricId|day` -> [values]
+    for (const log of logs) {
+      const key = `${log.metricId}|${dayKey(log.date)}`;
+      if (!byMetricDay.has(key)) byMetricDay.set(key, []);
+      byMetricDay.get(key).push(log.value);
+    }
+    for (const h of metricHabits) {
+      const mode = dayAggById.get(h.autoSource.metricId) || 'last';
+      for (const day of days) {
+        const values = byMetricDay.get(`${h.autoSource.metricId}|${day}`);
+        if (values) out.set(`${h.def._id}|${day}`, metricAggregate.reduce(values, mode));
+      }
+    }
+  }
+
+  // --- activity-bound habits ---
+  const activityHabits = habits.filter(h => h.autoSource?.kind === 'activity');
+  for (const h of activityHabits) {
+    const matches = await trainingCriteria.findMatches(userId, h.autoSource.criteria, rangeStart, rangeEnd)
+      .catch(() => []);
+    const perDay = new Map(); // day -> { count, distance(km), duration(min) }
+    for (const m of matches) {
+      const day = dayKey(m.date);
+      if (!perDay.has(day)) perDay.set(day, { count: 0, distance: 0, duration: 0 });
+      const acc = perDay.get(day);
+      acc.count += 1;
+      acc.distance += (m.distance || 0) / 1000;
+      acc.duration += (m.movingTime || 0) / 60;
+    }
+    for (const [day, acc] of perDay) {
+      const value = Math.round(acc[h.autoSource.metric] * 100) / 100;
+      out.set(`${h.def._id}|${day}`, value);
+    }
+  }
+
+  return out;
+}
+
+// The source label for an auto-filled entry ('metric' | 'activity').
+function autoSourceKindOf(habits, habitId) {
+  const h = habits.find(x => String(x.def._id) === String(habitId));
+  return h?.autoSource?.kind || null;
+}
+
 async function dueHabitsForRange(userId, startStr, endStr) {
   const days = daysInRange(startStr, endStr);
   if (days.length === 0) return [];
@@ -103,8 +184,17 @@ async function dueHabitsForRange(userId, startStr, endStr) {
 
   const habits = definitions
     .filter(d => selectedIds.has(String(d._id)))
-    .map(d => ({ def: d, schedule: scheduleOf(habitSettings[String(d._id)]) }));
+    .map(d => ({
+      def: d,
+      schedule: scheduleOf(habitSettings[String(d._id)]),
+      autoSource: normalizeAutoSource(habitSettings[String(d._id)]?.autoSource),
+    }));
   if (habits.length === 0) return [];
+
+  // Auto-fill: habits bound to a metric or to matching activities get their
+  // daily value derived from that source instead of a manual log. Map keyed
+  // `habitId|day` → number.
+  const autoValues = await computeAutoValues(userId, habits, days);
 
   // Source data window: 'after' triggers look back, 'before' triggers look
   // ahead — clamp per config, never beyond MAX_OFFSET_DAYS.
@@ -248,6 +338,13 @@ async function dueHabitsForRange(userId, startStr, endStr) {
       const s = habitSettings[String(def._id)] || {};
       const targetCondition = ['min', 'max', 'exact'].includes(s.targetCondition) ? s.targetCondition : 'none';
       const targetValue = Number.isFinite(s.targetValue) ? s.targetValue : 0;
+
+      // A manual log always wins; otherwise fall back to the auto-filled value
+      // from the bound metric/activity, if any.
+      const autoValue = autoValues.get(`${def._id}|${dayStr}`);
+      const hasAuto = !log && autoValue != null;
+      const effectiveValue = log ? log.value : (hasAuto ? autoValue : null);
+
       results.push({
         date: dayStr,
         habitId: String(def._id),
@@ -256,11 +353,15 @@ async function dueHabitsForRange(userId, startStr, endStr) {
         type: def.type,
         targetCondition,
         targetValue,
-        logged: !!log,
-        loggedValue: log ? log.value : null,
-        // A day only counts as DONE when the logged value satisfies the
-        // completion target — 0 g logged against a 5 g minimum stays open.
-        fulfilled: log ? meetsDailyTarget(targetCondition, targetValue, log.value) : false,
+        logged: !!log || hasAuto,
+        loggedValue: effectiveValue,
+        auto: hasAuto,
+        source: hasAuto ? autoSourceKindOf(habits, def._id) : (log ? 'manual' : null),
+        // A day only counts as DONE when the value satisfies the completion
+        // target — 0 g logged against a 5 g minimum stays open.
+        fulfilled: effectiveValue != null
+          ? meetsDailyTarget(targetCondition, targetValue, effectiveValue)
+          : false,
         reason,
       });
     }

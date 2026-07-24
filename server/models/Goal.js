@@ -43,7 +43,9 @@ const goalSchema = new mongoose.Schema({
     // weekly-*   = legacy, treated as periodic with intervalValue=1, intervalUnit='week'
     // periodic-strava = counts synced Strava activities matching stravaCriteria
     // meta = umbrella goal: met when >= targetValue of its child goals are met
-    enum: ['periodic-activity', 'periodic-habit', 'periodic-strava', 'weekly-activity', 'weekly-habit', 'long-term-activity', 'long-term-habit', 'meta'],
+    // periodic-metric / long-term-metric = target a MetricDefinition value
+    // (resting HR, body fat, steps, hydration, …), aggregated over the interval.
+    enum: ['periodic-activity', 'periodic-habit', 'periodic-strava', 'periodic-metric', 'weekly-activity', 'weekly-habit', 'long-term-activity', 'long-term-habit', 'long-term-metric', 'meta'],
     required: true
   },
 
@@ -69,7 +71,7 @@ const goalSchema = new mongoose.Schema({
   // referenced document. Meta goals use 'Goal' with targetRef 'meta'.
   targetRefModel: {
     type: String,
-    enum: ['ActivityType', 'HabitDefinition', 'StravaActivity', 'Goal', 'activity', 'habit'],
+    enum: ['ActivityType', 'HabitDefinition', 'StravaActivity', 'MetricDefinition', 'Goal', 'activity', 'habit'],
     required: true
   },
 

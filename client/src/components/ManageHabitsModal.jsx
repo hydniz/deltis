@@ -59,6 +59,8 @@ function settingsStateFrom(def = {}) {
     defaultVal: def.defaultValue ?? 0,
     targetCondition: def.targetCondition ?? 'none',
     targetValue: def.targetValue ?? 0,
+    // Auto-fill: bind the daily value to a metric (empty = manual logging).
+    autoMetricId: def.autoSource?.kind === 'metric' ? String(def.autoSource.metricId) : '',
   };
 }
 
@@ -86,6 +88,7 @@ function settingsPayload(s, type) {
     scheduleIntervalDays: s.scheduleMode === 'interval' ? (parseInt(s.intervalDays, 10) || null) : null,
     scheduleAnchorDate: s.scheduleMode === 'interval' ? (s.anchorDate || null) : null,
     scheduleTrigger: trigger,
+    autoSource: s.autoMetricId ? { kind: 'metric', metricId: s.autoMetricId } : null,
     ...target,
   };
 }
@@ -112,7 +115,7 @@ function HabitSettingsFields({ type, unitSymbol, value, onChange, triggerSources
     set({ days: next });
   };
   const isBoolean = type === 'boolean';
-  const { habits = [], activityTypes = [], trainingTypes = [], sportTypes = [] } = triggerSources;
+  const { habits = [], activityTypes = [], trainingTypes = [], sportTypes = [], metrics = [] } = triggerSources;
 
   const refOptions = value.triggerKind === 'habit' ? habits.map(h => ({ id: h._id, label: h.name }))
     : value.triggerKind === 'activityType' ? activityTypes.map(t => ({ id: t._id, label: t.label }))
@@ -273,6 +276,26 @@ function HabitSettingsFields({ type, unitSymbol, value, onChange, triggerSources
           </div>
           <p className="text-[11px] text-ink-400 mt-1.5">
             Der Tag zählt nur als erfüllt, wenn der eingetragene Wert das Ziel erreicht.
+          </p>
+        </div>
+      )}
+
+      {!isBoolean && metrics.length > 0 && (
+        <div>
+          <p className="text-xs font-semibold text-ink-600 mb-1.5">Automatisch ausfüllen</p>
+          <Select
+            className="!text-sm"
+            value={value.autoMetricId || ''}
+            onChange={e => set({ autoMetricId: e.target.value })}
+          >
+            <option value="">Manuell eintragen</option>
+            {metrics.map(m => (
+              <option key={m._id} value={m._id}>Aus Messwert: {m.name}{m.unit ? ` (${m.unit})` : ''}</option>
+            ))}
+          </Select>
+          <p className="text-[11px] text-ink-400 mt-1.5">
+            Der Tageswert wird automatisch aus dem Messwert übernommen (z.&nbsp;B. Schritte oder
+            Wasser aus Health Connect). Ein manueller Eintrag hat weiterhin Vorrang.
           </p>
         </div>
       )}
@@ -441,6 +464,7 @@ export default function ManageHabitsModal({ onSave, onClose, initialShowAdd = fa
   // Reference lists for event-trigger schedules ("nach/vor XY")
   const [activityTypes, setActivityTypes] = useState([]);
   const [trainingTypes, setTrainingTypes] = useState([]);
+  const [metrics, setMetrics] = useState([]);
 
   useEffect(() => {
     api.get('/habits/definitions', { params: { includeDeleted: true } }).then(res => {
@@ -453,6 +477,7 @@ export default function ManageHabitsModal({ onSave, onClose, initialShowAdd = fa
     });
     api.get('/activity-types').then(res => setActivityTypes(res.data)).catch(() => {});
     api.get('/training-types').then(res => setTrainingTypes(res.data)).catch(() => {});
+    api.get('/metrics').then(res => setMetrics(res.data)).catch(() => {});
   }, []);
 
   const toggle = (id) => {
@@ -534,6 +559,7 @@ export default function ManageHabitsModal({ onSave, onClose, initialShowAdd = fa
     activityTypes,
     trainingTypes,
     sportTypes: COMMON_SPORT_TYPES,
+    metrics,
   };
 
   return (
