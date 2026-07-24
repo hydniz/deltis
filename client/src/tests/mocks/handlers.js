@@ -41,6 +41,8 @@ export const handlers = [
   http.get('/api/strava/activities', () => {
     return HttpResponse.json({ activities: [], total: 0 });
   }),
+  http.get('/api/metrics', () => HttpResponse.json([])),
+  http.get('/api/metrics/catalog', () => HttpResponse.json([])),
   http.get('/api/health/config', () => {
     return HttpResponse.json({
       connected: false,
