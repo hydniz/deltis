@@ -132,9 +132,9 @@ function MetricCard({ metric, onChanged }) {
           type="number" step="any" inputMode="decimal"
           value={value} onChange={e => { setValue(e.target.value); setError(''); }}
           placeholder="Wert eintragen" aria-label={`${metric.name} eintragen`}
-          className="flex-1"
+          className="flex-1 min-w-0"
         />
-        <Button type="submit" icon={Plus} loading={saving} disabled={value === ''}>Eintragen</Button>
+        <Button type="submit" icon={Plus} loading={saving} disabled={value === ''} className="flex-shrink-0">Eintragen</Button>
       </form>
       {error && <p className="text-xs text-rose-500">{error}</p>}
       {logs && logs.length > 0 && (

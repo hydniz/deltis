@@ -234,12 +234,12 @@ function HabitCard({ habit, todayLog, onLog }) {
             type="number"
             value={value}
             onChange={e => setValue(e.target.value)}
-            className="flex-1"
+            className="flex-1 min-w-0"
             placeholder={`${isToday ? 'Heute' : 'Wert'} in ${habit.unitSymbol}`}
             min="0"
             step="0.1"
           />
-          <Button type="submit" loading={saving} disabled={value === ''} className="whitespace-nowrap">
+          <Button type="submit" loading={saving} disabled={value === ''} className="whitespace-nowrap flex-shrink-0">
             {currentLog ? 'Aktualisieren' : 'Eintragen'}
           </Button>
         </form>
