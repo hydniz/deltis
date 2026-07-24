@@ -642,7 +642,19 @@ function ActivityFilterEditor({ filters, filterFields, onAdd, onUpdate, onRemove
 
 // Goal creation wizard
 
-function CreateGoalModal({ activityTypes, habits, strava, existingGoals = [], trainingTypes = [], onSave, onClose, onTargetsChanged }) {
+// Selectors for a metric goal: how the readings collapse over the interval.
+const METRIC_GOAL_SELECTORS = [
+  { value: 'value', label: 'Standard (Aggregation des Messwerts)' },
+  { value: 'avg', label: 'Durchschnitt' },
+  { value: 'sum', label: 'Summe' },
+  { value: 'min', label: 'Minimum' },
+  { value: 'max', label: 'Maximum' },
+  { value: 'last', label: 'Letzter Wert' },
+  { value: 'count', label: 'Anzahl Messungen' },
+  { value: 'days', label: 'Tage mit Messung' },
+];
+
+function CreateGoalModal({ activityTypes, habits, metrics = [], strava, existingGoals = [], trainingTypes = [], onSave, onClose, onTargetsChanged }) {
   const [form, setForm] = useState({
     name: '',
     description: '',
@@ -704,8 +716,10 @@ function CreateGoalModal({ activityTypes, habits, strava, existingGoals = [], tr
 
   const isActivityGoal = form.targetCategory === 'activity';
   const isStravaGoal = form.targetCategory === 'strava';
+  const isMetricGoal = form.targetCategory === 'metric';
   const selectedActivityType = activityTypes.find(t => t._id === form.targetRef);
   const selectedHabit = habits.find(h => h._id === form.targetRef);
+  const selectedMetric = metrics.find(m => m._id === form.targetRef);
 
   const unitForMetric = (metric, actType, habit) => {
     if (metric === 'count') return form.targetCategory === 'habit' ? 'Tage' : 'Mal';
@@ -731,6 +745,17 @@ function CreateGoalModal({ activityTypes, habits, strava, existingGoals = [], tr
         targetRef: 'strava',
         stravaCriteria: f.stravaCriteria || emptyGroup(),
         conditions: [{ metric: 'count', condition: 'min', targetValue: '', unitSymbol: 'Mal', valueScope: 'total', aggregation: 'sum', activityFilters: [] }],
+      }));
+      return;
+    }
+    if (category === 'metric') {
+      const firstMetric = metrics[0];
+      setForm(f => ({
+        ...f,
+        targetCategory: 'metric',
+        targetRefModel: 'MetricDefinition',
+        targetRef: firstMetric?._id || '',
+        conditions: [{ metric: 'value', condition: 'max', targetValue: '', unitSymbol: firstMetric?.unit || '', valueScope: 'total', aggregation: 'sum', activityFilters: [] }],
       }));
       return;
     }
@@ -771,6 +796,17 @@ function CreateGoalModal({ activityTypes, habits, strava, existingGoals = [], tr
   };
 
   const handleRefChange = (ref) => {
+    if (isMetricGoal) {
+      const m = metrics.find(x => x._id === ref);
+      setForm(f => ({
+        ...f,
+        targetRef: ref,
+        conditions: f.conditions.map(c =>
+          ['count', 'days'].includes(c.metric) ? c : { ...c, unitSymbol: m?.unit || '' }
+        ),
+      }));
+      return;
+    }
     if (!isActivityGoal) {
       const h = habits.find(h => h._id === ref);
       setForm(f => ({
@@ -881,6 +917,16 @@ function CreateGoalModal({ activityTypes, habits, strava, existingGoals = [], tr
   };
 
   const handleMetricChangeForCondition = (i, metric) => {
+    // Metric goals: the selector never changes the unit (that follows the
+    // chosen metric), except count/days which are unitless.
+    if (isMetricGoal) {
+      const unit = ['count', 'days'].includes(metric) ? '' : (selectedMetric?.unit || '');
+      setForm(f => ({
+        ...f,
+        conditions: f.conditions.map((c, idx) => idx === i ? { ...c, metric, unitSymbol: unit } : c),
+      }));
+      return;
+    }
     const newUnit = unitForMetric(metric, selectedActivityType, selectedHabit);
     const applies = scopeApplies(metric);
     setForm(f => ({
@@ -1209,6 +1255,18 @@ function CreateGoalModal({ activityTypes, habits, strava, existingGoals = [], tr
                 <div className="flex items-center gap-1.5 font-semibold text-sm"><Sparkles size={13} /> Gewohnheit</div>
                 <div className="text-xs opacity-70 mt-0.5">Tägliche Routinen…</div>
               </button>
+              <button
+                type="button"
+                onClick={() => handleCategoryChange('metric')}
+                className={`p-3.5 rounded-xl border text-left transition-colors ${
+                  form.targetCategory === 'metric'
+                    ? 'border-rose-400 bg-rose-50 text-ink-900'
+                    : 'border-paper-200 bg-paper-50 text-ink-400 hover:text-ink-600'
+                }`}
+              >
+                <div className="flex items-center gap-1.5 font-semibold text-sm"><Activity size={13} /> Messwert</div>
+                <div className="text-xs opacity-70 mt-0.5">Ruhepuls, Gewicht…</div>
+              </button>
               {strava?.configured && !form.isLongTerm && (
                 <button
                   type="button"
@@ -1271,7 +1329,24 @@ function CreateGoalModal({ activityTypes, habits, strava, existingGoals = [], tr
             )}
           </>)}
 
-          {!isStravaGoal && (
+          {isMetricGoal && (
+            <Field label="Welcher Messwert?">
+              {metrics.length > 0 ? (
+                <Select value={form.targetRef} onChange={e => handleRefChange(e.target.value)}>
+                  {metrics.map(m => (
+                    <option key={m._id} value={m._id}>{m.name}{m.unit ? ` (${m.unit})` : ''}</option>
+                  ))}
+                </Select>
+              ) : (
+                <Alert tone="warning">
+                  Noch keine Messwerte vorhanden.{' '}
+                  <Link to="/metrics" className="underline font-semibold whitespace-nowrap">Jetzt anlegen →</Link>
+                </Alert>
+              )}
+            </Field>
+          )}
+
+          {!isStravaGoal && !isMetricGoal && (
           <Field label={isActivityGoal ? 'Welche Aktivität?' : 'Welche Gewohnheit?'}>
             {(isActivityGoal ? activityTypes.length > 0 : habits.length > 0) ? (
               <>
@@ -1346,7 +1421,9 @@ function CreateGoalModal({ activityTypes, habits, strava, existingGoals = [], tr
                             <option key={`${f.key}:${opt}`} value={`select_${f.key}:${opt}`}>{f.label} = {opt}</option>
                           ))
                         )}
-                      </>) : (<>
+                      </>) : isMetricGoal ? (
+                        METRIC_GOAL_SELECTORS.map(s => <option key={s.value} value={s.value}>{s.label}</option>)
+                      ) : (<>
                         <option value="value">Summe der Werte{selectedHabit ? ` (${selectedHabit.unitSymbol})` : ''}</option>
                         <option value="count">Anzahl Tage</option>
                       </>)}
@@ -2100,6 +2177,7 @@ export default function Goals() {
   const [goals, setGoals] = useState([]);
   const [activityTypes, setActivityTypes] = useState([]);
   const [habits, setHabits] = useState([]);
+  const [metrics, setMetrics] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showCreate, setShowCreate] = useState(false);
   const [editGoal, setEditGoal] = useState(null);
@@ -2124,14 +2202,16 @@ export default function Goals() {
   const load = async () => {
     setLoading(true);
     try {
-      const [goalsRes, typesRes, habitsRes] = await Promise.all([
+      const [goalsRes, typesRes, habitsRes, metricsRes] = await Promise.all([
         api.get('/goals'),
         api.get('/activity-types'),
         api.get('/habits/definitions'),
+        api.get('/metrics').catch(() => ({ data: [] })),
       ]);
       setGoals(goalsRes.data);
       setActivityTypes(typesRes.data);
       setHabits(habitsRes.data.filter(h => h.selected));
+      setMetrics(metricsRes.data);
     } catch (err) {
       console.error(err);
     } finally {
@@ -2251,6 +2331,7 @@ export default function Goals() {
         <CreateGoalModal
           activityTypes={activityTypes}
           habits={habits}
+          metrics={metrics}
           strava={strava}
           existingGoals={goals}
           trainingTypes={trainingTypes}
