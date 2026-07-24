@@ -1,6 +1,6 @@
 {
   "name": "deltis-backend",
-  "version": "0.9.0",
+  "version": "0.9.1",
   "stage": "",
   "apiVersion": 16,
   "scripts": {
