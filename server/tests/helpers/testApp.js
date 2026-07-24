@@ -53,6 +53,7 @@ function buildApp() {
   app.use('/api/training-types', require('../../routes/trainingTypes'));
   app.use('/api/strava', require('../../routes/strava'));
   app.use('/api/health', require('../../routes/health'));
+  app.use('/api/metrics', require('../../routes/metrics'));
 
   return app;
 }

@@ -430,6 +430,63 @@ describe('weight merging', () => {
   });
 });
 
+describe('metric ingestion', () => {
+  const MetricDefinition = require('../models/MetricDefinition');
+  const MetricLog = require('../models/MetricLog');
+
+  it('auto-provisions metric definitions for enabled health-metric types on connect', async () => {
+    const { token, user } = await createUser();
+    await connect(token, { enabledTypes: ['exercise', 'restingHeartRate', 'sleepDuration'] });
+
+    const defs = await MetricDefinition.find({ userId: user._id }).lean();
+    const types = defs.map(d => d.healthType).sort();
+    expect(types).toEqual(['restingHeartRate', 'sleepDuration']);
+    expect(defs.every(d => d.builtin)).toBe(true);
+  });
+
+  it('exposes metricTargets in the config', async () => {
+    const { token } = await createUser();
+    await connect(token, { enabledTypes: ['exercise', 'bodyFat'] });
+
+    const res = await request(app).get('/api/health/config').set(authHeader(token));
+    expect(res.body.metricTargets).toHaveLength(1);
+    expect(res.body.metricTargets[0].healthType).toBe('bodyFat');
+  });
+
+  it('routes metric records to the matching metric on sync', async () => {
+    const { token, user } = await createUser();
+    await connect(token, { enabledTypes: ['restingHeartRate'] });
+
+    const res = await request(app).post('/api/health/sync').set(authHeader(token)).send({
+      metrics: [{ type: 'restingHeartRate', id: 'r1', time: '2026-05-01T06:00:00.000Z', value: 51 }],
+    });
+
+    expect(res.status).toBe(200);
+    expect(res.body.metrics.imported).toBe(1);
+    const def = await MetricDefinition.findOne({ userId: user._id, healthType: 'restingHeartRate' });
+    expect(await MetricLog.countDocuments({ userId: user._id, metricId: def._id })).toBe(1);
+  });
+
+  it('reports records with no destination metric as unmapped', async () => {
+    const { token } = await createUser();
+    await connect(token, { enabledTypes: ['exercise'] }); // no metric enabled
+
+    const res = await request(app).post('/api/health/sync').set(authHeader(token)).send({
+      metrics: [{ type: 'bodyFat', id: 'b1', time: '2026-05-01T06:00:00.000Z', value: 20 }],
+    });
+    expect(res.body.metrics.unmapped.bodyFat).toBe(1);
+  });
+
+  it('counts metrics toward the per-request record cap', async () => {
+    const { token } = await createUser();
+    await connect(token, { enabledTypes: ['steps'] });
+    const many = Array.from({ length: 501 }, (_, i) => ({
+      type: 'steps', id: `s${i}`, time: '2026-05-01T06:00:00.000Z', value: 100,
+    }));
+    expect((await request(app).post('/api/health/sync').set(authHeader(token)).send({ metrics: many })).status).toBe(413);
+  });
+});
+
 describe('GET /api/health/activities', () => {
   it('hides superseded sessions by default and shows them on request', async () => {
     const { token, user } = await createUser();

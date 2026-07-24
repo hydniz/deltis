@@ -11,9 +11,38 @@ const HealthConnection = require('../models/HealthConnection');
 const HealthActivity = require('../models/HealthActivity');
 const activityMerge = require('../services/activityMerge');
 const healthWeight = require('../services/healthWeight');
+const healthMetrics = require('../services/healthMetrics');
+const catalog = require('../services/metricCatalog');
+const MetricDefinition = require('../models/MetricDefinition');
 
 // Upper bound per request — the app pages through longer backfills.
 const MAX_RECORDS_PER_SYNC = 500;
+
+// When the user enables a Health-Connect-backed metric type, make sure a
+// MetricDefinition exists to receive it — otherwise the upload would have
+// nowhere to go. Idempotent: seeds only the missing ones.
+async function ensureMetricDefinitions(userId, enabledTypes) {
+  const wanted = (enabledTypes || []).filter(t => catalog.HEALTH_METRICS[t]);
+  if (wanted.length === 0) return;
+  const existing = new Set(
+    (await MetricDefinition.find({ userId, healthType: { $in: wanted }, deletedAt: null })
+      .select('healthType').lean()).map(d => d.healthType)
+  );
+  for (const type of wanted) {
+    if (existing.has(type)) continue;
+    try {
+      await MetricDefinition.create({
+        userId,
+        ...catalog.definitionFromTemplate(type, catalog.HEALTH_METRICS[type]),
+        healthType: type,
+        builtin: type,
+      });
+    } catch {
+      // A concurrent sync may have created it, or the key/healthType is taken
+      // by a metric the user renamed — either way the upload still routes.
+    }
+  }
+}
 
 function publicConnection(connection) {
   return {
@@ -47,6 +76,15 @@ function sanitizeTypes(value, fallback) {
   return allowed.length ? [...new Set(allowed)] : fallback;
 }
 
+// The metrics that currently pull from Health Connect, so the companion knows
+// which record types to read and which unit each value is expected in.
+async function metricTargetsFor(userId) {
+  const defs = await MetricDefinition.find({
+    userId, deletedAt: null, healthType: { $type: 'string' },
+  }).select('healthType key name unit').lean();
+  return defs.map(d => ({ healthType: d.healthType, metricId: String(d._id), name: d.name, unit: d.unit }));
+}
+
 // What the app needs before reading anything: which types it may read, how far
 // back, and which writing apps to skip so Deltis never sees a record twice.
 router.get('/config', auth, async (req, res) => {
@@ -64,7 +102,11 @@ router.get('/config', auth, async (req, res) => {
         maxBackfillDays: HealthConnection.MAX_BACKFILL_DAYS,
       });
     }
-    res.json({ ...publicConnection(connection), excludedOrigins });
+    res.json({
+      ...publicConnection(connection),
+      excludedOrigins,
+      metricTargets: await metricTargetsFor(req.user._id),
+    });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -97,7 +139,11 @@ router.post('/connect', auth, async (req, res) => {
       { upsert: true, new: true, setDefaultsOnInsert: true }
     );
 
-    res.status(201).json(publicConnection(connection));
+    await ensureMetricDefinitions(req.user._id, connection.enabledTypes);
+    res.status(201).json({
+      ...publicConnection(connection),
+      metricTargets: await metricTargetsFor(req.user._id),
+    });
   } catch (err) {
     res.status(400).json({ error: err.message });
   }
@@ -116,7 +162,11 @@ router.put('/config', auth, async (req, res) => {
       connection.backfillDays = HealthConnection.clampBackfillDays(req.body.backfillDays);
     }
     await connection.save();
-    res.json(publicConnection(connection));
+    await ensureMetricDefinitions(req.user._id, connection.enabledTypes);
+    res.json({
+      ...publicConnection(connection),
+      metricTargets: await metricTargetsFor(req.user._id),
+    });
   } catch (err) {
     res.status(400).json({ error: err.message });
   }
@@ -195,7 +245,8 @@ router.post('/sync', auth, async (req, res) => {
 
     const activities = Array.isArray(req.body.activities) ? req.body.activities : [];
     const weights = Array.isArray(req.body.weights) ? req.body.weights : [];
-    if (activities.length + weights.length > MAX_RECORDS_PER_SYNC) {
+    const metrics = Array.isArray(req.body.metrics) ? req.body.metrics : [];
+    if (activities.length + weights.length + metrics.length > MAX_RECORDS_PER_SYNC) {
       return res.status(413).json({
         error: `Zu viele Datensätze pro Anfrage (max. ${MAX_RECORDS_PER_SYNC}).`,
       });
@@ -231,6 +282,12 @@ router.post('/sync', auth, async (req, res) => {
       });
     }
 
+    // Generic scalar measurements (body fat, resting HR, sleep, blood pressure,
+    // steps, hydration, …) route to the user's metrics. Records whose type has
+    // no destination metric are reported in `metricResult.unmapped`.
+    const definitions = await healthMetrics.healthDefinitionsFor(req.user._id);
+    const metricResult = await healthMetrics.mergeMetricRecords(req.user._id, metrics, definitions);
+
     // Reconcile the touched window in both directions, so a session that
     // duplicates a Strava activity is flagged immediately.
     const times = accepted.map(r => new Date(r.startTime).getTime());
@@ -245,6 +302,7 @@ router.post('/sync', auth, async (req, res) => {
       activities: stored,
       rejectedOrigins: rejected,
       weights: weightResult,
+      metrics: metricResult,
       merge,
     };
     connection.lastSyncAt = new Date();
