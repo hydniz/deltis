@@ -145,7 +145,7 @@ function HabitCard({ habit, todayLog, onLog }) {
   const tone = chipColorFor(habit._id);
 
   return (
-    <div className={`card p-5 border-l-4 ${TONE_ACCENT_BORDER[tone]}`}>
+    <div className={`card p-5 border-l-4 min-w-0 ${TONE_ACCENT_BORDER[tone]}`}>
       <div className="flex items-start justify-between mb-4">
         <div className="flex items-center gap-3 min-w-0">
           <div className={`w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 ${TONE_BUBBLE[tone]}`}>
@@ -402,7 +402,7 @@ export default function Habits() {
           }
         />
       ) : (
-        <div className="grid sm:grid-cols-2 gap-4 anim-list">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 anim-list">
           {sortedHabits.map(habit => (
             <HabitCard
               key={habit._id}
