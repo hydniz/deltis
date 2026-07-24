@@ -291,6 +291,19 @@ router.post('/sync', auth, async (req, res) => {
     const definitions = await healthMetrics.healthDefinitionsFor(req.user._id);
     const metricResult = await healthMetrics.mergeMetricRecords(req.user._id, metrics, definitions);
 
+    // Write auto-filled habit values for the touched days so a habit bound to a
+    // metric/activity actually shows its value (not just in the due engine).
+    // Best-effort — a failure here must not fail the upload.
+    try {
+      const touchedDays = [...new Set([
+        ...metrics.map(m => new Date(m.time).toISOString().slice(0, 10)),
+        ...accepted.map(a => new Date(a.startTime).toISOString().slice(0, 10)),
+      ].filter(d => /^\d{4}-\d{2}-\d{2}$/.test(d)))];
+      await require('../services/autoFillHabits').materialize(req.user._id, touchedDays);
+    } catch (err) {
+      require('../utils/logger').warn('health', `Auto-Fill fehlgeschlagen: ${err.message}`);
+    }
+
     // Reconcile the touched window in both directions, so a session that
     // duplicates a Strava activity is flagged immediately.
     const times = accepted.map(r => new Date(r.startTime).getTime());
