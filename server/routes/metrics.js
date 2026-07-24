@@ -88,6 +88,9 @@ async function enrich(def, userId) {
   const todayMap = dailySeries(chronological.filter(l => l.date.toISOString().slice(0, 10) === today), def.dayAggregation);
   return {
     ...def,
+    // Original source name + explanation for a metric seeded from a template,
+    // so a renamed metric still reveals what value actually sits behind it.
+    source: catalog.templateInfo(def.builtin || def.healthType),
     latest: logs[0] ? { value: logs[0].value, date: logs[0].date, source: logs[0].source } : null,
     todayValue: todayMap.get(today) ?? null,
     count: logs.length,

@@ -87,8 +87,73 @@ const EXTRA_CATALOG = {
 // values already in the metric's unit, but the server clamps/records defensively.
 const HEALTH_TYPE_KEYS = Object.keys(HEALTH_METRICS);
 
+// Plain-language explanations of what each measurement actually represents.
+// Surfaced as help text in the UI so a renamed metric still tells the user what
+// value really sits behind it.
+const DESCRIPTIONS = {
+  bodyFat: 'Anteil deines Körpergewichts, der aus Fett besteht.',
+  leanBodyMass: 'Körpergewicht ohne Fett – Muskeln, Knochen, Organe und Wasser zusammen.',
+  boneMass: 'Geschätztes Gewicht deiner Knochen.',
+  bodyWaterMass: 'Geschätzter Wasseranteil deines Körpers als Gewicht.',
+  height: 'Deine Körpergröße.',
+  restingHeartRate: 'Herzschläge pro Minute in völliger Ruhe – niedriger ist meist ein Zeichen guter Fitness und Erholung.',
+  heartRateVariability: 'Schwankung der Abstände zwischen den Herzschlägen (RMSSD). Höhere Werte deuten auf gute Erholung und ein entspanntes Nervensystem hin.',
+  oxygenSaturation: 'Sauerstoffsättigung des Bluts (SpO₂). Gesunde Werte liegen meist bei 95–100 %.',
+  respiratoryRate: 'Atemzüge pro Minute.',
+  bodyTemperature: 'Deine gemessene Körpertemperatur.',
+  basalBodyTemperature: 'Körpertemperatur direkt nach dem Aufwachen, noch vor jeder Aktivität.',
+  bloodGlucose: 'Zuckerkonzentration im Blut.',
+  vo2Max: 'Maximale Sauerstoffaufnahme – der wichtigste Laborwert für die Ausdauerleistung.',
+  bloodPressureSystolic: 'Oberer Blutdruckwert: der Druck, während das Herz schlägt.',
+  bloodPressureDiastolic: 'Unterer Blutdruckwert: der Druck, während das Herz zwischen den Schlägen ruht.',
+  steps: 'Summe deiner Schritte an diesem Tag.',
+  distance: 'Zurückgelegte Strecke über den ganzen Tag.',
+  activeCalories: 'Kalorien, die du durch Bewegung zusätzlich zum Grundumsatz verbrannt hast.',
+  totalCalories: 'Gesamter Kalorienverbrauch des Tages inklusive Grundumsatz.',
+  floorsClimbed: 'Anzahl der hochgestiegenen Etagen.',
+  basalMetabolicRate: 'Grundumsatz – die Kalorien, die dein Körper in völliger Ruhe pro Tag verbraucht.',
+  elevationGained: 'Insgesamt an diesem Tag überwundene Höhenmeter.',
+  wheelchairPushes: 'Anzahl der Rollstuhl-Stöße.',
+  sleepDuration: 'Gesamte Schlafdauer einer Nacht.',
+  sleepDeep: 'Zeit im Tiefschlaf – die erholsamste Schlafphase.',
+  sleepRem: 'Zeit im REM-Schlaf (Traumschlaf), wichtig für Gedächtnis und Verarbeitung.',
+  sleepLight: 'Zeit im Leichtschlaf.',
+  sleepAwake: 'Wachzeit während der Nacht.',
+  nutritionEnergy: 'Über die Nahrung aufgenommene Kalorien.',
+  protein: 'Aufgenommenes Protein.',
+  carbs: 'Aufgenommene Kohlenhydrate.',
+  fat: 'Aufgenommenes Fett.',
+  sugar: 'Aufgenommener Zucker.',
+  fiber: 'Aufgenommene Ballaststoffe.',
+  sodium: 'Aufgenommenes Natrium (Salz).',
+  hydration: 'Getrunkene Flüssigkeitsmenge.',
+  menstruationFlow: 'Stärke der Menstruationsblutung (0 = keine, 3 = stark).',
+  mood: 'Deine selbst eingeschätzte Stimmung auf einer Skala.',
+  energy: 'Dein selbst eingeschätztes Energielevel.',
+  stress: 'Dein selbst eingeschätztes Stresslevel.',
+  waistCircumference: 'Umfang deiner Taille.',
+};
+
+function describe(key) {
+  return DESCRIPTIONS[key] || '';
+}
+
 function healthTemplate(type) {
   return HEALTH_METRICS[type] || null;
+}
+
+// Source info for a metric seeded from a template (by its builtin/healthType
+// key): the ORIGINAL name and explanation, so a renamed metric still exposes
+// what value actually sits behind it. Returns null for hand-made metrics.
+function templateInfo(key) {
+  const t = HEALTH_METRICS[key] || EXTRA_CATALOG[key];
+  if (!t) return null;
+  return {
+    key,
+    name: t.name,
+    description: describe(key),
+    healthType: HEALTH_METRICS[key] ? key : null,
+  };
 }
 
 // Builds the fields for a MetricDefinition from a template. `key` becomes the
@@ -116,10 +181,10 @@ function definitionFromTemplate(key, template) {
 // each tagged with whether Health Connect can fill it.
 function fullCatalog() {
   const health = Object.entries(HEALTH_METRICS).map(([key, t]) => ({
-    key, ...definitionFromTemplate(key, t), healthType: key, importable: true,
+    key, ...definitionFromTemplate(key, t), description: describe(key), healthType: key, importable: true,
   }));
   const extra = Object.entries(EXTRA_CATALOG).map(([key, t]) => ({
-    key, ...definitionFromTemplate(key, t), healthType: null, importable: false,
+    key, ...definitionFromTemplate(key, t), description: describe(key), healthType: null, importable: false,
   }));
   return [...health, ...extra];
 }
@@ -128,7 +193,10 @@ module.exports = {
   HEALTH_METRICS,
   EXTRA_CATALOG,
   HEALTH_TYPE_KEYS,
+  DESCRIPTIONS,
+  describe,
   healthTemplate,
+  templateInfo,
   definitionFromTemplate,
   fullCatalog,
 };

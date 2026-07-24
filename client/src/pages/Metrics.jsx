@@ -7,13 +7,15 @@ import { format, parseISO } from 'date-fns';
 import { de } from 'date-fns/locale';
 import { Activity, Plus, TrendingUp, TrendingDown, Minus, Settings2 } from 'lucide-react';
 import { ResponsiveContainer, LineChart, Line, Tooltip } from 'recharts';
-import { PageHeader, Button, Input, EmptyState, Spinner, useChart, TONE_BUBBLE } from '../components/ui';
+import { PageHeader, Button, Input, EmptyState, Spinner, HelpTip, useChart, TONE_BUBBLE } from '../components/ui';
 import ManageMetricsModal from '../components/ManageMetricsModal';
+import MetricSourceHelp from '../components/MetricSourceHelp';
+import { formatNumber, formatValueUnit, isHoursUnit, formatHoursMinutes } from '../utils/metricFormat';
 
 // Formats a value to the metric's precision, with thousands grouping.
+// (Kept for callers/tests; hour-based values go through metricFormat.)
 export function formatValue(value, decimals = 1) {
-  if (value == null || !Number.isFinite(value)) return '–';
-  return value.toLocaleString('de-DE', { minimumFractionDigits: decimals, maximumFractionDigits: decimals });
+  return formatNumber(value, decimals);
 }
 
 // The trend between the two most recent readings, coloured by the metric's
@@ -32,10 +34,13 @@ function TrendBadge({ trend, unit }) {
   if (trend.icon === 'flat') return <span className="text-ink-400 text-sm flex items-center gap-1"><Minus size={14} /></span>;
   const Icon = trend.icon === 'up' ? TrendingUp : TrendingDown;
   const color = trend.good == null ? 'text-ink-500' : trend.good ? 'text-emerald-600' : 'text-rose-500';
+  const delta = isHoursUnit(unit)
+    ? formatHoursMinutes(Math.abs(trend.delta))
+    : `${Math.abs(trend.delta).toLocaleString('de-DE', { maximumFractionDigits: 1 })}${unit ? ` ${unit}` : ''}`;
   return (
-    <span className={`text-sm flex items-center gap-1 ${color}`}>
+    <span className={`text-sm flex items-center gap-1 flex-shrink-0 ${color}`}>
       <Icon size={14} />
-      {Math.abs(trend.delta).toLocaleString('de-DE', { maximumFractionDigits: 1 })}{unit ? ` ${unit}` : ''}
+      {delta}
     </span>
   );
 }
@@ -87,12 +92,18 @@ function MetricCard({ metric, onChanged }) {
           <Activity size={15} />
         </span>
         <div className="flex-1 min-w-0">
-          <h3 className="font-semibold text-ink-800 truncate">{metric.name}</h3>
+          <div className="flex items-center gap-1 min-w-0">
+            <h3 className="font-semibold text-ink-800 truncate">{metric.name}</h3>
+            <MetricSourceHelp metric={metric} />
+          </div>
           <div className="flex items-baseline gap-2">
-            <span className="display text-2xl text-ink-900 tabular-nums">
-              {formatValue(current, metric.decimals)}
-            </span>
-            {metric.unit && <span className="text-sm text-ink-400">{metric.unit}</span>}
+            {(() => {
+              const { text, unit } = formatValueUnit(current, { unit: metric.unit, decimals: metric.decimals });
+              return (<>
+                <span className="display text-2xl text-ink-900 tabular-nums">{text}</span>
+                {unit && <span className="text-sm text-ink-400">{unit}</span>}
+              </>);
+            })()}
           </div>
         </div>
         <TrendBadge trend={trend} unit={metric.unit} />
@@ -104,7 +115,10 @@ function MetricCard({ metric, onChanged }) {
             <LineChart data={spark}>
               <Tooltip
                 contentStyle={CHART.tooltip}
-                formatter={v => [formatValue(v, metric.decimals) + (metric.unit ? ` ${metric.unit}` : ''), metric.name]}
+                formatter={v => {
+                  const { text, unit } = formatValueUnit(v, { unit: metric.unit, decimals: metric.decimals });
+                  return [text + (unit ? ` ${unit}` : ''), metric.name];
+                }}
                 labelFormatter={() => ''}
               />
               <Line type="monotone" dataKey="v" stroke={CHART.line} strokeWidth={2} dot={false} isAnimationActive={false} />
@@ -148,7 +162,7 @@ export default function Metrics() {
   useEffect(() => { load(); }, [load]);
 
   return (
-    <div className="max-w-5xl mx-auto">
+    <div className="space-y-6 anim-list">
       <PageHeader
         icon={Activity}
         title="Messwerte"

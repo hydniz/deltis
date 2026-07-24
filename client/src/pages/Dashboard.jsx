@@ -8,12 +8,13 @@ import {
 import { de } from 'date-fns/locale';
 import {
   Dumbbell, Scale, Target, Calendar, CalendarDays, Sparkles, ArrowRight,
-  Check, Circle,
+  Check, Circle, Activity,
 } from 'lucide-react';
 import {
   Stat, Chip, chipColorFor, Input, Button, Skeleton, TONE_BUBBLE,
 } from '../components/ui';
 import { isDueOn, formatScheduleBadge } from '../utils/habitSchedule';
+import { formatValueUnit } from '../utils/metricFormat';
 import { meetsTarget, formatTarget } from '../utils/habitTarget';
 import { getSessionGreeting, splitGreeting } from '../utils/greetings';
 
@@ -165,7 +166,7 @@ export default function Dashboard() {
   const { user } = useAuth();
   const [data, setData] = useState({
     definitions: [], habitLogs: [], activities: [], activityTotal: 0, stravaTotal: 0,
-    activityPlans: [], habitPlans: [], trainingPlans: [], dueToday: null, weight: null, goals: [],
+    activityPlans: [], habitPlans: [], trainingPlans: [], dueToday: null, weight: null, goals: [], metrics: [],
   });
   const [loading, setLoading] = useState(true);
   // Stable for the whole browser-tab session; rotates in a new tab,
@@ -181,7 +182,7 @@ export default function Dashboard() {
     const dayEnd = endOfDay(new Date()).toISOString();
     try {
       const dayParam = format(new Date(), 'yyyy-MM-dd');
-      const [defsRes, logsRes, actRes, stravaRes, planRes, habitPlanRes, trainingPlanRes, dueRes, weightRes, goalRes] = await Promise.all([
+      const [defsRes, logsRes, actRes, stravaRes, planRes, habitPlanRes, trainingPlanRes, dueRes, weightRes, goalRes, metricsRes] = await Promise.all([
         api.get('/habits/definitions'),
         api.get('/habits/logs', { params: { startDate: dayStart, endDate: dayEnd } }),
         api.get('/activities', {
@@ -205,6 +206,7 @@ export default function Dashboard() {
           .catch(() => ({ data: null })),
         api.get('/weight', { params: { limit: 1 } }),
         api.get('/goals'),
+        api.get('/metrics/summary', { params: { dashboard: 'true' } }).catch(() => ({ data: [] })),
       ]);
       setData({
         definitions: defsRes.data,
@@ -218,6 +220,7 @@ export default function Dashboard() {
         dueToday: dueRes.data,
         weight: weightRes.data[0] || null,
         goals: goalRes.data || [],
+        metrics: metricsRes.data || [],
       });
     } catch (err) {
       console.error(err);
@@ -331,6 +334,26 @@ export default function Dashboard() {
           />
         </div>
       </div>
+
+      {/* Messwerte flagged for the dashboard */}
+      {(data.metrics?.length ?? 0) > 0 && (
+        <SectionCard icon={Activity} tone="rose" title="Messwerte" linkTo="/metrics">
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 pt-1">
+            {data.metrics.map(m => {
+              const { text, unit } = formatValueUnit(m.value, { unit: m.unit, decimals: m.decimals });
+              return (
+                <Link key={m.metricId} to="/metrics" className="panel px-3.5 py-3 hover:bg-paper-100 transition-colors">
+                  <p className="text-xs text-ink-400 truncate">{m.name}</p>
+                  <p className="display text-xl text-ink-900 tabular-nums mt-0.5">
+                    {m.value == null ? '–' : text}
+                    {unit && <span className="text-sm text-ink-400 ml-1">{unit}</span>}
+                  </p>
+                </Link>
+              );
+            })}
+          </div>
+        </SectionCard>
+      )}
 
       {/* Feed: habits due today, with quick logging */}
       <SectionCard icon={Sparkles} tone="sage" title="Gewohnheiten für heute" linkTo="/habits">
