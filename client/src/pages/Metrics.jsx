@@ -3,14 +3,29 @@
 // modal for creating/editing/removing them. Backed by /api/metrics.
 import { useState, useEffect, useCallback } from 'react';
 import api from '../utils/api';
-import { format, parseISO } from 'date-fns';
+import { format, parseISO, differenceInCalendarDays } from 'date-fns';
 import { de } from 'date-fns/locale';
-import { Activity, Plus, TrendingUp, TrendingDown, Minus, Settings2 } from 'lucide-react';
-import { ResponsiveContainer, LineChart, Line, Tooltip } from 'recharts';
+import { Activity, Plus, TrendingUp, TrendingDown, Minus, Settings2, Maximize2, Clock } from 'lucide-react';
+import { ResponsiveContainer, LineChart, Line, Tooltip, XAxis } from 'recharts';
 import { PageHeader, Button, Input, EmptyState, Spinner, HelpTip, useChart, TONE_BUBBLE } from '../components/ui';
 import ManageMetricsModal from '../components/ManageMetricsModal';
+import MetricDetailModal from '../components/MetricDetailModal';
 import MetricSourceHelp from '../components/MetricSourceHelp';
 import { formatNumber, formatValueUnit, isHoursUnit, formatHoursMinutes } from '../utils/metricFormat';
+
+// A short, human "from when" label for the shown value, plus whether it is
+// stale (not from today). Prominent staleness matters — a metric card shows
+// the LATEST reading, which may be days old and easy to misread as current.
+function freshnessOf(date) {
+  if (!date) return null;
+  const daysAgo = differenceInCalendarDays(new Date(), new Date(date));
+  const stale = daysAgo >= 1;
+  const label = daysAgo <= 0 ? 'heute'
+    : daysAgo === 1 ? 'gestern'
+    : daysAgo < 7 ? `vor ${daysAgo} Tagen`
+    : `vom ${format(new Date(date), 'd. MMM yyyy', { locale: de })}`;
+  return { label, stale };
+}
 
 // Formats a value to the metric's precision, with thousands grouping.
 // (Kept for callers/tests; hour-based values go through metricFormat.)
@@ -45,12 +60,13 @@ function TrendBadge({ trend, unit }) {
   );
 }
 
-function MetricCard({ metric, onChanged }) {
+function MetricCard({ metric, allMetrics = [], onChanged }) {
   const CHART = useChart();
   const [logs, setLogs] = useState(null);
   const [value, setValue] = useState('');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
+  const [detail, setDetail] = useState(false);
 
   const loadLogs = useCallback(async () => {
     try {
@@ -81,12 +97,14 @@ function MetricCard({ metric, onChanged }) {
   };
 
   const sorted = logs ? [...logs].sort((a, b) => new Date(a.date) - new Date(b.date)) : [];
-  const current = sorted.length ? sorted[sorted.length - 1].value : metric.latest?.value ?? null;
+  const latest = sorted.length ? sorted[sorted.length - 1] : metric.latest ?? null;
+  const current = latest?.value ?? null;
   const trend = trendFor(logs || [], metric.direction);
-  const spark = sorted.slice(-30).map(l => ({ v: l.value }));
+  const spark = sorted.slice(-30).map(l => ({ v: l.value, date: l.date }));
+  const fresh = freshnessOf(latest?.date);
 
   return (
-    <div className="card p-5 flex flex-col gap-3" data-testid="metric-card">
+    <div className="card p-5 flex flex-col gap-3 anim-item" data-testid="metric-card">
       <div className="flex items-start gap-3">
         <span className={`w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0 ${TONE_BUBBLE[metric.color] || TONE_BUBBLE.rose}`}>
           <Activity size={15} />
@@ -105,26 +123,54 @@ function MetricCard({ metric, onChanged }) {
               </>);
             })()}
           </div>
+          {/* From WHEN the shown value is — subtle for today, a prominent amber
+              pill when the reading is older, so a stale value can't be mistaken
+              for a current one. */}
+          {fresh && (
+            fresh.stale ? (
+              <span className="mt-1 inline-flex items-center gap-1 rounded-full bg-ocher-100 text-ocher-700 px-2 py-0.5 text-[11px] font-semibold">
+                <Clock size={11} /> {fresh.label}
+              </span>
+            ) : (
+              <span className="mt-1 inline-flex items-center gap-1 text-[11px] text-ink-400">
+                <Clock size={11} /> {fresh.label}
+              </span>
+            )
+          )}
         </div>
         <TrendBadge trend={trend} unit={metric.unit} />
       </div>
 
       {spark.length >= 2 && (
-        <div className="h-12 -mx-1">
+        <button
+          type="button"
+          onClick={() => setDetail(true)}
+          aria-label={`${metric.name} – Verlauf vergrößern`}
+          className="group relative h-16 -mx-1 rounded-lg hover:bg-paper-50 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-300"
+        >
+          <Maximize2 size={13} className="absolute top-1 right-1.5 text-ink-300 opacity-0 group-hover:opacity-100 transition-opacity z-10" />
           <ResponsiveContainer width="100%" height="100%">
-            <LineChart data={spark}>
+            <LineChart data={spark} margin={{ top: 6, right: 6, bottom: 0, left: 6 }}>
+              <XAxis
+                dataKey="date"
+                tickFormatter={d => format(parseISO(d), 'd.M.', { locale: de })}
+                tick={{ ...CHART.tick, fontSize: 9 }}
+                tickLine={false} axisLine={false}
+                minTickGap={32} height={14}
+                interval="preserveStartEnd"
+              />
               <Tooltip
                 contentStyle={CHART.tooltip}
                 formatter={v => {
                   const { text, unit } = formatValueUnit(v, { unit: metric.unit, decimals: metric.decimals });
                   return [text + (unit ? ` ${unit}` : ''), metric.name];
                 }}
-                labelFormatter={() => ''}
+                labelFormatter={d => format(parseISO(d), 'd. MMM yyyy', { locale: de })}
               />
               <Line type="monotone" dataKey="v" stroke={CHART.line} strokeWidth={2} dot={false} isAnimationActive={false} />
             </LineChart>
           </ResponsiveContainer>
-        </div>
+        </button>
       )}
 
       <form onSubmit={add} className="flex gap-2 mt-auto">
@@ -138,9 +184,11 @@ function MetricCard({ metric, onChanged }) {
       </form>
       {error && <p className="text-xs text-rose-500">{error}</p>}
       {logs && logs.length > 0 && (
-        <p className="text-[11px] text-ink-300">
-          Zuletzt: {format(parseISO(sorted[sorted.length - 1].date), 'd. MMM yyyy', { locale: de })} · {logs.length} Einträge
-        </p>
+        <p className="text-[11px] text-ink-300">{logs.length} Einträge</p>
+      )}
+
+      {detail && (
+        <MetricDetailModal metric={metric} allMetrics={allMetrics} onClose={() => setDetail(false)} />
       )}
     </div>
   );
@@ -186,9 +234,9 @@ export default function Metrics() {
           action={<Button icon={Plus} onClick={() => setManage(true)}>Messwert anlegen</Button>}
         />
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 anim-list anim-skip">
           {metrics.map(m => (
-            <MetricCard key={m._id} metric={m} onChanged={load} />
+            <MetricCard key={m._id} metric={m} allMetrics={metrics} onChanged={load} />
           ))}
         </div>
       )}

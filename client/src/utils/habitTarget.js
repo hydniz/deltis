@@ -5,6 +5,8 @@
 // value satisfies the condition. Without a target, any log fulfils the day.
 // Boolean (Ja/Nein) habits are fulfilled by any value >= 1.
 
+import { isHmUnit, formatHM } from './metricFormat';
+
 export const TARGET_CONDITIONS = [
   { value: 'none', label: 'Kein Ziel' },
   { value: 'min', label: 'Mindestens' },
@@ -37,10 +39,12 @@ export function progressRatio(habit, value) {
   return 0.25;
 }
 
-// Short human-readable target label, e.g. 'mind. 8 ml'.
+// Short human-readable target label, e.g. 'mind. 8 ml' or 'genau 8:00' for a
+// HH:MM duration habit (the target is in hours and shown as elapsed h:mm).
 export function formatTarget(habit) {
   const condition = habit.targetCondition;
   if (!condition || condition === 'none') return '';
   const prefix = condition === 'min' ? 'mind.' : condition === 'max' ? 'max.' : 'genau';
+  if (isHmUnit(habit.unitSymbol)) return `${prefix} ${formatHM(+habit.targetValue)}`;
   return `${prefix} ${habit.targetValue} ${habit.unitSymbol}`;
 }

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { isHoursUnit, formatNumber, formatHoursMinutes, formatValueUnit } from '../utils/metricFormat';
+import { isHoursUnit, formatNumber, formatHoursMinutes, formatValueUnit, isHmUnit, formatHM, parseHM, hoursToTimeInput } from '../utils/metricFormat';
 import { weekKey, weekLabel, markWeekStarts } from '../utils/weekGroups';
 
 describe('metricFormat', () => {
@@ -27,6 +27,25 @@ describe('metricFormat', () => {
   it('routes hour units through the h/min formatter and drops the unit', () => {
     expect(formatValueUnit(7.5, { unit: 'h' })).toEqual({ text: '7 h 30 min', unit: '' });
     expect(formatValueUnit(52, { unit: 'bpm', decimals: 0 })).toEqual({ text: '52', unit: 'bpm' });
+  });
+
+  it('treats HH:MM as a duration in hours, shown as elapsed h:mm', () => {
+    expect(isHmUnit('HH:MM')).toBe(true);
+    expect(isHmUnit('h')).toBe(false);
+    // 8.2667 h = 8:16 (the sleep case that used to render as a raw decimal)
+    expect(formatHM(8.266666666666667)).toBe('8:16');
+    expect(formatHM(8)).toBe('8:00');
+    expect(formatHM(0.0833333)).toBe('0:05');
+    expect(formatHM(null)).toBe('–');
+  });
+
+  it('round-trips HH:MM input through hours', () => {
+    expect(parseHM('08:16')).toBeCloseTo(8.2667, 3);
+    expect(parseHM('08:00')).toBe(8);
+    expect(parseHM('nonsense')).toBeNull();
+    expect(hoursToTimeInput(8.266666666666667)).toBe('08:16');
+    expect(hoursToTimeInput(8)).toBe('08:00');
+    expect(formatHM(parseHM('07:30'))).toBe('7:30');
   });
 });
 

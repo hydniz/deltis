@@ -180,12 +180,12 @@ function GoalItemsBreakdown({ goalId }) {
 function GoalProgress({ goal, actions, childGoals = [], childActions }) {
   const CHART = useChart();
   const [progress, setProgress] = useState(null);
-  const [showChart, setShowChart] = useState(false);
+  // Verlauf (trend) and Heatmap share one toggle and render stacked below
+  // each other — collapsed by default so the goal cards stay compact.
+  const [showDetails, setShowDetails] = useState(false);
   // Meta goals: children render nested — collapsed as compact progress rows,
   // expanded as the same full cards they used to be in the main list.
   const [showChildren, setShowChildren] = useState(false);
-  // Heatmap collapsed by default — the goal cards stay compact.
-  const [showHeatmap, setShowHeatmap] = useState(false);
 
   useEffect(() => {
     api.get(`/goals/${goal._id}/progress`).then(r => setProgress(r.data)).catch(() => {});
@@ -457,56 +457,57 @@ function GoalProgress({ goal, actions, childGoals = [], childActions }) {
         </div>
       )}
 
-      {isLongTerm && chartData.length > 0 && (
-        <>
-          <button
-            onClick={() => setShowChart(v => !v)}
-            className="text-xs font-semibold text-brand-600 hover:text-brand-700 transition-colors mb-2"
-          >
-            {showChart ? 'Verlauf ausblenden' : 'Verlauf anzeigen'}
-          </button>
-          {showChart && (
-            <ResponsiveContainer width="100%" height={150}>
-              <LineChart data={chartData}>
-                <CartesianGrid strokeDasharray="3 3" stroke={CHART.grid} />
-                <XAxis dataKey="date" tick={CHART.tick} tickLine={false} />
-                <YAxis tick={CHART.tick} tickLine={false} axisLine={false} width={30} />
-                <Tooltip contentStyle={CHART.tooltip} />
-                <Line type="monotone" dataKey="Wert" stroke={CHART.line} strokeWidth={2} dot={{ r: 3 }} />
-                <Line type="monotone" dataKey="Ziel" stroke={CHART.lineMuted} strokeWidth={1.5} strokeDasharray="4 2" dot={false} />
-                {stepResults.map((step, idx) => (
-                  <ReferenceLine
-                    key={idx}
-                    y={step.targetValue}
-                    stroke={!step.isPast ? '#d4a44e' : step.met ? '#10b981' : '#ef4444'}
-                    strokeDasharray="3 2"
-                    strokeWidth={1}
-                  />
-                ))}
-              </LineChart>
-            </ResponsiveContainer>
-          )}
-        </>
-      )}
-
-      {/* Heatmap (interval tiles for periodic, daily grid for long-term) —
-          collapsed by default so the card stays compact. */}
-      {!isMeta && (
-        <>
-          <button
-            type="button"
-            onClick={() => setShowHeatmap(v => !v)}
-            className="text-xs font-semibold text-brand-600 hover:text-brand-700 transition-colors"
-          >
-            {showHeatmap ? 'Heatmap ausblenden' : 'Heatmap anzeigen'}
-          </button>
-          {showHeatmap && (
-            <div className="max-w-sm">
-              <GoalHeatmap goal={goal} />
-            </div>
-          )}
-        </>
-      )}
+      {/* Verlauf (long-term trend chart) and Heatmap share one toggle and
+          render one below the other so both are visible together. */}
+      {!isMeta && (() => {
+        const hasVerlauf = isLongTerm && chartData.length > 0;
+        const detailLabel = hasVerlauf ? 'Verlauf & Heatmap' : 'Heatmap';
+        return (
+          <>
+            <button
+              type="button"
+              onClick={() => setShowDetails(v => !v)}
+              className="text-xs font-semibold text-brand-600 hover:text-brand-700 transition-colors"
+            >
+              {showDetails ? `${detailLabel} ausblenden` : `${detailLabel} anzeigen`}
+            </button>
+            {showDetails && (
+              <div className="space-y-4 mt-2 anim-list">
+                {hasVerlauf && (
+                  <div className="anim-item">
+                    <div className={`text-[11px] uppercase tracking-[0.09em] font-semibold mb-1.5 ${accentText}`}>Verlauf</div>
+                    <ResponsiveContainer width="100%" height={150}>
+                      <LineChart data={chartData}>
+                        <CartesianGrid strokeDasharray="3 3" stroke={CHART.grid} />
+                        <XAxis dataKey="date" tick={CHART.tick} tickLine={false} />
+                        <YAxis tick={CHART.tick} tickLine={false} axisLine={false} width={30} />
+                        <Tooltip contentStyle={CHART.tooltip} />
+                        <Line type="monotone" dataKey="Wert" stroke={CHART.line} strokeWidth={2} dot={{ r: 3 }} />
+                        <Line type="monotone" dataKey="Ziel" stroke={CHART.lineMuted} strokeWidth={1.5} strokeDasharray="4 2" dot={false} />
+                        {stepResults.map((step, idx) => (
+                          <ReferenceLine
+                            key={idx}
+                            y={step.targetValue}
+                            stroke={!step.isPast ? '#d4a44e' : step.met ? '#10b981' : '#ef4444'}
+                            strokeDasharray="3 2"
+                            strokeWidth={1}
+                          />
+                        ))}
+                      </LineChart>
+                    </ResponsiveContainer>
+                  </div>
+                )}
+                <div className="anim-item">
+                  <div className={`text-[11px] uppercase tracking-[0.09em] font-semibold mb-1.5 ${accentText}`}>Heatmap</div>
+                  <div className="max-w-sm">
+                    <GoalHeatmap goal={goal} />
+                  </div>
+                </div>
+              </div>
+            )}
+          </>
+        );
+      })()}
 
       {/* Contribution breakdown — why does this goal have this progress? */}
       <GoalItemsBreakdown goalId={goal._id} />

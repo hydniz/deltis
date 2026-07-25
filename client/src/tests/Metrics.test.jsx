@@ -111,6 +111,48 @@ describe('Metrics page', () => {
     expect(await within(card).findByText(/über dem Maximum/)).toBeInTheDocument();
   });
 
+  const iso = (daysAgo) => new Date(Date.now() - daysAgo * 86400000).toISOString();
+
+  it('flags how old the shown value is (heute vs. a stale pill)', async () => {
+    mockMetrics([
+      metric({ _id: 'm1', name: 'Heute-Wert', latest: { value: 52, date: iso(0) } }),
+      metric({ _id: 'm2', name: 'Alt-Wert', latest: { value: 60, date: iso(3) } }),
+    ]);
+    mockLogs('m1', [{ _id: 'a', date: iso(1), value: 55 }, { _id: 'b', date: iso(0), value: 52 }]);
+    mockLogs('m2', [{ _id: 'c', date: iso(4), value: 61 }, { _id: 'd', date: iso(3), value: 60 }]);
+    renderPage();
+
+    const cards = await screen.findAllByTestId('metric-card');
+    const today = cards.find(c => within(c).queryByText('Heute-Wert'));
+    const old = cards.find(c => within(c).queryByText('Alt-Wert'));
+    await waitFor(() => expect(within(today).getByText('heute')).toBeInTheDocument());
+    expect(within(old).getByText('vor 3 Tagen')).toBeInTheDocument();
+  });
+
+  it('opens the detail modal with stats and a metric-overlay picker', async () => {
+    mockMetrics([
+      metric({ _id: 'm1', name: 'Ruhepuls' }),
+      metric({ _id: 'm2', name: 'Gewicht', unit: 'kg', key: 'weight' }),
+    ]);
+    mockLogs('m1', [{ _id: 'a', date: iso(2), value: 55 }, { _id: 'b', date: iso(0), value: 51 }]);
+    mockLogs('m2', [{ _id: 'c', date: iso(2), value: 80 }, { _id: 'd', date: iso(0), value: 79 }]);
+    const user = userEvent.setup();
+    renderPage();
+
+    const cards = await screen.findAllByTestId('metric-card');
+    const rhr = cards.find(c => within(c).queryByText('Ruhepuls'));
+    await user.click(within(rhr).getByRole('button', { name: /Ruhepuls – Verlauf vergrößern/ }));
+
+    expect(await screen.findByText('Verlauf & Statistik')).toBeInTheDocument();
+    expect(screen.getByLabelText('Zweiten Messwert überlagern')).toBeInTheDocument();
+    // Overlay option for the OTHER metric is offered
+    expect(screen.getByRole('option', { name: 'Gewicht' })).toBeInTheDocument();
+    // Descriptive statistics for the primary metric
+    expect(screen.getByText('Aktuell')).toBeInTheDocument();
+    expect(screen.getByText('Minimum')).toBeInTheDocument();
+    expect(screen.getByText('Maximum')).toBeInTheDocument();
+  });
+
   it('opens the manage modal', async () => {
     renderPage();
     const user = userEvent.setup();

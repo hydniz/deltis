@@ -70,4 +70,10 @@ describe('formatTarget', () => {
     expect(formatTarget(amount('exact', 2))).toBe('genau 2 ml');
     expect(formatTarget(amount('none', 0))).toBe('');
   });
+
+  it('renders HH:MM duration targets as elapsed h:mm without a unit', () => {
+    const dur = (c, v) => ({ type: 'duration', unitSymbol: 'HH:MM', targetCondition: c, targetValue: v });
+    expect(formatTarget(dur('exact', 8))).toBe('genau 8:00');
+    expect(formatTarget(dur('min', 7.5))).toBe('mind. 7:30');
+  });
 });

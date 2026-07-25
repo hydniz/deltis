@@ -14,7 +14,7 @@ import {
   Stat, Chip, chipColorFor, Input, Button, Skeleton, TONE_BUBBLE,
 } from '../components/ui';
 import { isDueOn, formatScheduleBadge } from '../utils/habitSchedule';
-import { formatValueUnit } from '../utils/metricFormat';
+import { formatValueUnit, isHmUnit, formatHM, parseHM, hoursToTimeInput } from '../utils/metricFormat';
 import { meetsTarget, formatTarget } from '../utils/habitTarget';
 import { getSessionGreeting, splitGreeting } from '../utils/greetings';
 
@@ -66,7 +66,10 @@ function TodayHabitRow({ habit, log, onLog }) {
   const [saving, setSaving] = useState(false);
   const tone = chipColorFor(habit._id);
   const isBoolean = habit.type === 'boolean';
+  const isHm = isHmUnit(habit.unitSymbol);
   const fulfilled = log != null && meetsTarget(habit, log.value);
+  // HH:MM habits show elapsed h:mm without a trailing unit; others show "value unit".
+  const shownValue = log ? (isHm ? formatHM(log.value) : `${log.value} ${habit.unitSymbol}`) : '';
 
   useEffect(() => { setValue(log?.value ?? ''); }, [log]);
 
@@ -103,11 +106,11 @@ function TodayHabitRow({ habit, log, onLog }) {
           {log ? (
             fulfilled ? (
               <span className="text-emerald-600 font-medium">
-                {isBoolean ? 'Erledigt' : `${log.value} ${habit.unitSymbol} – erfüllt`}
+                {isBoolean ? 'Erledigt' : `${shownValue} – erfüllt`}
               </span>
             ) : (
               <span className="text-ocher-600 font-medium">
-                {log.value} {habit.unitSymbol} · Ziel: {formatTarget(habit)}
+                {shownValue} · Ziel: {formatTarget(habit)}
               </span>
             )
           ) : (
@@ -127,15 +130,24 @@ function TodayHabitRow({ habit, log, onLog }) {
         )
       ) : (
         <form onSubmit={handleSubmit} className="flex items-center gap-1.5 flex-shrink-0">
-          <Input
-            type="number"
-            value={value}
-            onChange={e => setValue(e.target.value)}
-            className="!w-20 !py-1.5 !text-sm"
-            placeholder={habit.unitSymbol}
-            min="0"
-            step="0.1"
-          />
+          {isHm ? (
+            <Input
+              type="time"
+              value={value === '' ? '' : hoursToTimeInput(value)}
+              onChange={e => setValue(e.target.value === '' ? '' : String(parseHM(e.target.value) ?? ''))}
+              className="!w-24 !py-1.5 !text-sm"
+            />
+          ) : (
+            <Input
+              type="number"
+              value={value}
+              onChange={e => setValue(e.target.value)}
+              className="!w-20 !py-1.5 !text-sm"
+              placeholder={habit.unitSymbol}
+              min="0"
+              step="0.1"
+            />
+          )}
           <Button type="submit" size="sm" loading={saving} disabled={value === ''}>
             {log ? <Check size={14} /> : 'OK'}
           </Button>

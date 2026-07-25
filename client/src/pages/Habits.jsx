@@ -6,7 +6,7 @@ import { de } from 'date-fns/locale';
 import { Plus, TrendingUp, Sparkles, Settings2, Check, CalendarOff, LayoutGrid, Undo2 } from 'lucide-react';
 import { isDueOn, formatScheduleBadge } from '../utils/habitSchedule';
 import { meetsTarget, formatTarget } from '../utils/habitTarget';
-import { isHmUnit, formatHM, parseHM, minutesToTimeInput } from '../utils/metricFormat';
+import { isHmUnit, formatHM, parseHM, hoursToTimeInput } from '../utils/metricFormat';
 import HabitHeatmap from '../components/HabitHeatmap';
 import {
   ResponsiveContainer, LineChart, Line, XAxis, YAxis, Tooltip, CartesianGrid
@@ -232,11 +232,11 @@ function HabitCard({ habit, todayLog, onLog }) {
       ) : (
         <form onSubmit={e => { e.preventDefault(); handleLog(); }} className="flex gap-2">
           {isHmUnit(habit.unitSymbol) ? (
-            // Duration habit: enter as HH:MM, but keep `value` in minutes so
-            // logging, targets and stats stay numeric.
+            // Duration habit: enter as HH:MM, but keep `value` numeric (hours)
+            // so logging, targets and stats stay comparable with the metrics.
             <Input
               type="time"
-              value={value === '' ? '' : minutesToTimeInput(value)}
+              value={value === '' ? '' : hoursToTimeInput(value)}
               onChange={e => setValue(e.target.value === '' ? '' : String(parseHM(e.target.value) ?? ''))}
               className="flex-1 min-w-0"
             />
@@ -261,7 +261,7 @@ function HabitCard({ habit, todayLog, onLog }) {
         const fulfilled = meetsTarget(habit, currentLog.value);
         const isHm = isHmUnit(habit.unitSymbol);
         const unit = currentLog.historicalUnit || habit.unitSymbol;
-        const valueText = isHm ? `${formatHM(currentLog.value)} h` : `${currentLog.value}${currentLog.historicalUnit ? ` ${currentLog.historicalUnit} (jetzt: ${habit.unitSymbol})` : ` ${unit}`}`;
+        const valueText = isHm ? formatHM(currentLog.value) : `${currentLog.value}${currentLog.historicalUnit ? ` ${currentLog.historicalUnit} (jetzt: ${habit.unitSymbol})` : ` ${unit}`}`;
         const datePrefix = isToday ? 'Heute' : format(parseISO(selectedDate), 'd. MMM', { locale: de });
         return (
           <p className={`text-xs font-medium mt-2 flex items-center gap-1 ${fulfilled ? 'text-emerald-600' : 'text-ocher-600'}`}>

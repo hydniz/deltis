@@ -4,6 +4,7 @@ import { de } from 'date-fns/locale';
 import api from '../utils/api';
 import { Skeleton, chipColorFor } from './ui';
 import { progressRatio, formatTarget } from '../utils/habitTarget';
+import { isHmUnit, formatHM } from '../utils/metricFormat';
 import { levelFor, EMPTY_CELL } from '../utils/heatmap';
 
 // GitHub-style dot heatmap for one habit: columns = weeks (oldest left),
@@ -72,6 +73,7 @@ export default function HabitHeatmap({ habit }) {
               const label = future ? '' : `${format(day, 'd. MMM', { locale: de })}: ${
                 value === null ? 'kein Eintrag'
                   : isBoolean ? 'erledigt'
+                  : isHmUnit(habit.unitSymbol) ? formatHM(value)
                   : `${value} ${habit.unitSymbol}`
               }`;
 
