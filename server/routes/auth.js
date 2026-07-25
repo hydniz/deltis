@@ -201,6 +201,14 @@ router.put('/me', auth, async (req, res) => {
       }
       update.checkinTimes = [...new Set(times)].sort();
     }
+    if (req.body.todoReminderTime !== undefined) {
+      const t = req.body.todoReminderTime;
+      // Empty string disables the default reminder.
+      if (t !== '' && !(typeof t === 'string' && /^([01]\d|2[0-3]):[0-5]\d$/.test(t))) {
+        return res.status(400).json({ error: 'Ungültige Erinnerungszeit (HH:MM).' });
+      }
+      update.todoReminderTime = t;
+    }
     if (weightGoal !== undefined) {
       // null clears the goal; otherwise weight is required, date optional.
       if (weightGoal === null) {

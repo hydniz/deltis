@@ -45,6 +45,8 @@ export const handlers = [
   http.get('/api/metrics/catalog', () => HttpResponse.json([])),
   http.get('/api/metrics/summary', () => HttpResponse.json([])),
   http.get('/api/health/activities', () => HttpResponse.json([])),
+  http.get('/api/todos', () => HttpResponse.json([])),
+  http.get('/api/todos/due', () => HttpResponse.json([])),
   http.get('/api/health/config', () => {
     return HttpResponse.json({
       connected: false,

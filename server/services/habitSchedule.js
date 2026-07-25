@@ -28,6 +28,8 @@ const ActivityType = require('../models/ActivityType');
 const TrainingType = require('../models/TrainingType');
 const MetricDefinition = require('../models/MetricDefinition');
 const MetricLog = require('../models/MetricLog');
+const TodoCompletion = require('../models/TodoCompletion');
+const Todo = require('../models/Todo');
 const metricAggregate = require('../services/metricAggregate');
 const trainingCriteria = require('../services/trainingCriteria');
 
@@ -214,8 +216,9 @@ async function dueHabitsForRange(userId, startStr, endStr) {
   const needsHabitPlans = triggers.some(t => t.kind === 'habit' && t.direction === 'before');
   const needsActivityPlans = triggers.some(t => t.kind === 'activityType' && t.direction === 'before');
   const needsTrainingPlans = triggers.some(t => t.kind === 'trainingType');
+  const needsTodoComps = triggers.some(t => t.kind === 'todo' && t.direction === 'after');
 
-  const [habitLogs, activityLogs, stravaActivities, habitPlans, activityPlans, trainingPlans, activityTypes, trainingTypes] = await Promise.all([
+  const [habitLogs, activityLogs, stravaActivities, habitPlans, activityPlans, trainingPlans, activityTypes, trainingTypes, todoComps, todos] = await Promise.all([
     HabitLog.find({ userId, date: { $gte: histStart, $lte: histEnd } }).select('habitId date value source').lean(),
     needsActivityLogs
       ? ActivityLog.find({ userId, date: { $gte: histStart, $lte: histEnd } }).select('activityTypeRef activityType date').lean()
@@ -235,6 +238,10 @@ async function dueHabitsForRange(userId, startStr, endStr) {
       : [],
     ActivityType.find({ userId }).select('label').lean(),
     TrainingType.find({ userId }).select('name').lean(),
+    needsTodoComps
+      ? TodoCompletion.find({ userId, date: { $gte: histStart, $lte: histEnd } }).select('todoId date').lean()
+      : [],
+    needsTodoComps ? Todo.find({ userId }).select('title').lean() : [],
   ]);
 
   // Logged state for the visible range ("already ticked off today").
@@ -247,6 +254,8 @@ async function dueHabitsForRange(userId, startStr, endStr) {
   const activityTypeNameById = new Map(activityTypes.map(t => [String(t._id), t.label]));
   const trainingTypeNameById = new Map(trainingTypes.map(t => [String(t._id), t.name]));
 
+  const todoTitleById = new Map(todos.map(t => [String(t._id), t.title]));
+  const todoCompsByDay = daySetBy(todoComps, c => c.date);
   const stravaByDay = daySetBy(stravaActivities, a => a.startDateLocal || a.startDate);
   const habitPlansByDay = daySetBy(habitPlans, p => p.scheduledDate);
   const activityPlansByDay = daySetBy(activityPlans, p => p.scheduledDate);
@@ -260,12 +269,16 @@ async function dueHabitsForRange(userId, startStr, endStr) {
     if (trigger.kind === 'habit') return habitNameById.get(String(trigger.refId)) || 'Gewohnheit';
     if (trigger.kind === 'activityType') return activityTypeNameById.get(String(trigger.refId)) || 'Aktivität';
     if (trigger.kind === 'trainingType') return trainingTypeNameById.get(String(trigger.refId)) || 'Training';
+    if (trigger.kind === 'todo') return todoTitleById.get(String(trigger.refId)) || 'Aufgabe';
     return '?';
   }
 
   // Did XY happen / is XY planned on the given day?
   function triggerMatchesDay(trigger, dayStr) {
     if (trigger.direction === 'after') {
+      if (trigger.kind === 'todo') {
+        return (todoCompsByDay.get(dayStr) || []).some(c => String(c.todoId) === String(trigger.refId));
+      }
       if (trigger.kind === 'habit') {
         return (habitLogsByDay.get(dayStr) || []).some(l => String(l.habitId) === String(trigger.refId));
       }
@@ -295,7 +308,7 @@ async function dueHabitsForRange(userId, startStr, endStr) {
   }
 
   const results = [];
-  for (const { def, schedule } of habits) {
+  for (const { def, schedule, autoSource } of habits) {
     for (const dayStr of days) {
       let reason = null;
 
@@ -356,6 +369,9 @@ async function dueHabitsForRange(userId, startStr, endStr) {
         logged: !!log || hasAuto,
         loggedValue: effectiveValue,
         auto: hasAuto,
+        // True when the habit is BOUND to an auto-fill source at all (whether or
+        // not a value exists yet) — the daily check-in skips these.
+        autoFilled: !!autoSource,
         source: log ? (log.source || 'manual') : (hasAuto ? autoSourceKindOf(habits, def._id) : null),
         // A day only counts as DONE when the value satisfies the completion
         // target — 0 g logged against a 5 g minimum stays open.

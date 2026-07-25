@@ -6,6 +6,7 @@ import { de } from 'date-fns/locale';
 import { Plus, TrendingUp, Sparkles, Settings2, Check, CalendarOff, LayoutGrid, Undo2 } from 'lucide-react';
 import { isDueOn, formatScheduleBadge } from '../utils/habitSchedule';
 import { meetsTarget, formatTarget } from '../utils/habitTarget';
+import { isHmUnit, formatHM, parseHM, minutesToTimeInput } from '../utils/metricFormat';
 import HabitHeatmap from '../components/HabitHeatmap';
 import {
   ResponsiveContainer, LineChart, Line, XAxis, YAxis, Tooltip, CartesianGrid
@@ -230,15 +231,26 @@ function HabitCard({ habit, todayLog, onLog }) {
         )
       ) : (
         <form onSubmit={e => { e.preventDefault(); handleLog(); }} className="flex gap-2">
-          <Input
-            type="number"
-            value={value}
-            onChange={e => setValue(e.target.value)}
-            className="flex-1 min-w-0"
-            placeholder={`${isToday ? 'Heute' : 'Wert'} in ${habit.unitSymbol}`}
-            min="0"
-            step="0.1"
-          />
+          {isHmUnit(habit.unitSymbol) ? (
+            // Duration habit: enter as HH:MM, but keep `value` in minutes so
+            // logging, targets and stats stay numeric.
+            <Input
+              type="time"
+              value={value === '' ? '' : minutesToTimeInput(value)}
+              onChange={e => setValue(e.target.value === '' ? '' : String(parseHM(e.target.value) ?? ''))}
+              className="flex-1 min-w-0"
+            />
+          ) : (
+            <Input
+              type="number"
+              value={value}
+              onChange={e => setValue(e.target.value)}
+              className="flex-1 min-w-0"
+              placeholder={`${isToday ? 'Heute' : 'Wert'} in ${habit.unitSymbol}`}
+              min="0"
+              step="0.1"
+            />
+          )}
           <Button type="submit" loading={saving} disabled={value === ''} className="whitespace-nowrap flex-shrink-0">
             {currentLog ? 'Aktualisieren' : 'Eintragen'}
           </Button>
@@ -247,13 +259,14 @@ function HabitCard({ habit, todayLog, onLog }) {
 
       {currentLog && !isBoolean && (() => {
         const fulfilled = meetsTarget(habit, currentLog.value);
+        const isHm = isHmUnit(habit.unitSymbol);
         const unit = currentLog.historicalUnit || habit.unitSymbol;
-        const suffix = currentLog.historicalUnit ? ` ${currentLog.historicalUnit} (jetzt: ${habit.unitSymbol})` : ` ${unit}`;
+        const valueText = isHm ? `${formatHM(currentLog.value)} h` : `${currentLog.value}${currentLog.historicalUnit ? ` ${currentLog.historicalUnit} (jetzt: ${habit.unitSymbol})` : ` ${unit}`}`;
         const datePrefix = isToday ? 'Heute' : format(parseISO(selectedDate), 'd. MMM', { locale: de });
         return (
           <p className={`text-xs font-medium mt-2 flex items-center gap-1 ${fulfilled ? 'text-emerald-600' : 'text-ocher-600'}`}>
             {fulfilled && <Check size={12} strokeWidth={3} />}
-            {`${datePrefix}: ${currentLog.value}${suffix}`}
+            {`${datePrefix}: ${valueText}`}
             {!fulfilled && ` · Ziel: ${formatTarget(habit)}`}
           </p>
         );

@@ -6,7 +6,7 @@ import api from '../utils/api';
 import {
   Check, LogOut, User, Save, Download, Upload, AtSign, Lock, Server, Monitor,
   Settings as SettingsIcon, Sun, Moon, MonitorSmartphone, SunMoon, UserRound, Plug, Database,
-  Sparkles,
+  Sparkles, ListTodo,
 } from 'lucide-react';
 import {
   PageHeader, Button, Field, Input, Select, PasswordInput, Alert, TONE_BUBBLE,
@@ -353,6 +353,25 @@ function AccountSection() {
 
   // Check-in reminder times (HH:MM). Saved separately from the profile form.
   const [checkinTimes, setCheckinTimes] = useState(user?.checkinTimes || []);
+  // Companion reminder for todos still open today ('' disables it).
+  const [todoReminder, setTodoReminder] = useState(user?.todoReminderTime ?? '18:00');
+  const [todoSaving, setTodoSaving] = useState(false);
+  const [todoSaved, setTodoSaved] = useState(false);
+  useEffect(() => { if (user) setTodoReminder(user.todoReminderTime ?? '18:00'); }, [user]);
+  const handleSaveTodoReminder = async (e) => {
+    e.preventDefault();
+    setTodoSaving(true);
+    try {
+      const res = await api.put('/auth/me', { todoReminderTime: todoReminder });
+      updateUser(res.data);
+      setTodoSaved(true);
+      setTimeout(() => setTodoSaved(false), 2000);
+    } catch (err) {
+      alert('Fehler: ' + (err.response?.data?.error || err.message));
+    } finally {
+      setTodoSaving(false);
+    }
+  };
   const [checkinSaving, setCheckinSaving] = useState(false);
   const [checkinSaved, setCheckinSaved] = useState(false);
   useEffect(() => { if (user) setCheckinTimes(user.checkinTimes || []); }, [user]);
@@ -478,6 +497,27 @@ function AccountSection() {
             <div>
               <Button type="submit" icon={checkinSaved ? Check : Save} loading={checkinSaving}>
                 {checkinSaved ? 'Gespeichert!' : 'Speichern'}
+              </Button>
+            </div>
+          </form>
+        </SettingsCard>
+
+        <SettingsCard icon={ListTodo} tone="amber" title="Aufgaben-Erinnerung">
+          <form onSubmit={handleSaveTodoReminder} className="space-y-3">
+            <p className="text-xs text-ink-400">
+              Die Companion-App erinnert dich zu dieser Uhrzeit an Aufgaben, die
+              heute noch offen sind. Leer lassen, um die Erinnerung abzuschalten.
+              Einzelne Aufgaben können eine eigene Uhrzeit haben.
+            </p>
+            <Input
+              type="time"
+              value={todoReminder}
+              onChange={e => setTodoReminder(e.target.value)}
+              className="!w-32"
+            />
+            <div>
+              <Button type="submit" icon={todoSaved ? Check : Save} loading={todoSaving}>
+                {todoSaved ? 'Gespeichert!' : 'Speichern'}
               </Button>
             </div>
           </form>

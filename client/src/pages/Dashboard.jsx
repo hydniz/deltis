@@ -8,7 +8,7 @@ import {
 import { de } from 'date-fns/locale';
 import {
   Dumbbell, Scale, Target, Calendar, CalendarDays, Sparkles, ArrowRight,
-  Check, Circle, Activity,
+  Check, Circle, Activity, ListTodo, CheckSquare, Square, Flag,
 } from 'lucide-react';
 import {
   Stat, Chip, chipColorFor, Input, Button, Skeleton, TONE_BUBBLE,
@@ -231,6 +231,23 @@ export default function Dashboard() {
 
   useEffect(() => { load(); }, [load]);
 
+  // Todos due today (self-contained so it can refresh on its own).
+  const [dueTodos, setDueTodos] = useState([]);
+  const loadTodos = useCallback(() => {
+    const day = format(new Date(), 'yyyy-MM-dd');
+    api.get('/todos/due', { params: { startDate: day, endDate: day } })
+      .then(r => setDueTodos(r.data)).catch(() => setDueTodos([]));
+  }, []);
+  useEffect(() => { loadTodos(); }, [loadTodos]);
+  const toggleTodo = async (item) => {
+    setDueTodos(prev => prev.map(t => t.todoId === item.todoId ? { ...t, done: !t.done } : t));
+    const day = format(new Date(), 'yyyy-MM-dd');
+    try {
+      if (item.done) await api.delete(`/todos/${item.todoId}/complete`, { params: { date: day } });
+      else await api.post(`/todos/${item.todoId}/complete`, { date: day });
+    } catch { loadTodos(); }
+  };
+
   const { before, after } = greeting;
 
   // Skeleton mirroring the page layout — calmer than a spinner and the
@@ -352,6 +369,26 @@ export default function Dashboard() {
               );
             })}
           </div>
+        </SectionCard>
+      )}
+
+      {/* Todos due today */}
+      {dueTodos.length > 0 && (
+        <SectionCard icon={ListTodo} tone="amber" title="Aufgaben für heute" linkTo="/todos">
+          <ul className="divide-hairline anim-list">
+            {dueTodos.map(item => (
+              <li key={item.todoId} className="flex items-center gap-3 py-2.5">
+                <button type="button" onClick={() => toggleTodo(item)} className="flex-shrink-0 text-brand-600"
+                  aria-label={item.done ? 'Als offen markieren' : 'Als erledigt markieren'}>
+                  {item.done ? <CheckSquare size={19} /> : <Square size={19} className="text-ink-300" />}
+                </button>
+                <span className={`flex-1 min-w-0 text-sm truncate ${item.done ? 'line-through text-ink-400' : 'text-ink-800'}`}>
+                  {item.title}
+                </span>
+                {item.priority === 'high' && <Flag size={13} className="text-rose-500 flex-shrink-0" />}
+              </li>
+            ))}
+          </ul>
         </SectionCard>
       )}
 
