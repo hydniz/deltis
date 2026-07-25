@@ -1,19 +1,17 @@
 // Settings card: the WEB side of the Health Connect integration.
 //
-// The actual connection and permission grant happen in the Android companion
-// app (Deltis Companion) — a browser cannot read Health Connect. So this card
-// is a STATUS and CONFIGURATION surface: it shows which device is linked, what
-// it is allowed to read, how far back, and how much was deduplicated, and it
-// lets the user adjust the readable types and the backfill window or unlink
-// the device. Backed by /api/health (see docs/api/health.md).
+// The connection, permission grant AND the choice of which data types to read
+// all happen in the Android companion app (a browser cannot read Health
+// Connect). So this card is STATUS-ONLY: it lists the linked device(s), what
+// each is reading, how much was deduplicated and when it last synced — but it
+// does not let you pick data types or the window (that lives in the app). It
+// can still unlink a device. Backed by /api/health (see docs/api/health.md).
 import { useState, useEffect, useCallback } from 'react';
-import { HeartPulse, Smartphone, Unlink, RefreshCw } from 'lucide-react';
+import { HeartPulse, Smartphone, Unlink } from 'lucide-react';
 import api from '../utils/api';
-import { Button, Alert, Spinner, Toggle, Checkbox, Field, Select, TONE_BUBBLE } from './ui';
+import { Button, Alert, Spinner, Checkbox, TONE_BUBBLE } from './ui';
 
 // German labels for the Health Connect record types the server supports.
-// `heartRate`/`steps`/`activeCalories`/`distance` enrich an exercise session
-// rather than standing alone, which the hint below the toggles explains.
 const TYPE_LABELS = {
   exercise: 'Trainingseinheiten',
   weight: 'Gewicht',
@@ -23,15 +21,16 @@ const TYPE_LABELS = {
   distance: 'Distanz',
 };
 
-const BACKFILL_OPTIONS = [7, 14, 30, 90, 180, 365];
+function typeLabel(type) {
+  return TYPE_LABELS[type] || type;
+}
 
 function formatDateTime(value) {
   if (!value) return '–';
   return new Date(value).toLocaleString('de-DE', { dateStyle: 'medium', timeStyle: 'short' });
 }
 
-// Turns the last sync's counts into a short German summary, or null when
-// there is nothing meaningful to report yet.
+// Turns a device's last-sync counts into a short German summary, or null.
 export function summarizeSync(counts) {
   if (!counts) return null;
   const parts = [];
@@ -46,9 +45,7 @@ export function summarizeSync(counts) {
 export default function HealthConnectCard() {
   const [config, setConfig] = useState(null); // null = loading
   const [error, setError] = useState('');
-  const [saving, setSaving] = useState(false);
-  const [saved, setSaved] = useState(false);
-  const [showDisconnect, setShowDisconnect] = useState(false);
+  const [confirmId, setConfirmId] = useState(null); // deviceId whose disconnect confirm is open
   const [purge, setPurge] = useState(false);
   const [disconnecting, setDisconnecting] = useState(false);
 
@@ -57,59 +54,32 @@ export default function HealthConnectCard() {
       const res = await api.get('/health/config');
       setConfig(res.data);
     } catch {
-      setConfig({ connected: false, supportedTypes: Object.keys(TYPE_LABELS) });
+      setConfig({ connected: false });
     }
   }, []);
 
   useEffect(() => { load(); }, [load]);
 
-  const supportedTypes = config?.supportedTypes?.length
-    ? config.supportedTypes
-    : Object.keys(TYPE_LABELS);
-  const enabledTypes = config?.enabledTypes || [];
-  const minDays = config?.minBackfillDays || 7;
-  const options = BACKFILL_OPTIONS.filter(d => d >= minDays);
+  // The per-device list. Falls back to the single connection shape for an older
+  // server that doesn't send `devices` yet.
+  const devices = config?.devices?.length
+    ? config.devices
+    : (config?.connected ? [{
+        deviceId: config.deviceId, deviceName: config.deviceName,
+        enabledTypes: config.enabledTypes, lastSyncAt: config.lastSyncAt,
+        lastSyncCounts: config.lastSyncCounts, backfillDays: config.backfillDays,
+      }] : []);
 
-  const toggleType = (type) => {
-    setSaved(false);
-    setConfig(prev => {
-      const has = prev.enabledTypes?.includes(type);
-      const next = has
-        ? prev.enabledTypes.filter(t => t !== type)
-        : [...(prev.enabledTypes || []), type];
-      return { ...prev, enabledTypes: next };
-    });
-  };
-
-  const changeBackfill = (days) => {
-    setSaved(false);
-    setConfig(prev => ({ ...prev, backfillDays: days }));
-  };
-
-  const handleSave = async () => {
-    setSaving(true);
-    setError('');
-    setSaved(false);
-    try {
-      const res = await api.put('/health/config', {
-        enabledTypes: config.enabledTypes,
-        backfillDays: config.backfillDays,
-      });
-      setConfig(res.data);
-      setSaved(true);
-    } catch (err) {
-      setError(err.response?.data?.error || 'Speichern fehlgeschlagen.');
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const handleDisconnect = async () => {
+  const handleDisconnect = async (deviceId) => {
     setDisconnecting(true);
     setError('');
     try {
-      await api.delete(`/health/connect${purge ? '?purge=true' : ''}`);
-      setShowDisconnect(false);
+      const params = new URLSearchParams();
+      if (deviceId) params.set('deviceId', deviceId);
+      if (purge) params.set('purge', 'true');
+      const qs = params.toString();
+      await api.delete(`/health/connect${qs ? `?${qs}` : ''}`);
+      setConfirmId(null);
       setPurge(false);
       await load();
     } catch (err) {
@@ -118,8 +88,6 @@ export default function HealthConnectCard() {
       setDisconnecting(false);
     }
   };
-
-  const syncSummary = summarizeSync(config?.lastSyncCounts);
 
   return (
     <div className="card p-5" data-testid="health-connect-card">
@@ -132,103 +100,86 @@ export default function HealthConnectCard() {
 
       {!config ? (
         <div className="flex items-center justify-center py-6"><Spinner size="md" /></div>
-      ) : !config.connected ? (
+      ) : devices.length === 0 ? (
         <div className="space-y-3">
           <p className="text-sm text-ink-500">
             Verbinde deine Android-Gesundheitsdaten mit der App <strong>Deltis Companion</strong>.
-            Die App liest die von dir freigegebenen Health-Connect-Daten (z.&nbsp;B. Trainingseinheiten
-            und Gewicht) und überträgt sie an Deltis – Aktivitäten aus bereits verbundenen Quellen
-            wie Strava werden dabei automatisch übersprungen, sodass keine Duplikate entstehen.
+            Die App liest die von dir freigegebenen Health-Connect-Daten und überträgt sie an
+            Deltis – Aktivitäten aus bereits verbundenen Quellen wie Strava werden dabei
+            automatisch übersprungen, sodass keine Duplikate entstehen.
           </p>
           <Alert tone="info">
-            Installiere die Companion-App auf deinem Android-Gerät, melde dich mit diesem Konto an
-            und wähle dort aus, welche Daten übertragen werden. Sobald das Gerät verbunden ist,
-            erscheint der Status hier.
+            Installiere die Companion-App, melde dich mit diesem Konto an und wähle <strong>dort</strong>
+            {' '}aus, welche Daten übertragen werden. Sobald ein Gerät verbunden ist, erscheint der
+            Status hier.
           </Alert>
         </div>
       ) : (
         <div className="space-y-4">
-          <div className="panel px-3.5 py-3 flex items-center gap-3">
-            <span className="w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0 bg-rose-100 text-rose-600">
-              <Smartphone size={16} />
-            </span>
-            <div className="flex-1 min-w-0">
-              <p className="text-sm font-semibold text-ink-800 truncate">
-                {config.deviceName || 'Android-Gerät'}
-              </p>
-              <p className="text-xs text-ink-400">
-                Letzte Übertragung: {formatDateTime(config.lastSyncAt)}
-              </p>
-            </div>
-          </div>
-
-          {syncSummary && (
-            <Alert tone="success" title="Zuletzt übertragen">{syncSummary}</Alert>
-          )}
-
-          <div>
-            <p className="text-sm font-semibold text-ink-700 mb-2">Welche Daten werden gelesen?</p>
-            <div className="space-y-2">
-              {supportedTypes.map(type => (
-                <div key={type} className="flex items-center justify-between gap-3">
-                  <span className="text-sm text-ink-600">{TYPE_LABELS[type] || type}</span>
-                  <Toggle
-                    value={enabledTypes.includes(type)}
-                    onChange={() => toggleType(type)}
-                    label={TYPE_LABELS[type] || type}
-                  />
-                </div>
-              ))}
-            </div>
-            <p className="text-xs text-ink-400 mt-2">
-              Herzfrequenz, Schritte, Kalorien und Distanz ergänzen deine Trainingseinheiten.
-            </p>
-          </div>
-
-          <Field label="Wie weit zurück wird gelesen?" hint={`Mindestens ${minDays} Tage.`}>
-            <Select
-              value={config.backfillDays || minDays}
-              onChange={e => changeBackfill(Number(e.target.value))}
-            >
-              {options.map(d => (
-                <option key={d} value={d}>{d} Tage</option>
-              ))}
-            </Select>
-          </Field>
+          <p className="text-xs text-ink-400">
+            Datenarten und Zeitraum stellst du in der Companion-App ein – hier siehst du den Status.
+          </p>
 
           {error && <Alert tone="error">{error}</Alert>}
-          {saved && <Alert tone="success">Einstellungen gespeichert.</Alert>}
 
-          <div className="flex flex-wrap gap-2.5">
-            <Button icon={RefreshCw} loading={saving} onClick={handleSave}>
-              Speichern
-            </Button>
-            <Button variant="secondary" icon={Unlink} onClick={() => setShowDisconnect(v => !v)}>
-              Gerät trennen
-            </Button>
-          </div>
+          {devices.map(device => {
+            const summary = summarizeSync(device.lastSyncCounts);
+            const types = device.enabledTypes || [];
+            const open = confirmId === device.deviceId;
+            return (
+              <div key={device.deviceId || 'device'} className="panel px-3.5 py-3 space-y-3">
+                <div className="flex items-center gap-3">
+                  <span className="w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0 bg-rose-100 text-rose-600">
+                    <Smartphone size={16} />
+                  </span>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-semibold text-ink-800 truncate">
+                      {device.deviceName || 'Android-Gerät'}
+                    </p>
+                    <p className="text-xs text-ink-400">
+                      Letzte Übertragung: {formatDateTime(device.lastSyncAt)}
+                    </p>
+                  </div>
+                  <Button variant="ghost" size="sm" icon={Unlink} onClick={() => { setConfirmId(open ? null : device.deviceId); setPurge(false); }}>
+                    Trennen
+                  </Button>
+                </div>
 
-          {showDisconnect && (
-            <div className="panel p-3.5 space-y-3">
-              <p className="text-sm text-ink-600">
-                Die Verbindung zu diesem Gerät trennen? Es werden keine neuen Gesundheitsdaten
-                mehr übertragen.
-              </p>
-              <Checkbox
-                checked={purge}
-                onChange={e => setPurge(e.target.checked)}
-                label="Auch die bereits übertragenen Trainingseinheiten löschen"
-              />
-              <div className="flex gap-2">
-                <Button variant="danger" size="sm" loading={disconnecting} onClick={handleDisconnect}>
-                  Verbindung trennen
-                </Button>
-                <Button variant="secondary" size="sm" onClick={() => { setShowDisconnect(false); setPurge(false); }}>
-                  Abbrechen
-                </Button>
+                {types.length > 0 && (
+                  <div className="flex flex-wrap gap-1.5">
+                    {types.map(t => (
+                      <span key={t} className="text-[11px] px-2 py-0.5 rounded-full bg-paper-100 text-ink-500">
+                        {typeLabel(t)}
+                      </span>
+                    ))}
+                  </div>
+                )}
+
+                {summary && <p className="text-xs text-emerald-600">{summary}</p>}
+
+                {open && (
+                  <div className="border-t hairline pt-3 space-y-3">
+                    <p className="text-sm text-ink-600">
+                      Verbindung zu diesem Gerät trennen? Es werden keine neuen Daten mehr übertragen.
+                    </p>
+                    <Checkbox
+                      checked={purge}
+                      onChange={e => setPurge(e.target.checked)}
+                      label="Auch die bereits übertragenen Trainingseinheiten löschen"
+                    />
+                    <div className="flex gap-2">
+                      <Button variant="danger" size="sm" loading={disconnecting} onClick={() => handleDisconnect(device.deviceId)}>
+                        Verbindung trennen
+                      </Button>
+                      <Button variant="secondary" size="sm" onClick={() => { setConfirmId(null); setPurge(false); }}>
+                        Abbrechen
+                      </Button>
+                    </div>
+                  </div>
+                )}
               </div>
-            </div>
-          )}
+            );
+          })}
         </div>
       )}
     </div>

@@ -75,7 +75,7 @@ describe('HealthConnectCard – not connected', () => {
   });
 });
 
-describe('HealthConnectCard – connected', () => {
+describe('HealthConnectCard – connected (status only)', () => {
   it('shows the device, last sync and dedup summary', async () => {
     mockConfig(connectedConfig);
     render(<HealthConnectCard />);
@@ -85,65 +85,30 @@ describe('HealthConnectCard – connected', () => {
     expect(screen.getByText('5 Aktivitäten · 2 Gewichtswerte · 1 Duplikat erkannt')).toBeInTheDocument();
   });
 
-  it('renders a toggle per supported type, reflecting the enabled ones', async () => {
+  it('lists the read data types read-only — no switches, no save, no window', async () => {
     mockConfig(connectedConfig);
     render(<HealthConnectCard />);
 
-    const exercise = await screen.findByRole('switch', { name: 'Trainingseinheiten' });
-    const heartRate = screen.getByRole('switch', { name: 'Herzfrequenz' });
-    expect(exercise).toHaveAttribute('aria-checked', 'true');
-    expect(heartRate).toHaveAttribute('aria-checked', 'false');
+    expect(await screen.findByText('Trainingseinheiten')).toBeInTheDocument();
+    expect(screen.getByText('Gewicht')).toBeInTheDocument();
+    expect(screen.queryByRole('switch')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Speichern' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('combobox')).not.toBeInTheDocument();
+    expect(screen.getByText(/in der Companion-App ein/)).toBeInTheDocument();
   });
 
-  it('offers only backfill options at or above the minimum', async () => {
-    mockConfig({ ...connectedConfig, minBackfillDays: 30, backfillDays: 30 });
+  it('lists every linked device from the devices array', async () => {
+    mockConfig({
+      connected: true,
+      devices: [
+        { deviceId: 'a', deviceName: 'Pixel 8', enabledTypes: ['exercise'], lastSyncAt: '2026-07-20T08:30:00.000Z', lastSyncCounts: null },
+        { deviceId: 'b', deviceName: 'Galaxy S24', enabledTypes: ['weight'], lastSyncAt: null, lastSyncCounts: null },
+      ],
+    });
     render(<HealthConnectCard />);
 
-    await screen.findByText('Pixel 8');
-    expect(screen.queryByRole('option', { name: '7 Tage' })).not.toBeInTheDocument();
-    expect(screen.getByRole('option', { name: '30 Tage' })).toBeInTheDocument();
-  });
-
-  it('saves changed types and window via PUT and confirms', async () => {
-    mockConfig(connectedConfig);
-    let putBody = null;
-    server.use(http.put('/api/health/config', async ({ request }) => {
-      putBody = await request.json();
-      return HttpResponse.json({ ...connectedConfig, ...putBody });
-    }));
-    const user = userEvent.setup();
-    render(<HealthConnectCard />);
-
-    const heartRate = await screen.findByRole('switch', { name: 'Herzfrequenz' });
-    await user.click(heartRate);
-    await user.selectOptions(screen.getByRole('combobox'), '90');
-    await user.click(screen.getByRole('button', { name: 'Speichern' }));
-
-    await waitFor(() => expect(screen.getByText('Einstellungen gespeichert.')).toBeInTheDocument());
-    expect(putBody.enabledTypes).toContain('heartRate');
-    expect(putBody.backfillDays).toBe(90);
-  });
-
-  it('shows an error when saving fails', async () => {
-    mockConfig(connectedConfig);
-    server.use(http.put('/api/health/config', () =>
-      HttpResponse.json({ error: 'Kaputt.' }, { status: 400 })));
-    const user = userEvent.setup();
-    render(<HealthConnectCard />);
-
-    await user.click(await screen.findByRole('button', { name: 'Speichern' }));
-    expect(await screen.findByText('Kaputt.')).toBeInTheDocument();
-  });
-
-  it('toggles an enabled type off', async () => {
-    mockConfig(connectedConfig);
-    const user = userEvent.setup();
-    render(<HealthConnectCard />);
-
-    const weight = await screen.findByRole('switch', { name: 'Gewicht' });
-    expect(weight).toHaveAttribute('aria-checked', 'true');
-    await user.click(weight);
-    expect(weight).toHaveAttribute('aria-checked', 'false');
+    expect(await screen.findByText('Pixel 8')).toBeInTheDocument();
+    expect(screen.getByText('Galaxy S24')).toBeInTheDocument();
   });
 
   // The GET is stateful: connected on the initial mount, not-connected after
@@ -153,7 +118,7 @@ describe('HealthConnectCard – connected', () => {
     let deleteUrl = null;
     server.use(
       http.get('/api/health/config', () =>
-        HttpResponse.json(connected ? connectedConfig : { connected: false, supportedTypes: [] })),
+        HttpResponse.json(connected ? connectedConfig : { connected: false })),
       http.delete('/api/health/connect', ({ request }) => {
         deleteUrl = new URL(request.url);
         connected = false;
@@ -168,7 +133,7 @@ describe('HealthConnectCard – connected', () => {
     const user = userEvent.setup();
     render(<HealthConnectCard />);
 
-    await user.click(await screen.findByRole('button', { name: /Gerät trennen/ }));
+    await user.click(await screen.findByRole('button', { name: 'Trennen' }));
     await user.click(screen.getByRole('button', { name: 'Verbindung trennen' }));
 
     await waitFor(() => expect(screen.getByText(/Deltis Companion/)).toBeInTheDocument());
@@ -180,7 +145,7 @@ describe('HealthConnectCard – connected', () => {
     const user = userEvent.setup();
     render(<HealthConnectCard />);
 
-    await user.click(await screen.findByRole('button', { name: /Gerät trennen/ }));
+    await user.click(await screen.findByRole('button', { name: 'Trennen' }));
     await user.click(screen.getByRole('checkbox', { name: /bereits übertragenen/ }));
     await user.click(screen.getByRole('button', { name: 'Verbindung trennen' }));
 
@@ -194,7 +159,7 @@ describe('HealthConnectCard – connected', () => {
     const user = userEvent.setup();
     render(<HealthConnectCard />);
 
-    await user.click(await screen.findByRole('button', { name: /Gerät trennen/ }));
+    await user.click(await screen.findByRole('button', { name: 'Trennen' }));
     await user.click(screen.getByRole('button', { name: 'Verbindung trennen' }));
     expect(await screen.findByText('Geht nicht.')).toBeInTheDocument();
   });
@@ -204,7 +169,7 @@ describe('HealthConnectCard – connected', () => {
     const user = userEvent.setup();
     render(<HealthConnectCard />);
 
-    await user.click(await screen.findByRole('button', { name: /Gerät trennen/ }));
+    await user.click(await screen.findByRole('button', { name: 'Trennen' }));
     expect(screen.getByRole('button', { name: 'Verbindung trennen' })).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: 'Abbrechen' }));
     expect(screen.queryByRole('button', { name: 'Verbindung trennen' })).not.toBeInTheDocument();
@@ -218,10 +183,10 @@ describe('HealthConnectCard – connected', () => {
     expect(screen.getByText(/Letzte Übertragung: –/)).toBeInTheDocument();
   });
 
-  it('uses the type key as a label when no German label exists', async () => {
-    mockConfig({ ...connectedConfig, supportedTypes: ['exercise', 'mystery'], enabledTypes: [] });
+  it('uses the type key as a label chip when no German label exists', async () => {
+    mockConfig({ ...connectedConfig, enabledTypes: ['exercise', 'mystery'] });
     render(<HealthConnectCard />);
 
-    expect(await screen.findByRole('switch', { name: 'mystery' })).toBeInTheDocument();
+    expect(await screen.findByText('mystery')).toBeInTheDocument();
   });
 });

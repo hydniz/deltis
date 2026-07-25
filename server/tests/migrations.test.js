@@ -623,6 +623,33 @@ describe('bundled migrations', () => {
     expect(settings.habitSettings[water.toString()]).toBeUndefined();
   });
 
+  it('005-multi-device-health drops the legacy unique index on healthconnections.userId', async () => {
+    const backupDir = tmpDir('mig-backup-');
+    const coll = mongoose.connection.collection('healthconnections');
+    // Simulate the OLD schema: one connection per user, a unique index on userId.
+    await coll.createIndex({ userId: 1 }, { unique: true, name: 'userId_1' });
+    await coll.insertOne({ userId: new mongoose.Types.ObjectId(), deviceId: 'phone-a' });
+
+    silenceConsole();
+    await runMigrations({ dir: realMigrationsDir, backupDir, exitOnFailure: false });
+    restoreConsole();
+
+    const indexes = await coll.indexes();
+    const stale = indexes.find(ix =>
+      ix.unique && ix.key && Object.keys(ix.key).length === 1 && ix.key.userId === 1);
+    expect(stale).toBeUndefined();
+  });
+
+  it('005-multi-device-health is a no-op with no healthconnections collection', async () => {
+    const backupDir = tmpDir('mig-backup-');
+    silenceConsole();
+    await runMigrations({ dir: realMigrationsDir, backupDir, exitOnFailure: false });
+    restoreConsole();
+
+    const Migration = require('../models/Migration');
+    expect(await Migration.findOne({ name: '005-multi-device-health' })).toBeTruthy();
+  });
+
   it('bundled migrations end up recorded with the correct names', async () => {
     const backupDir = tmpDir('mig-backup-');
     silenceConsole();
@@ -631,7 +658,10 @@ describe('bundled migrations', () => {
 
     const Migration = require('../models/Migration');
     const names = (await Migration.find().sort({ appliedAt: 1 }).lean()).map(m => m.name);
-    expect(names).toEqual(['001-versioned-refs', '002-habit-settings', '003-habit-selection-opt-in', '004-personal-habit-library']);
+    expect(names).toEqual([
+      '001-versioned-refs', '002-habit-settings', '003-habit-selection-opt-in',
+      '004-personal-habit-library', '005-multi-device-health',
+    ]);
   });
 });
 

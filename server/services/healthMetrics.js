@@ -26,7 +26,7 @@ const SOURCE = 'health';
 // caller). Records whose type has no destination metric are counted in
 // `unmapped` so the UI can offer to create one. Returns
 // { imported, skipped, collapsed, unmapped }.
-async function mergeMetricRecords(userId, records, definitions) {
+async function mergeMetricRecords(userId, records, definitions, { deviceId = '' } = {}) {
   const result = { imported: 0, skipped: 0, collapsed: 0, unmapped: {} };
   const list = Array.isArray(records) ? records : [];
   if (list.length === 0) return result;
@@ -47,7 +47,7 @@ async function mergeMetricRecords(userId, records, definitions) {
 
     const idStr = String(def._id);
     if (!byMetric.has(idStr)) byMetric.set(idStr, { def, records: [] });
-    byMetric.get(idStr).records.push({ ...rec, value });
+    byMetric.get(idStr).records.push({ ...rec, value, origin: String(rec.dataOrigin || '') });
   }
 
   for (const { def, records: recs } of byMetric.values()) {
@@ -78,7 +78,10 @@ async function mergeMetricRecords(userId, records, definitions) {
       await MetricLog.updateOne(
         { userId, metricId: def._id, source: SOURCE, sourceId: String(rec.id) },
         {
-          $set: { date: new Date(rec.time), value: rec.value, metricVersion: def.version },
+          $set: {
+            date: new Date(rec.time), value: rec.value, metricVersion: def.version,
+            origin: rec.origin || '', deviceId: String(deviceId || ''),
+          },
           $setOnInsert: { userId, metricId: def._id, source: SOURCE, sourceId: String(rec.id) },
         },
         { upsert: true }

@@ -5,6 +5,8 @@ const HealthActivity = require('../models/HealthActivity');
 const StravaActivity = require('../models/StravaActivity');
 const StravaConnection = require('../models/StravaConnection');
 const WeightLog = require('../models/WeightLog');
+const MetricDefinition = require('../models/MetricDefinition');
+const MetricLog = require('../models/MetricLog');
 
 let app;
 
@@ -711,7 +713,10 @@ describe('error handling', () => {
 
   it('500s when the configuration cannot be read', async () => {
     const { token } = await createUser();
-    jest.spyOn(HealthConnection, 'findOne').mockRejectedValue(new Error('db weg'));
+    // /config lists the user's devices first — make that read fail.
+    jest.spyOn(HealthConnection, 'find').mockReturnValue({
+      sort: () => Promise.reject(new Error('db weg')),
+    });
 
     const res = await request(app).get('/api/health/config').set(authHeader(token));
     expect(res.status).toBe(500);
@@ -758,9 +763,73 @@ describe('error handling', () => {
   it('500s when disconnecting fails', async () => {
     const { token } = await createUser();
     await connect(token);
-    jest.spyOn(HealthConnection, 'deleteOne').mockRejectedValue(new Error('db weg'));
+    // Without ?deviceId the route removes every connection via deleteMany.
+    jest.spyOn(HealthConnection, 'deleteMany').mockRejectedValue(new Error('db weg'));
 
     const res = await request(app).delete('/api/health/connect').set(authHeader(token));
     expect(res.status).toBe(500);
+  });
+});
+
+// A user can sync from several phones; each is its own connection and every
+// reading is tagged with its source.
+describe('multi-device Health Connect', () => {
+  it('keeps one connection per device and lists them all', async () => {
+    const { token } = await createUser();
+    await connect(token, { deviceId: 'phone-a', deviceName: 'Pixel 8' });
+    await connect(token, { deviceId: 'phone-b', deviceName: 'Galaxy S24' });
+    // Re-connecting the same device updates, never duplicates.
+    await connect(token, { deviceId: 'phone-a', deviceName: 'Pixel 8 Pro' });
+
+    expect(await HealthConnection.countDocuments({ userId: (await HealthConnection.findOne({ deviceId: 'phone-a' })).userId })).toBe(2);
+
+    const res = await request(app).get('/api/health/config').set(authHeader(token));
+    expect(res.body.devices).toHaveLength(2);
+    const names = res.body.devices.map(d => d.deviceName).sort();
+    expect(names).toEqual(['Galaxy S24', 'Pixel 8 Pro']);
+  });
+
+  it('returns a specific device config via ?deviceId', async () => {
+    const { token } = await createUser();
+    await connect(token, { deviceId: 'phone-a', backfillDays: 30 });
+    await connect(token, { deviceId: 'phone-b', backfillDays: 90 });
+
+    const res = await request(app).get('/api/health/config?deviceId=phone-b').set(authHeader(token));
+    expect(res.body.deviceId).toBe('phone-b');
+    expect(res.body.backfillDays).toBe(90);
+  });
+
+  it('disconnects a single device with ?deviceId, leaving the others', async () => {
+    const { token } = await createUser();
+    await connect(token, { deviceId: 'phone-a' });
+    await connect(token, { deviceId: 'phone-b' });
+
+    await request(app).delete('/api/health/connect?deviceId=phone-a').set(authHeader(token));
+
+    const left = await HealthConnection.find({});
+    expect(left).toHaveLength(1);
+    expect(left[0].deviceId).toBe('phone-b');
+  });
+
+  it('tags imported metrics with their origin app and syncing device', async () => {
+    const { user, token } = await createUser();
+    // Default types (exercise/weight) so the route doesn't auto-seed the metric
+    // definition — this test owns it. Metric records route regardless of the
+    // enabled activity/weight types.
+    await connect(token, { deviceId: 'phone-a' });
+    await MetricDefinition.create({
+      userId: user._id, key: 'rhr', name: 'Ruhepuls', unit: 'bpm',
+      dayAggregation: 'last', healthType: 'restingHeartRate',
+    });
+
+    await request(app).post('/api/health/sync').set(authHeader(token)).send({
+      deviceId: 'phone-a',
+      metrics: [{ type: 'restingHeartRate', id: 'r1', time: '2026-05-02T06:00:00.000Z', value: 58, dataOrigin: 'com.garmin.android' }],
+    });
+
+    const log = await MetricLog.findOne({ userId: user._id, sourceId: 'r1' });
+    expect(log.origin).toBe('com.garmin.android');
+    expect(log.deviceId).toBe('phone-a');
+    expect(log.value).toBe(58);
   });
 });
