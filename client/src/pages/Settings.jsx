@@ -6,7 +6,7 @@ import api from '../utils/api';
 import {
   Check, LogOut, User, Save, Download, Upload, AtSign, Lock, Server, Monitor,
   Settings as SettingsIcon, Sun, Moon, MonitorSmartphone, SunMoon, UserRound, Plug, Database,
-  Sparkles, ListTodo,
+  Sparkles, ListTodo, ArrowUpDown,
 } from 'lucide-react';
 import {
   PageHeader, Button, Field, Input, Select, PasswordInput, Alert, TONE_BUBBLE,
@@ -14,6 +14,7 @@ import {
 import StravaCard from '../components/StravaCard';
 import HealthConnectCard from '../components/HealthConnectCard';
 import TrainingTypesCard from '../components/TrainingTypesCard';
+import NavOrderEditor from '../components/NavOrderEditor';
 
 // Sub-sections — each is its own route below /settings.
 const SECTIONS = [
@@ -436,7 +437,7 @@ function AccountSection() {
 
   return (
     <div className="space-y-5">
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 items-start">
+      <div className="columns-1 lg:columns-2 gap-5 [&>*]:mb-5 [&>*]:break-inside-avoid">
         {/* Profile */}
         <SettingsCard icon={User} tone="clay" title="Profil">
           <form onSubmit={handleSaveProfile} className="space-y-4">
@@ -587,8 +588,11 @@ function AccountSection() {
 
 function AppearanceSection() {
   return (
-    <div className="max-w-xl">
+    <div className="max-w-xl space-y-5">
       <AppearanceCard />
+      <SettingsCard icon={ArrowUpDown} tone="clay" title="Navigation">
+        <NavOrderEditor />
+      </SettingsCard>
     </div>
   );
 }

@@ -959,6 +959,11 @@ export default function Planner() {
   };
 
   const today = new Date();
+  // In the current week, lead with today so the plan opens on what matters now;
+  // the already-passed days of the week wrap to the bottom. Other weeks keep
+  // their natural Mon–Sun order.
+  const todayIdx = days.findIndex(d => isSameDay(d, today));
+  const orderedDays = todayIdx >= 0 ? [...days.slice(todayIdx), ...days.slice(0, todayIdx)] : days;
   const allPlans = [...plans, ...habitPlans, ...trainingPlans];
   const doneCount = allPlans.filter(p => p.completed).length;
   const totalCount = allPlans.length;
@@ -1038,7 +1043,7 @@ export default function Planner() {
             the narrow desktop content column, where seven side-by-side day
             columns get too cramped. */}
         <div className="card overflow-hidden divide-y divide-[color:var(--surface-border)] anim-list">
-          {days.map(day => {
+          {orderedDays.map(day => {
             const dayDate = format(day, 'yyyy-MM-dd');
             const dayPlans = filters.activities
               ? plans.filter(p => (p.scheduledDate || '').slice(0, 10) === dayDate)

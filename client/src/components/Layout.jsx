@@ -8,6 +8,7 @@ import {
   LayoutDashboard, Dumbbell, CalendarDays, Sparkles, Scale, Activity, ListTodo, Target,
   MoreHorizontal,
 } from 'lucide-react';
+import { useOrderedNav } from '../utils/navOrder';
 
 // Mobile keeps only the daily-use tabs; everything else lives behind "Mehr".
 // The desktop sidebar still shows all pages. Einstellungen and the admin
@@ -26,6 +27,10 @@ const mobileMore = [
   { to: '/goals', icon: Target, label: 'Ziele' },
 ];
 
+// The user's chosen order applies to the mobile bar too: the first four become
+// the primary tabs, the rest live behind "Mehr".
+const mobileAll = [...mobilePrimary, ...mobileMore];
+
 function TabItem({ icon: Icon, label, isActive, ...props }) {
   return (
     <>
@@ -38,7 +43,7 @@ function TabItem({ icon: Icon, label, isActive, ...props }) {
 }
 
 // Bottom sheet listing the secondary pages, opened from the "Mehr" tab.
-function MoreSheet({ onClose }) {
+function MoreSheet({ items, onClose }) {
   return (
     <>
       <div
@@ -51,7 +56,7 @@ function MoreSheet({ onClose }) {
           bottom-[calc(4.8rem+env(safe-area-inset-bottom))] anim-modal"
         role="menu"
       >
-        {mobileMore.map(({ to, icon: Icon, label }) => (
+        {items.map(({ to, icon: Icon, label }) => (
           <NavLink
             key={to}
             to={to}
@@ -74,7 +79,10 @@ function MoreSheet({ onClose }) {
 export default function Layout({ children }) {
   const [moreOpen, setMoreOpen] = useState(false);
   const location = useLocation();
-  const moreActive = mobileMore.some(item => location.pathname.startsWith(item.to));
+  const ordered = useOrderedNav(mobileAll);
+  const primary = ordered.slice(0, 4);
+  const more = ordered.slice(4);
+  const moreActive = more.some(item => location.pathname.startsWith(item.to));
 
   return (
     <div className="min-h-screen">
@@ -101,13 +109,13 @@ export default function Layout({ children }) {
         </div>
       </main>
 
-      {moreOpen && <MoreSheet onClose={() => setMoreOpen(false)} />}
+      {moreOpen && <MoreSheet items={more} onClose={() => setMoreOpen(false)} />}
 
       {/* Tab bar – mobile only */}
       <nav className="lg:hidden fixed bottom-0 left-0 right-0 z-40 bg-surface/90 backdrop-blur-xl
         border-t hairline pb-[env(safe-area-inset-bottom)]">
         <div className="flex items-stretch">
-          {mobilePrimary.map(({ to, icon: Icon, label, end }) => (
+          {primary.map(({ to, icon: Icon, label, end }) => (
             <NavLink
               key={to}
               to={to}

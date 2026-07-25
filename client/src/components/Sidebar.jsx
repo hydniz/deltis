@@ -4,10 +4,12 @@ import Logo from './Logo';
 import {
   LayoutDashboard, Dumbbell, CalendarDays, Sparkles, Scale, Activity, ListTodo, Target,
 } from 'lucide-react';
+import { useOrderedNav } from '../utils/navOrder';
 
 // Main navigation shows content pages only. Einstellungen and the admin
 // area live in the user menu (avatar) — Nextcloud-style separation.
-const navItems = [
+// Exported as the canonical page list for the reorder editor in Settings.
+export const navItems = [
   { to: '/dashboard', icon: LayoutDashboard, label: 'Dashboard', end: true },
   { to: '/activities', icon: Dumbbell, label: 'Aktivitäten' },
   { to: '/planner', icon: CalendarDays, label: 'Planer' },
@@ -38,6 +40,7 @@ function NavItem({ to, icon: Icon, label, end }) {
 }
 
 export default function Sidebar() {
+  const items = useOrderedNav(navItems);
   return (
     <aside className="hidden lg:flex flex-col w-64 fixed left-0 top-0 bottom-0 z-30
       bg-paper-50/70 backdrop-blur-xl border-r hairline">
@@ -48,7 +51,7 @@ export default function Sidebar() {
 
       {/* Navigation */}
       <nav className="flex-1 px-3.5 overflow-y-auto space-y-1">
-        {navItems.map(item => (
+        {items.map(item => (
           <NavItem key={item.to} {...item} />
         ))}
       </nav>

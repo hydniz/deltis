@@ -6,7 +6,7 @@ import api from '../utils/api';
 import { format, parseISO, differenceInCalendarDays } from 'date-fns';
 import { de } from 'date-fns/locale';
 import { Activity, Plus, TrendingUp, TrendingDown, Minus, Settings2, Maximize2, Clock } from 'lucide-react';
-import { ResponsiveContainer, LineChart, Line, Tooltip, XAxis } from 'recharts';
+import { ResponsiveContainer, LineChart, Line, Tooltip, XAxis, YAxis } from 'recharts';
 import { PageHeader, Button, Input, EmptyState, Spinner, HelpTip, useChart, TONE_BUBBLE } from '../components/ui';
 import ManageMetricsModal from '../components/ManageMetricsModal';
 import MetricDetailModal from '../components/MetricDetailModal';
@@ -102,6 +102,15 @@ function MetricCard({ metric, allMetrics = [], onChanged }) {
   const trend = trendFor(logs || [], metric.direction);
   const spark = sorted.slice(-30).map(l => ({ v: l.value, date: l.date }));
   const fresh = freshnessOf(latest?.date);
+  // Zoom the sparkline to the data's own range (with a little padding) instead
+  // of anchoring at 0, so small day-to-day fluctuations are actually visible.
+  const sparkDomain = (() => {
+    if (spark.length < 2) return [0, 1];
+    const vals = spark.map(s => s.v);
+    const lo = Math.min(...vals), hi = Math.max(...vals);
+    const pad = (hi - lo) * 0.15 || Math.abs(hi) * 0.05 || 1;
+    return [lo - pad, hi + pad];
+  })();
 
   return (
     <div className="card p-5 flex flex-col gap-3 anim-item" data-testid="metric-card">
@@ -128,12 +137,12 @@ function MetricCard({ metric, allMetrics = [], onChanged }) {
               for a current one. */}
           {fresh && (
             fresh.stale ? (
-              <span className="mt-1 inline-flex items-center gap-1 rounded-full bg-ocher-100 text-ocher-700 px-2 py-0.5 text-[11px] font-semibold">
-                <Clock size={11} /> {fresh.label}
+              <span className="mt-1 inline-flex items-center gap-1 whitespace-nowrap rounded-full bg-ocher-100 text-ocher-700 px-2 py-0.5 text-[11px] font-semibold">
+                <Clock size={11} className="flex-shrink-0" /> {fresh.label}
               </span>
             ) : (
-              <span className="mt-1 inline-flex items-center gap-1 text-[11px] text-ink-400">
-                <Clock size={11} /> {fresh.label}
+              <span className="mt-1 inline-flex items-center gap-1 whitespace-nowrap text-[11px] text-ink-400">
+                <Clock size={11} className="flex-shrink-0" /> {fresh.label}
               </span>
             )
           )}
@@ -151,6 +160,7 @@ function MetricCard({ metric, allMetrics = [], onChanged }) {
           <Maximize2 size={13} className="absolute top-1 right-1.5 text-ink-300 opacity-0 group-hover:opacity-100 transition-opacity z-10" />
           <ResponsiveContainer width="100%" height="100%">
             <LineChart data={spark} margin={{ top: 6, right: 6, bottom: 0, left: 6 }}>
+              <YAxis hide domain={sparkDomain} />
               <XAxis
                 dataKey="date"
                 tickFormatter={d => format(parseISO(d), 'd.M.', { locale: de })}
@@ -167,7 +177,10 @@ function MetricCard({ metric, allMetrics = [], onChanged }) {
                 }}
                 labelFormatter={d => format(parseISO(d), 'd. MMM yyyy', { locale: de })}
               />
-              <Line type="monotone" dataKey="v" stroke={CHART.line} strokeWidth={2} dot={false} isAnimationActive={false} />
+              <Line
+                type="monotone" dataKey="v" stroke={CHART.line} strokeWidth={2} dot={false}
+                isAnimationActive animationDuration={750} animationEasing="ease-out"
+              />
             </LineChart>
           </ResponsiveContainer>
         </button>

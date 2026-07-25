@@ -153,6 +153,7 @@ export default function MetricDetailModal({ metric, allMetrics = [], onClose }) 
                 <XAxis dataKey="date" tickFormatter={tickDate} tick={CHART.tick} tickLine={false} minTickGap={28} />
                 <YAxis
                   yAxisId="a"
+                  domain={['auto', 'auto']}
                   tick={CHART.tick}
                   tickLine={false}
                   axisLine={false}
@@ -164,6 +165,7 @@ export default function MetricDetailModal({ metric, allMetrics = [], onClose }) 
                   <YAxis
                     yAxisId="b"
                     orientation="right"
+                    domain={['auto', 'auto']}
                     tick={{ ...CHART.tick, fill: overlayColor }}
                     tickLine={false}
                     axisLine={false}
@@ -184,13 +186,13 @@ export default function MetricDetailModal({ metric, allMetrics = [], onClose }) 
                 <Line
                   yAxisId="a" type="monotone" dataKey="a" name={metric.name}
                   stroke={CHART.line} strokeWidth={2.5} dot={{ r: 2 }} activeDot={{ r: 4 }}
-                  connectNulls isAnimationActive={false}
+                  connectNulls isAnimationActive animationDuration={800} animationEasing="ease-out"
                 />
                 {overlayMetric && (
                   <Line
                     yAxisId="b" type="monotone" dataKey="b" name={overlayMetric.name}
                     stroke={overlayColor} strokeWidth={2} strokeDasharray="5 3" dot={{ r: 2 }} activeDot={{ r: 4 }}
-                    connectNulls isAnimationActive={false}
+                    connectNulls isAnimationActive animationDuration={800} animationEasing="ease-out"
                   />
                 )}
               </LineChart>
