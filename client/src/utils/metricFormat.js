@@ -35,6 +35,29 @@ export function formatValueUnit(value, { unit = '', decimals = 1 } = {}) {
   return { text: formatNumber(value, decimals), unit };
 }
 
+// One string for a measured value in its unit — so a duration is NEVER shown as
+// a raw decimal: "HH:MM" habits render as "8:16", hour units as "8 h 30 min",
+// everything else as "value unit". Integers stay clean ("3", not "3,0"); pass
+// `decimals` to force a precision. Use this anywhere a value + unit is shown.
+export function formatMeasure(value, unit = '', decimals) {
+  if (value == null || value === '' || !Number.isFinite(+value)) return '–';
+  const v = +value;
+  if (isHmUnit(unit)) return formatHM(v);
+  if (isHoursUnit(unit)) return formatHoursMinutes(v);
+  const num = decimals == null
+    ? v.toLocaleString('de-DE', { maximumFractionDigits: 1 })
+    : formatNumber(v, decimals);
+  return unit ? `${num} ${unit}` : num;
+}
+
+// "current / target unit" with the unit shown once — durations formatted, plain
+// units kept compact ("3 / 3 Mal", "8:16 / 8:00", "7 h 30 min / 8 h").
+export function formatRatio(current, target, unit = '') {
+  if (isHmUnit(unit)) return `${formatHM(+current)} / ${formatHM(+target)}`;
+  if (isHoursUnit(unit)) return `${formatHoursMinutes(+current)} / ${formatHoursMinutes(+target)}`;
+  return `${current} / ${target}${unit ? ` ${unit}` : ''}`;
+}
+
 // The special "duration as HH:MM" unit for habits. The value is a DURATION in
 // HOURS (fractional) — the same unit the health metrics and goals use, so a
 // sleep habit auto-filled with 8.2667 h and a goal of "8" line up — and it is

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { isHoursUnit, formatNumber, formatHoursMinutes, formatValueUnit, isHmUnit, formatHM, parseHM, hoursToTimeInput } from '../utils/metricFormat';
+import { isHoursUnit, formatNumber, formatHoursMinutes, formatValueUnit, isHmUnit, formatHM, parseHM, hoursToTimeInput, formatMeasure } from '../utils/metricFormat';
 import { weekKey, weekLabel, markWeekStarts } from '../utils/weekGroups';
 
 describe('metricFormat', () => {
@@ -37,6 +37,14 @@ describe('metricFormat', () => {
     expect(formatHM(8)).toBe('8:00');
     expect(formatHM(0.0833333)).toBe('0:05');
     expect(formatHM(null)).toBe('–');
+  });
+
+  it('formatMeasure never shows a duration as a raw decimal', () => {
+    expect(formatMeasure(8.266666666666667, 'HH:MM')).toBe('8:16'); // duration habit
+    expect(formatMeasure(7.5, 'h')).toBe('7 h 30 min');             // hour metric
+    expect(formatMeasure(52, 'bpm', 0)).toBe('52 bpm');            // plain unit
+    expect(formatMeasure(3, '')).toBe('3');
+    expect(formatMeasure(null, 'HH:MM')).toBe('–');
   });
 
   it('round-trips HH:MM input through hours', () => {
