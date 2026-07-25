@@ -185,12 +185,12 @@ describe('Planner – Plan für mehrere Tage anlegen', () => {
     render(<MemoryRouter><Planner /></MemoryRouter>);
     await screen.findByText('Wasser trinken');
 
-    // Open the add modal on Monday (first day column)
+    // Open the add modal on the first day row — today (Wed 15.) leads the week
     await user.click(screen.getAllByLabelText('Plan hinzufügen')[0]);
     await screen.findByText('Tage');
 
-    // Monday is preselected — additionally select Wednesday
-    await user.click(screen.getByRole('button', { name: 'Mi. 15.' }));
+    // Wednesday (today) is preselected — additionally select Monday
+    await user.click(screen.getByRole('button', { name: 'Mo. 13.' }));
     await user.click(screen.getByRole('button', { name: 'Speichern' }));
 
     await waitFor(() => expect(posted.length).toBe(2));
@@ -213,7 +213,8 @@ describe('Planner – Plan bearbeiten', () => {
     render(<MemoryRouter><Planner /></MemoryRouter>);
     await screen.findByText('Wasser trinken');
 
-    await user.click(screen.getAllByLabelText('Plan bearbeiten')[0]);
+    // Rows lead with today (Wed 15.), so Monday's plan (ap1) is the 3rd edit button
+    await user.click(screen.getAllByLabelText('Plan bearbeiten')[2]);
     expect(await screen.findByText('Plan bearbeiten')).toBeInTheDocument();
 
     const dateInput = screen.getByDisplayValue('2026-07-13');
@@ -238,8 +239,8 @@ describe('Planner – Plan bearbeiten', () => {
     render(<MemoryRouter><Planner /></MemoryRouter>);
     await screen.findByText('Wasser trinken');
 
-    // Third edit button belongs to the Thursday habit plan
-    await user.click(screen.getAllByLabelText('Plan bearbeiten')[2]);
+    // With today (Wed 15.) first, the Thursday habit plan is the 2nd edit button
+    await user.click(screen.getAllByLabelText('Plan bearbeiten')[1]);
     expect(await screen.findByText('Plan bearbeiten')).toBeInTheDocument();
 
     fireEvent.change(screen.getByPlaceholderText('Optional…'), { target: { value: 'Große Flasche' } });
