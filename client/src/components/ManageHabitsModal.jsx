@@ -481,6 +481,9 @@ export default function ManageHabitsModal({ onSave, onClose, initialShowAdd = fa
   const [showTrash, setShowTrash] = useState(false);
   const [saving, setSaving] = useState(false);
   const [addingSaving, setAddingSaving] = useState(false);
+  // A submit attempt with a missing name/unit marks those fields instead of
+  // failing silently.
+  const [addAttempted, setAddAttempted] = useState(false);
   const [lastCreated, setLastCreated] = useState(null);
   // Reference lists for event-trigger schedules ("nach/vor XY")
   const [activityTypes, setActivityTypes] = useState([]);
@@ -524,7 +527,7 @@ export default function ManageHabitsModal({ onSave, onClose, initialShowAdd = fa
   const handleAddHabit = async (e) => {
     e.preventDefault();
     const isBoolean = newHabit.type === 'boolean';
-    if (!newHabit.name.trim() || (!isBoolean && !newHabit.unitSymbol.trim())) return;
+    if (!newHabit.name.trim() || (!isBoolean && !newHabit.unitSymbol.trim())) { setAddAttempted(true); return; }
     setAddingSaving(true);
     try {
       const payload = {
@@ -633,6 +636,7 @@ export default function ManageHabitsModal({ onSave, onClose, initialShowAdd = fa
               <Field label="Name">
                 <Input
                   value={newHabit.name}
+                  invalid={addAttempted && !newHabit.name.trim()}
                   onChange={e => setNewHabit(h => ({ ...h, name: e.target.value }))}
                   placeholder="z.B. Vitamine, Stretching …"
                   autoFocus
@@ -655,6 +659,7 @@ export default function ManageHabitsModal({ onSave, onClose, initialShowAdd = fa
                   <Field label="Einheit">
                     <Input
                       value={newHabit.unitSymbol}
+                      invalid={addAttempted && !newHabit.unitSymbol.trim()}
                       onChange={e => setNewHabit(h => ({ ...h, unitSymbol: e.target.value }))}
                       placeholder="z.B. ml, g, Stück"
                       required

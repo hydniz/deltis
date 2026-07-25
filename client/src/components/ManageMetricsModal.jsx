@@ -28,6 +28,7 @@ export default function ManageMetricsModal({ onClose, onChanged }) {
   const [showCustom, setShowCustom] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
+  const [attempted, setAttempted] = useState(false); // marks an empty name on submit
   const [editing, setEditing] = useState(null); // id being edited
   const [editForm, setEditForm] = useState({ name: '', unit: '' });
 
@@ -60,6 +61,7 @@ export default function ManageMetricsModal({ onClose, onChanged }) {
 
   const createCustom = async (e) => {
     e.preventDefault();
+    if (!form.name.trim()) { setAttempted(true); return; }
     setBusy(true);
     setError('');
     try {
@@ -190,7 +192,7 @@ export default function ManageMetricsModal({ onClose, onChanged }) {
         ) : (
           <form onSubmit={createCustom} className="panel p-4 space-y-3">
             <Field label="Bezeichnung">
-              <Input value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} placeholder="z. B. Ruhepuls" autoFocus />
+              <Input value={form.name} invalid={attempted && !form.name.trim()} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} placeholder="z. B. Ruhepuls" autoFocus />
             </Field>
             <div className="grid grid-cols-2 gap-3">
               <Field label="Einheit">
@@ -216,7 +218,7 @@ export default function ManageMetricsModal({ onClose, onChanged }) {
               </Field>
             </div>
             <div className="flex gap-2">
-              <Button type="submit" loading={busy} disabled={!form.name.trim()}>Anlegen</Button>
+              <Button type="submit" loading={busy}>Anlegen</Button>
               <Button type="button" variant="ghost" onClick={() => { setShowCustom(false); setForm(EMPTY); }}>Abbrechen</Button>
             </div>
           </form>

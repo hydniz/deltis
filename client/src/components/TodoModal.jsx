@@ -83,6 +83,9 @@ export default function TodoModal({ todo, sources = {}, onSaved, onClose }) {
   const [s, setS] = useState(() => stateFrom(todo));
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
+  // A submit attempt with an empty required field marks the field (see below)
+  // rather than showing a separate error message.
+  const [attempted, setAttempted] = useState(false);
   const set = (patch) => setS(prev => ({ ...prev, ...patch }));
 
   const { habits = [], activityTypes = [], trainingTypes = [], todos = [], sportTypes = [] } = sources;
@@ -95,7 +98,7 @@ export default function TodoModal({ todo, sources = {}, onSaved, onClose }) {
   const directionFixed = DIRECTION_FIXED[s.triggerKind];
 
   const submit = async () => {
-    if (!s.title.trim()) { setError('Titel ist erforderlich.'); return; }
+    if (!s.title.trim()) { setAttempted(true); return; }
     setSaving(true);
     setError('');
     try {
@@ -121,7 +124,7 @@ export default function TodoModal({ todo, sources = {}, onSaved, onClose }) {
     >
       <div className="space-y-4">
         <Field label="Titel">
-          <Input value={s.title} onChange={e => { set({ title: e.target.value }); setError(''); }} placeholder="z. B. Rechnung bezahlen" autoFocus />
+          <Input value={s.title} invalid={attempted && !s.title.trim()} onChange={e => { set({ title: e.target.value }); setError(''); }} placeholder="z. B. Rechnung bezahlen" autoFocus />
         </Field>
 
         <Field label="Notiz" optional>
