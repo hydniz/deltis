@@ -18,6 +18,15 @@ const metricLogSchema = new mongoose.Schema({
 
   source: { type: String, default: 'manual' },  // 'manual' | 'health' | 'import'
   sourceId: { type: String, default: null },     // Health Connect record id for imports
+
+  // Which platform/device this reading came from, so the per-metric source
+  // policy can include/exclude sources and the merge can de-duplicate overlaps
+  // (see services/healthMetrics + the source-policy engine). `origin` is the
+  // writing app's package (e.g. Samsung Health, Garmin); `deviceId` the phone
+  // that synced it. Empty for manual entries and pre-migration imports.
+  origin: { type: String, default: '' },
+  deviceId: { type: String, default: '' },
+
   createdAt: { type: Date, default: Date.now },
 });
 

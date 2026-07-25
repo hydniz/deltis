@@ -60,6 +60,35 @@ function publicConnection(connection) {
   };
 }
 
+// A compact per-device summary for the web status view (which lists every phone
+// that syncs, but no longer offers type selection — that lives in the app).
+function deviceSummary(c) {
+  return {
+    deviceId: c.deviceId,
+    deviceName: c.deviceName,
+    platform: c.platform,
+    appVersion: c.appVersion,
+    enabledTypes: c.enabledTypes,
+    backfillDays: c.backfillDays,
+    lastSyncAt: c.lastSyncAt,
+    lastSyncCounts: c.lastSyncCounts,
+    createdAt: c.createdAt,
+  };
+}
+
+async function listDevices(userId) {
+  const conns = await HealthConnection.find({ userId }).sort({ createdAt: 1 });
+  return conns.map(deviceSummary);
+}
+
+// Which connection a request acts on. New companions pass their own deviceId;
+// older ones (and the web status view) omit it → the user's oldest connection,
+// so previous single-device behaviour is unchanged.
+async function resolveConnection(userId, deviceId) {
+  if (deviceId) return HealthConnection.findOne({ userId, deviceId: String(deviceId) });
+  return HealthConnection.findOne({ userId }).sort({ createdAt: 1 });
+}
+
 // Which origins the app must skip, derived from what Deltis ACTUALLY ingests
 // server-side right now. A static list is a data-loss bug: a user who records
 // with Strava but never linked it to Deltis would have every GPS activity
@@ -90,7 +119,8 @@ async function metricTargetsFor(userId) {
 router.get('/config', auth, async (req, res) => {
   try {
     const excludedOrigins = await effectiveExcludedOrigins(req.user._id);
-    const connection = await HealthConnection.findOne({ userId: req.user._id });
+    const devices = await listDevices(req.user._id);
+    const connection = await resolveConnection(req.user._id, req.query.deviceId);
     if (!connection) {
       return res.json({
         connected: false,
@@ -98,6 +128,7 @@ router.get('/config', auth, async (req, res) => {
         enabledTypes: [],
         backfillDays: HealthConnection.DEFAULT_BACKFILL_DAYS,
         excludedOrigins,
+        devices,
         minBackfillDays: HealthConnection.MIN_BACKFILL_DAYS,
         maxBackfillDays: HealthConnection.MAX_BACKFILL_DAYS,
       });
@@ -105,6 +136,7 @@ router.get('/config', auth, async (req, res) => {
     res.json({
       ...publicConnection(connection),
       excludedOrigins,
+      devices,
       metricTargets: await metricTargetsFor(req.user._id),
     });
   } catch (err) {
@@ -122,11 +154,11 @@ router.post('/connect', auth, async (req, res) => {
       return res.status(400).json({ error: 'Geräte-ID fehlt.' });
     }
 
+    const did = String(deviceId).slice(0, 200);
     const connection = await HealthConnection.findOneAndUpdate(
-      { userId: req.user._id },
+      { userId: req.user._id, deviceId: did },
       {
         $set: {
-          deviceId: String(deviceId).slice(0, 200),
           deviceName: String(deviceName || '').slice(0, 100),
           platform: String(platform || 'android').slice(0, 40),
           appVersion: String(appVersion || '').slice(0, 40),
@@ -134,7 +166,7 @@ router.post('/connect', auth, async (req, res) => {
           backfillDays: HealthConnection.clampBackfillDays(
             backfillDays ?? HealthConnection.DEFAULT_BACKFILL_DAYS),
         },
-        $setOnInsert: { userId: req.user._id },
+        $setOnInsert: { userId: req.user._id, deviceId: did },
       },
       { upsert: true, new: true, setDefaultsOnInsert: true }
     );
@@ -152,7 +184,7 @@ router.post('/connect', auth, async (req, res) => {
 // Change which types are read and how far back.
 router.put('/config', auth, async (req, res) => {
   try {
-    const connection = await HealthConnection.findOne({ userId: req.user._id });
+    const connection = await resolveConnection(req.user._id, req.body.deviceId);
     if (!connection) return res.status(404).json({ error: 'Health Connect ist nicht verbunden.' });
 
     if (req.body.enabledTypes !== undefined) {
@@ -243,7 +275,7 @@ function isValidRecord(record) {
 // window can never create duplicates.
 router.post('/sync', auth, async (req, res) => {
   try {
-    const connection = await HealthConnection.findOne({ userId: req.user._id });
+    const connection = await resolveConnection(req.user._id, req.body.deviceId);
     if (!connection) return res.status(404).json({ error: 'Health Connect ist nicht verbunden.' });
 
     const activities = Array.isArray(req.body.activities) ? req.body.activities : [];
@@ -289,7 +321,8 @@ router.post('/sync', auth, async (req, res) => {
     // steps, hydration, …) route to the user's metrics. Records whose type has
     // no destination metric are reported in `metricResult.unmapped`.
     const definitions = await healthMetrics.healthDefinitionsFor(req.user._id);
-    const metricResult = await healthMetrics.mergeMetricRecords(req.user._id, metrics, definitions);
+    const metricResult = await healthMetrics.mergeMetricRecords(
+      req.user._id, metrics, definitions, { deviceId: connection.deviceId });
 
     // Write auto-filled habit values for the touched days so a habit bound to a
     // metric/activity actually shows its value (not just in the due engine).
@@ -353,13 +386,17 @@ router.get('/activities', auth, async (req, res) => {
   }
 });
 
-// Disconnect. Imported data is kept by default — `?purge=true` removes the
-// synced sessions as well (the weight log is never purged automatically).
+// Disconnect. With `?deviceId=` only that phone is removed; without it every
+// connection for the user is removed (the web "disconnect Health Connect"
+// button). Imported data is kept by default — `?purge=true` removes the synced
+// sessions as well (the weight log is never purged automatically).
 router.delete('/connect', auth, async (req, res) => {
   try {
-    await HealthConnection.deleteOne({ userId: req.user._id });
+    const { deviceId, purge } = req.query;
+    if (deviceId) await HealthConnection.deleteOne({ userId: req.user._id, deviceId: String(deviceId) });
+    else await HealthConnection.deleteMany({ userId: req.user._id });
     let removed = 0;
-    if (req.query.purge === 'true') {
+    if (purge === 'true') {
       const result = await HealthActivity.deleteMany({ userId: req.user._id });
       removed = result.deletedCount || 0;
     }

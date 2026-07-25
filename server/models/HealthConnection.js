@@ -28,7 +28,10 @@ const MAX_BACKFILL_DAYS = 365;
 const DEFAULT_BACKFILL_DAYS = 30;
 
 const healthConnectionSchema = new mongoose.Schema({
-  userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true, unique: true },
+  // One document PER DEVICE now — a user can sync from several phones. The
+  // (userId, deviceId) pair is unique; see migration 005 which drops the old
+  // unique-on-userId index.
+  userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
 
   deviceId: { type: String, required: true },   // stable per install
   deviceName: { type: String, default: '' },    // "Pixel 8" — shown in settings
@@ -49,6 +52,9 @@ const healthConnectionSchema = new mongoose.Schema({
 
   createdAt: { type: Date, default: Date.now },
 });
+
+// One connection per (user, device). Replaces the old unique-on-userId index.
+healthConnectionSchema.index({ userId: 1, deviceId: 1 }, { unique: true });
 
 // Keeps the stored window inside the supported range regardless of caller.
 healthConnectionSchema.statics.clampBackfillDays = function (value) {
