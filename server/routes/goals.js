@@ -16,7 +16,7 @@ const trainingCriteria = require('../services/trainingCriteria');
 const MetricDefinition = require('../models/MetricDefinition');
 const MetricLog = require('../models/MetricLog');
 const metricAggregate = require('../services/metricAggregate');
-const { filterLogs } = require('../services/metricSources');
+const { resolveLogs } = require('../services/metricSources');
 
 // Metric-goal value selectors: how the readings collapse to one number for the
 // interval. 'value' uses the metric's own aggregation; the rest override it.
@@ -28,8 +28,8 @@ async function getMetricValueForGoal(selector, goal, userId, start, end) {
   const def = await MetricDefinition.findOne({ _id: goal.targetRef, userId }).lean();
   if (!def) return 0;
   const raw = await MetricLog.find({ userId, metricId: goal.targetRef, date: { $gte: start, $lte: end } })
-    .select('date value source origin deviceId').lean();
-  const logs = filterLogs(raw, def.sourcePolicy); // honour the metric's source policy
+    .select('date endTime value source origin deviceId').lean();
+  const logs = resolveLogs(raw, def); // policy filter + overlap dedup for sum metrics
   if (logs.length === 0) return 0;
   const round = v => Math.round(v * 100) / 100;
   const sel = selector && selector !== 'value' ? selector : null;
@@ -660,11 +660,11 @@ router.get('/:id/heatmap', auth, async (req, res) => {
 
     if (goal.targetRefModel === 'MetricDefinition') {
       const mDef = await MetricDefinition.findOne({ _id: goal.targetRef, userId: req.user._id })
-        .select('sourcePolicy').lean();
+        .select('sourcePolicy dayAggregation').lean();
       const rawM = await MetricLog.find({
         userId: req.user._id, metricId: goal.targetRef, date: { $gte: start, $lte: end },
-      }).select('date value source origin deviceId').lean();
-      const mLogs = filterLogs(rawM, mDef?.sourcePolicy);
+      }).select('date endTime value source origin deviceId').lean();
+      const mLogs = resolveLogs(rawM, mDef);
       for (const log of mLogs) add(log.date, metric === 'count' ? 1 : (log.value || 0));
       return res.json({ start, end, weeks, metric, unitSymbol: firstCond.unitSymbol, days });
     }

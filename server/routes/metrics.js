@@ -9,7 +9,7 @@ const MetricDefinition = require('../models/MetricDefinition');
 const MetricLog = require('../models/MetricLog');
 const catalog = require('../services/metricCatalog');
 const { latestValue, dailySeries } = require('../services/metricAggregate');
-const { filterLogs, distinctSources, appLabel } = require('../services/metricSources');
+const { resolveLogs, distinctSources, appLabel } = require('../services/metricSources');
 const HealthConnection = require('../models/HealthConnection');
 
 // Normalises a user-supplied source policy: mode + a bounded list of
@@ -98,9 +98,9 @@ function sanitizeDefinition(body) {
 // the list/dashboard, mirroring how /habits/definitions enriches.
 async function enrich(def, userId) {
   const raw = await MetricLog.find({ userId, metricId: def._id })
-    .sort({ date: -1 }).limit(60).select('date value source origin deviceId').lean();
-  // Only readings the metric's source policy admits count towards its value.
-  const logs = filterLogs(raw, def.sourcePolicy);
+    .sort({ date: -1 }).limit(120).select('date endTime value source origin deviceId').lean();
+  // Only readings the source policy admits + overlap-deduped for sum metrics.
+  const logs = resolveLogs(raw, def).sort((a, b) => new Date(b.date) - new Date(a.date));
   const chronological = [...logs].reverse();
   const today = new Date().toISOString().slice(0, 10);
   const todayMap = dailySeries(chronological.filter(l => l.date.toISOString().slice(0, 10) === today), def.dayAggregation);
@@ -136,8 +136,8 @@ router.get('/summary', auth, async (req, res) => {
     const defs = await MetricDefinition.find(query).sort({ order: 1, createdAt: 1 }).lean();
     const rows = await Promise.all(defs.map(async def => {
       const raw = await MetricLog.find({ userId: req.user._id, metricId: def._id })
-        .sort({ date: -1 }).limit(30).select('date value source origin deviceId').lean();
-      const logs = filterLogs(raw, def.sourcePolicy);
+        .sort({ date: -1 }).limit(60).select('date endTime value source origin deviceId').lean();
+      const logs = resolveLogs(raw, def).sort((a, b) => new Date(b.date) - new Date(a.date));
       return {
         metricId: String(def._id), key: def.key, name: def.name, unit: def.unit,
         icon: def.icon, color: def.color, direction: def.direction,
@@ -310,9 +310,10 @@ router.get('/:id/logs', auth, async (req, res) => {
       if (endDate) query.date.$lte = new Date(endDate);
     }
     const logs = await MetricLog.find(query).sort({ date: -1 }).limit(Math.min(+limit || 200, 1000));
-    // The chart/list reflects the effective value, so it shows only the sources
-    // the metric's policy admits.
-    res.json(filterLogs(logs.reverse(), def.sourcePolicy));
+    // The chart/list reflects the effective value: only the policy-admitted
+    // sources, overlap-deduped for sum metrics.
+    const resolved = resolveLogs(logs.map(l => l.toObject()), def);
+    res.json(resolved.sort((a, b) => new Date(a.date) - new Date(b.date)));
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

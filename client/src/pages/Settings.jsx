@@ -13,6 +13,7 @@ import {
 } from '../components/ui';
 import StravaCard from '../components/StravaCard';
 import HealthConnectCard from '../components/HealthConnectCard';
+import ActivitySourcesCard from '../components/ActivitySourcesCard';
 import TrainingTypesCard from '../components/TrainingTypesCard';
 import NavOrderEditor from '../components/NavOrderEditor';
 
@@ -604,6 +605,7 @@ function IntegrationsSection() {
     <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 items-start">
       <StravaCard />
       <HealthConnectCard />
+      <ActivitySourcesCard />
       <TrainingTypesCard />
     </div>
   );

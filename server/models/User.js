@@ -24,6 +24,11 @@ const userSchema = new mongoose.Schema({
   // Local time the companion nags about a todo still open today ('HH:MM').
   // Per-todo reminderTime overrides this; empty string disables the default.
   todoReminderTime: { type: String, default: '18:00' },
+  // Preferred order of activity sources (Health Connect writing-app packages,
+  // highest priority first). When two synced sessions describe the same workout,
+  // the higher-priority source is kept canonical (see services/activityMerge +
+  // activitySources). Empty = no preference (dedup falls back to richness).
+  activityOriginPriority: { type: [String], default: [] },
   // Incremented on every password change/reset. The JWT carries the value it
   // was issued with (`sv` claim); a mismatch invalidates the session, so a
   // stolen cookie dies the moment the password is changed.

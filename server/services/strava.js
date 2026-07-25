@@ -291,9 +291,11 @@ async function syncConnectionSince(connection, afterDate) {
   if (synced > 0) {
     try {
       const activityMerge = require('./activityMerge');
+      const originPriorities = await require('./activitySources').priorityMap(conn.userId);
       await activityMerge.reconcileUser(conn.userId, {
         start: new Date(afterDate.getTime() - 24 * 60 * 60 * 1000),
         end: new Date(Date.now() + 24 * 60 * 60 * 1000),
+        originPriorities,
       });
     } catch (err) {
       require('../utils/logger').warn(

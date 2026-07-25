@@ -197,7 +197,8 @@ router.delete('/connection', auth, async (req, res) => {
     let promoted = 0;
     try {
       const activityMerge = require('../services/activityMerge');
-      ({ promoted } = await activityMerge.reconcileUser(req.user._id));
+      const originPriorities = await require('../services/activitySources').priorityMap(req.user._id);
+      ({ promoted } = await activityMerge.reconcileUser(req.user._id, { originPriorities }));
     } catch (err) {
       require('../utils/logger').warn(
         'strava', `Health-Reconciliation nach Trennung fehlgeschlagen: ${err.message}`);

@@ -14,6 +14,8 @@ const healthWeight = require('../services/healthWeight');
 const healthMetrics = require('../services/healthMetrics');
 const catalog = require('../services/metricCatalog');
 const MetricDefinition = require('../models/MetricDefinition');
+const User = require('../models/User');
+const activitySources = require('../services/activitySources');
 
 // Upper bound per request — the app pages through longer backfills.
 const MAX_RECORDS_PER_SYNC = 500;
@@ -344,6 +346,7 @@ router.post('/sync', auth, async (req, res) => {
       ? await activityMerge.reconcileUser(req.user._id, {
           start: new Date(Math.min(...times) - 24 * 60 * 60 * 1000),
           end: new Date(Math.max(...times) + 24 * 60 * 60 * 1000),
+          originPriorities: await activitySources.priorityMap(req.user._id),
         })
       : { checked: 0, superseded: 0, promoted: 0 };
 
@@ -381,6 +384,44 @@ router.get('/activities', auth, async (req, res) => {
       .sort({ startDate: -1 })
       .limit(Math.min(+limit || 100, 500));
     res.json(activities);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// The activity sources the user has synced, plus their saved preference order.
+// Feeds the "Aktivitäten-Quellen" card in Settings → Integrationen, which lets
+// the user rank sources so the higher one wins when the same workout arrives
+// from several platforms (see services/activitySources).
+router.get('/activity-sources', auth, async (req, res) => {
+  try {
+    const [sources, user] = await Promise.all([
+      activitySources.detectedSources(req.user._id),
+      User.findById(req.user._id).select('activityOriginPriority').lean(),
+    ]);
+    res.json({ sources, priority: (user && user.activityOriginPriority) || [] });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Save the activity-source preference order (highest priority first) and
+// immediately re-reconcile so the change is reflected without waiting for the
+// next sync. Best-effort reconcile — saving the preference must still succeed.
+router.put('/activity-sources', auth, async (req, res) => {
+  try {
+    const priority = Array.isArray(req.body.priority)
+      ? req.body.priority.filter(x => typeof x === 'string' && x).slice(0, 50)
+      : [];
+    await User.updateOne({ _id: req.user._id }, { $set: { activityOriginPriority: priority } });
+    try {
+      const originPriorities = await activitySources.priorityMap(req.user._id);
+      await activityMerge.reconcileUser(req.user._id, { originPriorities });
+    } catch (err) {
+      require('../utils/logger').warn(
+        'health', `Reconcile nach Quellen-Update fehlgeschlagen: ${err.message}`);
+    }
+    res.json({ success: true, priority });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

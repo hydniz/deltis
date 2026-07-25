@@ -124,16 +124,24 @@ async function computeAutoValues(userId, habits, days) {
     const [defs, logs] = await Promise.all([
       MetricDefinition.find({ userId, _id: { $in: metricIds } }).select('dayAggregation sourcePolicy').lean(),
       MetricLog.find({ userId, metricId: { $in: metricIds }, date: { $gte: rangeStart, $lte: rangeEnd } })
-        .select('metricId date value source origin deviceId').lean(),
+        .select('metricId date endTime value source origin deviceId').lean(),
     ]);
     const dayAggById = new Map(defs.map(d => [String(d._id), d.dayAggregation || 'last']));
-    const policyById = new Map(defs.map(d => [String(d._id), d.sourcePolicy]));
-    const byMetricDay = new Map(); // `metricId|day` -> [values]
+    const defById = new Map(defs.map(d => [String(d._id), d]));
+    // Resolve (source policy + overlap dedup) per metric, then bucket by day.
+    const logsByMetric = new Map();
     for (const log of logs) {
-      if (!metricSources.includeLog(log, policyById.get(String(log.metricId)))) continue;
-      const key = `${log.metricId}|${dayKey(log.date)}`;
-      if (!byMetricDay.has(key)) byMetricDay.set(key, []);
-      byMetricDay.get(key).push(log.value);
+      const k = String(log.metricId);
+      if (!logsByMetric.has(k)) logsByMetric.set(k, []);
+      logsByMetric.get(k).push(log);
+    }
+    const byMetricDay = new Map(); // `metricId|day` -> [values]
+    for (const [mid, mLogs] of logsByMetric) {
+      for (const log of metricSources.resolveLogs(mLogs, defById.get(mid))) {
+        const key = `${mid}|${dayKey(log.date)}`;
+        if (!byMetricDay.has(key)) byMetricDay.set(key, []);
+        byMetricDay.get(key).push(log.value);
+      }
     }
     for (const h of metricHabits) {
       const mode = dayAggById.get(h.autoSource.metricId) || 'last';
