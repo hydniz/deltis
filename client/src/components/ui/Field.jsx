@@ -25,16 +25,20 @@ export function Field({ label, hint, error, optional = false, children, classNam
   );
 }
 
-export const Input = forwardRef(function Input({ className = '', ...rest }, ref) {
-  return <input ref={ref} {...rest} className={`input ${className}`} />;
+// Red ring shown when a required field is left empty — used instead of a
+// separate error message so the user sees exactly which field to fill.
+const INVALID = '!border-red-400 ring-2 ring-red-300/60';
+
+export const Input = forwardRef(function Input({ className = '', invalid = false, ...rest }, ref) {
+  return <input ref={ref} aria-invalid={invalid || undefined} {...rest} className={`input ${invalid ? INVALID : ''} ${className}`} />;
 });
 
-export const Select = forwardRef(function Select({ className = '', children, ...rest }, ref) {
-  return <select ref={ref} {...rest} className={`input ${className}`}>{children}</select>;
+export const Select = forwardRef(function Select({ className = '', invalid = false, children, ...rest }, ref) {
+  return <select ref={ref} aria-invalid={invalid || undefined} {...rest} className={`input ${invalid ? INVALID : ''} ${className}`}>{children}</select>;
 });
 
-export const Textarea = forwardRef(function Textarea({ className = '', ...rest }, ref) {
-  return <textarea ref={ref} {...rest} className={`input resize-none ${className}`} />;
+export const Textarea = forwardRef(function Textarea({ className = '', invalid = false, ...rest }, ref) {
+  return <textarea ref={ref} aria-invalid={invalid || undefined} {...rest} className={`input resize-none ${invalid ? INVALID : ''} ${className}`} />;
 });
 
 // Password input with show/hide toggle — shared across login, settings,
