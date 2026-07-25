@@ -21,6 +21,7 @@ import StravaCriteriaBuilder, {
   normalizeCriteria, criteriaSummary, emptyGroup,
 } from '../components/StravaCriteriaBuilder';
 import GoalHeatmap from '../components/GoalHeatmap';
+import { formatMeasure, formatRatio } from '../utils/metricFormat';
 
 // Interval helpers
 
@@ -215,20 +216,24 @@ function GoalProgress({ goal, actions, childGoals = [], childActions }) {
 
   const renderConditionBar = (cond, idx) => {
     const { condition, currentValue, targetValue, unitSymbol, met: condMet } = cond;
+    // Duration values (HH:MM habits / hour units) go through formatMeasure so a
+    // goal never shows "8.2667 h" — same format as everywhere else.
+    const cur = formatMeasure(currentValue, unitSymbol);
+    const tgt = formatMeasure(targetValue, unitSymbol);
     let pct = 0, tone = 'danger', statusText = '';
     if (currentValue !== undefined) {
       if (condition === 'min') {
         pct = Math.min(100, (currentValue / targetValue) * 100);
         tone = 'auto';
-        statusText = pct >= 100 ? 'Erreicht' : `${currentValue} / ${targetValue}`;
+        statusText = pct >= 100 ? 'Erreicht' : formatRatio(currentValue, targetValue, unitSymbol);
       } else if (condition === 'max') {
         pct = currentValue <= targetValue ? 100 : Math.max(0, 100 - ((currentValue - targetValue) / targetValue) * 100);
         tone = currentValue <= targetValue ? 'success' : 'danger';
-        statusText = currentValue <= targetValue ? 'Im Zielbereich' : `${currentValue} (max. ${targetValue})`;
+        statusText = currentValue <= targetValue ? 'Im Zielbereich' : `${cur} (max. ${tgt})`;
       } else {
         pct = currentValue === targetValue ? 100 : (currentValue / targetValue) * 100;
         tone = currentValue === targetValue ? 'success' : 'warning';
-        statusText = `${currentValue} / ${targetValue}`;
+        statusText = formatRatio(currentValue, targetValue, unitSymbol);
       }
     }
 
@@ -241,8 +246,8 @@ function GoalProgress({ goal, actions, childGoals = [], childActions }) {
       <div key={idx} className="space-y-1.5">
         <div className="flex items-center justify-between text-xs gap-2">
           <span className="text-ink-500">
-            {metricLabel(cond.metric, customFields)} ({condLabel} {targetValue}{unitSymbol ? ` ${unitSymbol}` : ''}{scopeSuffix}):
-            {' '}<span className="text-ink-800 font-semibold">{currentValue} {unitSymbol}</span>
+            {metricLabel(cond.metric, customFields)} ({condLabel} {tgt}{scopeSuffix}):
+            {' '}<span className="text-ink-800 font-semibold">{cur}</span>
           </span>
           <span className={`font-semibold whitespace-nowrap ${condMet ? 'text-emerald-600' : pct >= 60 ? 'text-ocher-600' : 'text-red-600'}`}>
             {statusText}
@@ -358,7 +363,7 @@ function GoalProgress({ goal, actions, childGoals = [], childActions }) {
                   </span>
                   <span className={`ml-auto font-semibold whitespace-nowrap ${child.met ? 'text-emerald-600' : 'text-ink-400'}`}>
                     {hasPreview
-                      ? `${child.currentValue} / ${child.targetValue}${child.unitSymbol ? ` ${child.unitSymbol}` : ''}`
+                      ? formatRatio(child.currentValue, child.targetValue, child.unitSymbol)
                       : child.met ? 'Erfüllt' : 'Offen'}
                   </span>
                 </div>

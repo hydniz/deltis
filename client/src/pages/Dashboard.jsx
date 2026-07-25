@@ -14,7 +14,8 @@ import {
   Stat, Chip, chipColorFor, Input, Button, Skeleton, TONE_BUBBLE,
 } from '../components/ui';
 import { isDueOn, formatScheduleBadge } from '../utils/habitSchedule';
-import { formatValueUnit, isHmUnit, formatHM, parseHM, hoursToTimeInput } from '../utils/metricFormat';
+import { formatValueUnit, isHmUnit, formatHM } from '../utils/metricFormat';
+import DurationInput from '../components/DurationInput';
 import { meetsTarget, formatTarget } from '../utils/habitTarget';
 import { getSessionGreeting, splitGreeting } from '../utils/greetings';
 
@@ -131,11 +132,10 @@ function TodayHabitRow({ habit, log, onLog }) {
       ) : (
         <form onSubmit={handleSubmit} className="flex items-center gap-1.5 flex-shrink-0">
           {isHm ? (
-            <Input
-              type="time"
-              value={value === '' ? '' : hoursToTimeInput(value)}
-              onChange={e => setValue(e.target.value === '' ? '' : String(parseHM(e.target.value) ?? ''))}
-              className="!w-24 !py-1.5 !text-sm"
+            <DurationInput
+              value={value === '' ? '' : Number(value)}
+              onChange={v => setValue(v === '' ? '' : String(v))}
+              className="!w-40"
             />
           ) : (
             <Input

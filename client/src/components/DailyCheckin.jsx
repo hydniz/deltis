@@ -9,7 +9,8 @@ import { de } from 'date-fns/locale';
 import { Sparkles, Check, ChevronDown, ChevronUp } from 'lucide-react';
 import api from '../utils/api';
 import { useAuth } from '../contexts/AuthContext';
-import { isHmUnit, formatHM, parseHM, hoursToTimeInput } from '../utils/metricFormat';
+import { isHmUnit, formatHM } from '../utils/metricFormat';
+import DurationInput from './DurationInput';
 import { Modal, Button, Input } from './ui';
 
 const STORAGE_PREFIX = 'deltis.checkin';
@@ -67,11 +68,10 @@ function CheckinRow({ entry, onLogged }) {
           className="flex items-center gap-1.5"
         >
           {isHmUnit(entry.unitSymbol) ? (
-            <Input
-              type="time"
-              value={value === '' ? '' : hoursToTimeInput(value)}
-              onChange={e => setValue(e.target.value === '' ? '' : String(parseHM(e.target.value) ?? ''))}
-              className="!w-24 !py-1.5 !text-sm"
+            <DurationInput
+              value={value === '' ? '' : Number(value)}
+              onChange={v => setValue(v === '' ? '' : String(v))}
+              className="!w-40"
             />
           ) : (
             <Input
