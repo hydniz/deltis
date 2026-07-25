@@ -432,3 +432,61 @@ describe('error handling', () => {
     expect((await request(app).get('/api/metrics/catalog').set(authHeader(token))).status).toBe(500);
   });
 });
+
+// Per-metric multi-platform source selection (Phase 2).
+describe('metric source policy', () => {
+  const GARMIN = 'com.garmin.android.apps.connectmobile';
+  const SAMSUNG = 'com.sec.android.app.shealth';
+
+  async function metricWithSources(user) {
+    const def = await MetricDefinition.create({
+      userId: user._id, key: 'steps', name: 'Schritte', dayAggregation: 'sum', healthType: 'steps',
+    });
+    const d = new Date('2026-05-02T10:00:00Z');
+    await MetricLog.create({ userId: user._id, metricId: def._id, date: d, value: 5000, source: 'health', origin: GARMIN, deviceId: 'phone-a' });
+    await MetricLog.create({ userId: user._id, metricId: def._id, date: d, value: 4800, source: 'health', origin: SAMSUNG, deviceId: 'phone-b' });
+    await MetricLog.create({ userId: user._id, metricId: def._id, date: d, value: 100, source: 'manual', origin: '', deviceId: '' });
+    return def;
+  }
+
+  it('GET /:id/sources lists distinct platform sources with labels and the current policy', async () => {
+    const { token, user } = await createUser();
+    const def = await metricWithSources(user);
+    const res = await request(app).get(`/api/metrics/${def._id}/sources`).set(authHeader(token));
+    expect(res.status).toBe(200);
+    expect(res.body.policy.mode).toBe('all');
+    expect(res.body.sources).toHaveLength(2);
+    expect(res.body.sources.map(s => s.appLabel).sort()).toEqual(['Garmin Connect', 'Samsung Health']);
+  });
+
+  it('PUT /:id persists a source policy and drops empty entries', async () => {
+    const { token, user } = await createUser();
+    const def = await metricWithSources(user);
+    const res = await request(app).put(`/api/metrics/${def._id}`).set(authHeader(token)).send({
+      name: 'Schritte',
+      sourcePolicy: { mode: 'selected', sources: [{ deviceId: '', app: GARMIN }, { deviceId: '', app: '' }] },
+    });
+    expect(res.status).toBe(200);
+    const saved = await MetricDefinition.findById(def._id);
+    expect(saved.sourcePolicy.mode).toBe('selected');
+    expect(saved.sourcePolicy.sources).toHaveLength(1);
+    expect(saved.sourcePolicy.sources[0].app).toBe(GARMIN);
+  });
+
+  it('a selected policy filters excluded sources out of the log list (manual always kept)', async () => {
+    const { token, user } = await createUser();
+    const def = await metricWithSources(user);
+    await request(app).put(`/api/metrics/${def._id}`).set(authHeader(token)).send({
+      name: 'Schritte',
+      sourcePolicy: { mode: 'selected', sources: [{ deviceId: 'phone-a', app: GARMIN }] },
+    });
+    const res = await request(app).get(`/api/metrics/${def._id}/logs`).set(authHeader(token));
+    expect(res.body.map(l => l.value).sort((a, b) => a - b)).toEqual([100, 5000]);
+  });
+
+  it('404s for the sources of a missing metric', async () => {
+    const { token } = await createUser();
+    const res = await request(app).get('/api/metrics/64b000000000000000000000/sources').set(authHeader(token));
+    expect(res.status).toBe(404);
+  });
+});

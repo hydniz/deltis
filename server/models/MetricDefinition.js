@@ -25,6 +25,21 @@ const nameHistorySchema = new mongoose.Schema({
   validUntil: { type: Date, required: true },
 }, { _id: false });
 
+// Which platform sources feed this metric (the multi-platform merge). `mode`
+// 'all' takes every source (new ones auto-join, de-duplicated); 'selected'
+// takes only the listed ones. A source is a (deviceId, app) pair; an entry with
+// an empty deviceId is an APP WILDCARD — every device writing with that app —
+// which is how the user "aggregates by origin app across devices".
+const sourceRefSchema = new mongoose.Schema({
+  deviceId: { type: String, default: '' },
+  app: { type: String, default: '' },
+}, { _id: false });
+
+const sourcePolicySchema = new mongoose.Schema({
+  mode: { type: String, enum: ['all', 'selected'], default: 'all' },
+  sources: { type: [sourceRefSchema], default: [] },
+}, { _id: false });
+
 const metricDefinitionSchema = new mongoose.Schema({
   userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
 
@@ -57,6 +72,9 @@ const metricDefinitionSchema = new mongoose.Schema({
   // Import routing: which Health Connect type feeds this metric. At most one
   // metric per user may claim a given health type (unique partial index below).
   healthType: { type: String, default: null },
+
+  // Multi-platform source selection & merge policy (see sourcePolicySchema).
+  sourcePolicy: { type: sourcePolicySchema, default: () => ({ mode: 'all', sources: [] }) },
 
   // Set for built-in metrics seeded from the catalog/health types (holds the
   // template key); null for hand-created ones. Lets the UI mark them and keeps

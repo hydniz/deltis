@@ -12,6 +12,7 @@ const UserHabitSettings = require('../models/UserHabitSettings');
 const HabitLog = require('../models/HabitLog');
 const MetricDefinition = require('../models/MetricDefinition');
 const MetricLog = require('../models/MetricLog');
+const { includeLog } = require('./metricSources');
 const metricAggregate = require('./metricAggregate');
 const trainingCriteria = require('./trainingCriteria');
 
@@ -48,13 +49,15 @@ async function computeValues(userId, habits, days) {
   if (metricHabits.length) {
     const metricIds = [...new Set(metricHabits.map(h => h.metricId))];
     const [defs, logs] = await Promise.all([
-      MetricDefinition.find({ userId, _id: { $in: metricIds } }).select('dayAggregation').lean(),
+      MetricDefinition.find({ userId, _id: { $in: metricIds } }).select('dayAggregation sourcePolicy').lean(),
       MetricLog.find({ userId, metricId: { $in: metricIds }, date: { $gte: start, $lte: end } })
-        .select('metricId date value').lean(),
+        .select('metricId date value source origin deviceId').lean(),
     ]);
     const aggById = new Map(defs.map(d => [String(d._id), d.dayAggregation || 'last']));
+    const policyById = new Map(defs.map(d => [String(d._id), d.sourcePolicy]));
     const byMetricDay = new Map();
     for (const l of logs) {
+      if (!includeLog(l, policyById.get(String(l.metricId)))) continue; // honour source policy
       const k = `${l.metricId}|${dayKey(l.date)}`;
       if (!byMetricDay.has(k)) byMetricDay.set(k, []);
       byMetricDay.get(k).push(l.value);
