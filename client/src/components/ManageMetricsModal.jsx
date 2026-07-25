@@ -6,6 +6,7 @@ import api from '../utils/api';
 import { Plus, Check, Trash2, Pencil, Sparkles, Cloud } from 'lucide-react';
 import { Button, Field, Input, Select, Toggle, Modal, IconButton, Spinner, Alert } from './ui';
 import MetricSourceHelp from './MetricSourceHelp';
+import MetricSourcesEditor from './MetricSourcesEditor';
 
 const VALUE_TYPES = [
   { value: 'number', label: 'Zahl' },
@@ -131,6 +132,11 @@ export default function ManageMetricsModal({ onClose, onChanged }) {
                     <Field label="Einheit">
                       <Input value={editForm.unit} onChange={e => setEditForm(f => ({ ...f, unit: e.target.value }))} placeholder="bpm, %, ml …" className="w-full" aria-label="Einheit" />
                     </Field>
+                    {m.healthType && (
+                      <Field label="Datenquellen" hint="Welche Plattformen fließen in diesen Messwert ein.">
+                        <MetricSourcesEditor metricId={m._id} />
+                      </Field>
+                    )}
                     <div className="flex gap-2">
                       <Button size="sm" loading={busy} onClick={() => saveEdit(m._id)}>Sichern</Button>
                       <Button size="sm" variant="ghost" onClick={() => setEditing(null)}>Abbrechen</Button>

@@ -9,6 +9,22 @@ const MetricDefinition = require('../models/MetricDefinition');
 const MetricLog = require('../models/MetricLog');
 const catalog = require('../services/metricCatalog');
 const { latestValue, dailySeries } = require('../services/metricAggregate');
+const { filterLogs, distinctSources, appLabel } = require('../services/metricSources');
+const HealthConnection = require('../models/HealthConnection');
+
+// Normalises a user-supplied source policy: mode + a bounded list of
+// (deviceId, app) source refs (empty entries dropped).
+function sanitizeSourcePolicy(raw) {
+  if (!raw || typeof raw !== 'object') return undefined;
+  const mode = raw.mode === 'selected' ? 'selected' : 'all';
+  const sources = Array.isArray(raw.sources)
+    ? raw.sources.slice(0, 50).map(s => ({
+        deviceId: String(s?.deviceId || '').slice(0, 200),
+        app: String(s?.app || '').slice(0, 200),
+      })).filter(s => s.deviceId || s.app)
+    : [];
+  return { mode, sources };
+}
 
 const { VALUE_TYPES, AGGREGATIONS, DIRECTIONS } = MetricDefinition;
 
@@ -81,8 +97,10 @@ function sanitizeDefinition(body) {
 // Enriches a definition with the current value and a light recent history for
 // the list/dashboard, mirroring how /habits/definitions enriches.
 async function enrich(def, userId) {
-  const logs = await MetricLog.find({ userId, metricId: def._id })
-    .sort({ date: -1 }).limit(60).select('date value source').lean();
+  const raw = await MetricLog.find({ userId, metricId: def._id })
+    .sort({ date: -1 }).limit(60).select('date value source origin deviceId').lean();
+  // Only readings the metric's source policy admits count towards its value.
+  const logs = filterLogs(raw, def.sourcePolicy);
   const chronological = [...logs].reverse();
   const today = new Date().toISOString().slice(0, 10);
   const todayMap = dailySeries(chronological.filter(l => l.date.toISOString().slice(0, 10) === today), def.dayAggregation);
@@ -117,8 +135,9 @@ router.get('/summary', auth, async (req, res) => {
     if (req.query.dashboard === 'true') query.showOnDashboard = true;
     const defs = await MetricDefinition.find(query).sort({ order: 1, createdAt: 1 }).lean();
     const rows = await Promise.all(defs.map(async def => {
-      const logs = await MetricLog.find({ userId: req.user._id, metricId: def._id })
-        .sort({ date: -1 }).limit(30).select('date value').lean();
+      const raw = await MetricLog.find({ userId: req.user._id, metricId: def._id })
+        .sort({ date: -1 }).limit(30).select('date value source origin deviceId').lean();
+      const logs = filterLogs(raw, def.sourcePolicy);
       return {
         metricId: String(def._id), key: def.key, name: def.name, unit: def.unit,
         icon: def.icon, color: def.color, direction: def.direction,
@@ -195,6 +214,10 @@ router.put('/:id', auth, async (req, res) => {
     if (out.name === '') errors.push('Name ist erforderlich.');
     if (errors.length) return res.status(400).json({ error: errors.join(' ') });
 
+    // The multi-platform source policy travels with the definition edit.
+    const policy = sanitizeSourcePolicy(req.body.sourcePolicy);
+    if (policy) out.sourcePolicy = policy;
+
     const renamed = (out.name && out.name !== current.name) || (out.unit != null && out.unit !== current.unit);
     const update = { $set: out };
     if (renamed) {
@@ -248,6 +271,30 @@ router.post('/:id/restore', auth, async (req, res) => {
   }
 });
 
+// The platform sources that have ever fed this metric (Health Connect app +
+// device), for the "Datenquellen" picker. Manual entries are not listed.
+router.get('/:id/sources', auth, async (req, res) => {
+  try {
+    const def = await MetricDefinition.findOne({ _id: req.params.id, userId: req.user._id });
+    if (!def) return res.status(404).json({ error: 'Messwert nicht gefunden.' });
+
+    const logs = await MetricLog.find({ userId: req.user._id, metricId: def._id, source: 'health' })
+      .select('origin deviceId source').limit(3000).lean();
+    const conns = await HealthConnection.find({ userId: req.user._id }).select('deviceId deviceName').lean();
+    const deviceName = new Map(conns.map(c => [c.deviceId, c.deviceName]));
+
+    const sources = distinctSources(logs).map(s => ({
+      deviceId: s.deviceId,
+      app: s.app,
+      appLabel: appLabel(s.app),
+      deviceName: deviceName.get(s.deviceId) || '',
+    }));
+    res.json({ policy: def.sourcePolicy || { mode: 'all', sources: [] }, sources });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // Readings, newest-requested-range first but returned chronologically — the
 // same ordering fix WeightLog documents (a naive ascending sort + limit returns
 // the OLDEST rows).
@@ -263,7 +310,9 @@ router.get('/:id/logs', auth, async (req, res) => {
       if (endDate) query.date.$lte = new Date(endDate);
     }
     const logs = await MetricLog.find(query).sort({ date: -1 }).limit(Math.min(+limit || 200, 1000));
-    res.json(logs.reverse());
+    // The chart/list reflects the effective value, so it shows only the sources
+    // the metric's policy admits.
+    res.json(filterLogs(logs.reverse(), def.sourcePolicy));
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

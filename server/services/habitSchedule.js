@@ -31,6 +31,7 @@ const MetricLog = require('../models/MetricLog');
 const TodoCompletion = require('../models/TodoCompletion');
 const Todo = require('../models/Todo');
 const metricAggregate = require('../services/metricAggregate');
+const metricSources = require('../services/metricSources');
 const trainingCriteria = require('../services/trainingCriteria');
 
 const MAX_OFFSET_DAYS = 30;
@@ -121,13 +122,15 @@ async function computeAutoValues(userId, habits, days) {
   if (metricHabits.length) {
     const metricIds = [...new Set(metricHabits.map(h => h.autoSource.metricId))];
     const [defs, logs] = await Promise.all([
-      MetricDefinition.find({ userId, _id: { $in: metricIds } }).select('dayAggregation').lean(),
+      MetricDefinition.find({ userId, _id: { $in: metricIds } }).select('dayAggregation sourcePolicy').lean(),
       MetricLog.find({ userId, metricId: { $in: metricIds }, date: { $gte: rangeStart, $lte: rangeEnd } })
-        .select('metricId date value').lean(),
+        .select('metricId date value source origin deviceId').lean(),
     ]);
     const dayAggById = new Map(defs.map(d => [String(d._id), d.dayAggregation || 'last']));
+    const policyById = new Map(defs.map(d => [String(d._id), d.sourcePolicy]));
     const byMetricDay = new Map(); // `metricId|day` -> [values]
     for (const log of logs) {
+      if (!metricSources.includeLog(log, policyById.get(String(log.metricId)))) continue;
       const key = `${log.metricId}|${dayKey(log.date)}`;
       if (!byMetricDay.has(key)) byMetricDay.set(key, []);
       byMetricDay.get(key).push(log.value);
