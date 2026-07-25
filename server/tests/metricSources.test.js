@@ -83,3 +83,78 @@ describe('sourceMatches', () => {
     expect(sourceMatches({ deviceId: '', app: '' }, health('x', 'y'))).toBe(true);
   });
 });
+
+// Interval-level de-duplication (Phase 3): overlapping platform sources are
+// never double-counted; disjoint ones are summed.
+const { resolveLogs } = require('../services/metricSources');
+const { dailySeries } = require('../services/metricAggregate');
+
+const iv = (origin, device, value, s, e) =>
+  ({ source: 'health', origin, deviceId: device, value, date: new Date(s), endTime: new Date(e) });
+const dailyTotal = (origin, device, value, day) =>
+  ({ source: 'health', origin, deviceId: device, value, date: new Date(day), endTime: null });
+const manualLog = (value, day) => ({ source: 'manual', origin: '', deviceId: '', value, date: new Date(day), endTime: null });
+
+const sumDef = (policy) => ({ dayAggregation: 'sum', sourcePolicy: policy });
+const daySum = (logs) => [...dailySeries(logs, 'sum').values()].reduce((a, b) => a + b, 0);
+
+describe('resolveLogs — interval dedup for sum metrics', () => {
+  it('does nothing for non-sum metrics beyond the source filter', () => {
+    const logs = [iv('com.garmin', 'a', 5000, '2026-05-01T08:00:00Z', '2026-05-01T09:00:00Z')];
+    const out = resolveLogs(logs, { dayAggregation: 'last', sourcePolicy: { mode: 'all' } });
+    expect(out).toHaveLength(1);
+  });
+
+  it('keeps a single source untouched', () => {
+    const logs = [
+      iv('com.garmin', 'a', 3000, '2026-05-01T06:00:00Z', '2026-05-01T10:00:00Z'),
+      iv('com.garmin', 'a', 2000, '2026-05-01T18:00:00Z', '2026-05-01T20:00:00Z'),
+    ];
+    expect(daySum(resolveLogs(logs, sumDef({ mode: 'all' })))).toBe(5000);
+  });
+
+  it('drops the lower-priority source when two overlap (no double count)', () => {
+    const logs = [
+      iv('com.garmin', 'a', 5000, '2026-05-01T08:00:00Z', '2026-05-01T09:00:00Z'),
+      iv('com.sec', 'b', 4800, '2026-05-01T08:00:00Z', '2026-05-01T09:00:00Z'),
+    ];
+    const policy = { mode: 'selected', sources: [{ deviceId: '', app: 'com.garmin' }, { deviceId: '', app: 'com.sec' }] };
+    const out = resolveLogs(logs, sumDef(policy));
+    expect(daySum(out)).toBe(5000);           // Garmin wins (listed first)
+    expect(out.every(l => l.origin === 'com.garmin')).toBe(true);
+  });
+
+  it('sums disjoint sources (Garmin morning + another watch evening)', () => {
+    const logs = [
+      iv('com.garmin', 'a', 3000, '2026-05-01T06:00:00Z', '2026-05-01T10:00:00Z'),
+      iv('com.sec', 'b', 4000, '2026-05-01T14:00:00Z', '2026-05-01T18:00:00Z'),
+    ];
+    expect(daySum(resolveLogs(logs, sumDef({ mode: 'all' })))).toBe(7000);
+  });
+
+  it('interval readings supersede a daily-total reading on the same day', () => {
+    const logs = [
+      iv('com.garmin', 'a', 5000, '2026-05-01T08:00:00Z', '2026-05-01T09:00:00Z'),
+      dailyTotal('com.sec', 'b', 9999, '2026-05-01T12:00:00Z'),
+    ];
+    expect(daySum(resolveLogs(logs, sumDef({ mode: 'all' })))).toBe(5000);
+  });
+
+  it('keeps only the highest-priority source among competing daily totals', () => {
+    const logs = [
+      dailyTotal('com.garmin', 'a', 5000, '2026-05-01T12:00:00Z'),
+      dailyTotal('com.sec', 'b', 4800, '2026-05-01T12:00:00Z'),
+    ];
+    const policy = { mode: 'selected', sources: [{ deviceId: '', app: 'com.sec' }, { deviceId: '', app: 'com.garmin' }] };
+    expect(daySum(resolveLogs(logs, sumDef(policy)))).toBe(4800); // Samsung listed first
+  });
+
+  it('always adds manual entries on top of the deduped platform value', () => {
+    const logs = [
+      iv('com.garmin', 'a', 5000, '2026-05-01T08:00:00Z', '2026-05-01T09:00:00Z'),
+      iv('com.sec', 'b', 4800, '2026-05-01T08:00:00Z', '2026-05-01T09:00:00Z'),
+      manualLog(200, '2026-05-01T20:00:00Z'),
+    ];
+    expect(daySum(resolveLogs(logs, sumDef({ mode: 'all' })))).toBe(5200); // 5000 (one source) + 200 manual
+  });
+});

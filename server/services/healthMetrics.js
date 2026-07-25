@@ -81,6 +81,9 @@ async function mergeMetricRecords(userId, records, definitions, { deviceId = '' 
           $set: {
             date: new Date(rec.time), value: rec.value, metricVersion: def.version,
             origin: rec.origin || '', deviceId: String(deviceId || ''),
+            // Interval readings (steps/distance buckets) carry an end; point
+            // readings leave it null.
+            endTime: rec.endTime ? new Date(rec.endTime) : null,
           },
           $setOnInsert: { userId, metricId: def._id, source: SOURCE, sourceId: String(rec.id) },
         },

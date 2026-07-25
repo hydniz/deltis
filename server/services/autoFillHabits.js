@@ -12,7 +12,7 @@ const UserHabitSettings = require('../models/UserHabitSettings');
 const HabitLog = require('../models/HabitLog');
 const MetricDefinition = require('../models/MetricDefinition');
 const MetricLog = require('../models/MetricLog');
-const { includeLog } = require('./metricSources');
+const { resolveLogs } = require('./metricSources');
 const metricAggregate = require('./metricAggregate');
 const trainingCriteria = require('./trainingCriteria');
 
@@ -51,16 +51,24 @@ async function computeValues(userId, habits, days) {
     const [defs, logs] = await Promise.all([
       MetricDefinition.find({ userId, _id: { $in: metricIds } }).select('dayAggregation sourcePolicy').lean(),
       MetricLog.find({ userId, metricId: { $in: metricIds }, date: { $gte: start, $lte: end } })
-        .select('metricId date value source origin deviceId').lean(),
+        .select('metricId date endTime value source origin deviceId').lean(),
     ]);
     const aggById = new Map(defs.map(d => [String(d._id), d.dayAggregation || 'last']));
-    const policyById = new Map(defs.map(d => [String(d._id), d.sourcePolicy]));
-    const byMetricDay = new Map();
+    const defById = new Map(defs.map(d => [String(d._id), d]));
+    // Resolve (source policy + overlap dedup) per metric, then bucket by day.
+    const logsByMetric = new Map();
     for (const l of logs) {
-      if (!includeLog(l, policyById.get(String(l.metricId)))) continue; // honour source policy
-      const k = `${l.metricId}|${dayKey(l.date)}`;
-      if (!byMetricDay.has(k)) byMetricDay.set(k, []);
-      byMetricDay.get(k).push(l.value);
+      const k = String(l.metricId);
+      if (!logsByMetric.has(k)) logsByMetric.set(k, []);
+      logsByMetric.get(k).push(l);
+    }
+    const byMetricDay = new Map();
+    for (const [mid, mLogs] of logsByMetric) {
+      for (const l of resolveLogs(mLogs, defById.get(mid))) {
+        const k = `${mid}|${dayKey(l.date)}`;
+        if (!byMetricDay.has(k)) byMetricDay.set(k, []);
+        byMetricDay.get(k).push(l.value);
+      }
     }
     for (const h of metricHabits) {
       const mode = aggById.get(h.metricId) || 'last';

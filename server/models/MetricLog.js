@@ -13,6 +13,11 @@ const metricLogSchema = new mongoose.Schema({
   metricVersion: { type: Number },              // like HabitLog.habitVersion
 
   date: { type: Date, required: true },
+  // For interval readings (steps/distance/calories buckets) the END of the
+  // interval, so overlapping windows from several platforms can be de-duplicated
+  // instead of summed. Null for point/daily readings (weight, resting HR, a
+  // daily total). `date` is always the interval START.
+  endTime: { type: Date, default: null },
   value: { type: Number, required: true },
   note: { type: String, default: '', maxlength: 200 },
 

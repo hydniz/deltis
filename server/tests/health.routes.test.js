@@ -832,4 +832,89 @@ describe('multi-device Health Connect', () => {
     expect(log.deviceId).toBe('phone-a');
     expect(log.value).toBe(58);
   });
+
+  it('stores the interval end for interval readings and null for point readings', async () => {
+    const { user, token } = await createUser();
+    await connect(token, { deviceId: 'phone-a' });
+    await MetricDefinition.create({
+      userId: user._id, key: 'steps', name: 'Schritte', unit: 'Schritte',
+      dayAggregation: 'sum', healthType: 'steps',
+    });
+    await MetricDefinition.create({
+      userId: user._id, key: 'rhr', name: 'Ruhepuls', unit: 'bpm',
+      dayAggregation: 'last', healthType: 'restingHeartRate',
+    });
+
+    await request(app).post('/api/health/sync').set(authHeader(token)).send({
+      deviceId: 'phone-a',
+      metrics: [
+        { type: 'steps', id: 's1', time: '2026-05-01T08:00:00.000Z', endTime: '2026-05-01T09:00:00.000Z', value: 1200, dataOrigin: 'com.garmin.android' },
+        { type: 'restingHeartRate', id: 'r1', time: '2026-05-01T06:00:00.000Z', value: 55 },
+      ],
+    });
+
+    const steps = await MetricLog.findOne({ userId: user._id, sourceId: 's1' });
+    expect(steps.endTime).toEqual(new Date('2026-05-01T09:00:00.000Z'));
+    const rhr = await MetricLog.findOne({ userId: user._id, sourceId: 'r1' });
+    expect(rhr.endTime).toBeNull();
+  });
+});
+
+describe('activity source priority', () => {
+  it('lists the detected sources and an empty priority initially', async () => {
+    const { token } = await createUser();
+    await connect(token, { enabledTypes: ['exercise'] });
+    await request(app).post('/api/health/sync').set(authHeader(token)).send({
+      activities: [
+        session({ id: 'g1', dataOrigin: 'com.garmin.android' }),
+        session({ id: 's1', dataOrigin: 'com.sec.android.app.shealth',
+          startTime: '2026-05-02T08:00:00.000Z', endTime: '2026-05-02T09:00:00.000Z' }),
+      ],
+    });
+
+    const res = await request(app).get('/api/health/activity-sources').set(authHeader(token));
+    expect(res.status).toBe(200);
+    expect(res.body.priority).toEqual([]);
+    expect(res.body.sources.map(s => s.origin).sort())
+      .toEqual(['com.garmin.android', 'com.sec.android.app.shealth']);
+    const samsung = res.body.sources.find(s => s.origin === 'com.sec.android.app.shealth');
+    expect(samsung.appLabel).toBe('Samsung Health');
+  });
+
+  it('saves the preference order and returns it', async () => {
+    const { token } = await createUser();
+    const order = ['com.sec.android.app.shealth', 'com.garmin.android'];
+    const put = await request(app).put('/api/health/activity-sources').set(authHeader(token)).send({ priority: order });
+    expect(put.status).toBe(200);
+    expect(put.body.priority).toEqual(order);
+
+    const res = await request(app).get('/api/health/activity-sources').set(authHeader(token));
+    expect(res.body.priority).toEqual(order);
+  });
+
+  it('coerces a non-array priority to empty', async () => {
+    const { token } = await createUser();
+    const put = await request(app).put('/api/health/activity-sources').set(authHeader(token)).send({ priority: 'nope' });
+    expect(put.status).toBe(200);
+    expect(put.body.priority).toEqual([]);
+  });
+
+  it('lets the saved priority decide which health source wins a duplicate', async () => {
+    const { user, token } = await createUser();
+    await connect(token, { enabledTypes: ['exercise'] });
+    // The same workout arrives from two apps at the same time.
+    await request(app).post('/api/health/sync').set(authHeader(token)).send({
+      activities: [
+        session({ id: 'g1', dataOrigin: 'com.garmin.android' }),
+        session({ id: 's1', dataOrigin: 'com.sec.android.app.shealth' }),
+      ],
+    });
+    // Prefer Samsung — the PUT re-reconciles immediately.
+    await request(app).put('/api/health/activity-sources').set(authHeader(token))
+      .send({ priority: ['com.sec.android.app.shealth', 'com.garmin.android'] });
+
+    const canonical = await HealthActivity.find({ userId: user._id, canonical: true });
+    expect(canonical).toHaveLength(1);
+    expect(canonical[0].dataOrigin).toBe('com.sec.android.app.shealth');
+  });
 });
