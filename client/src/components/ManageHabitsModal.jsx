@@ -8,9 +8,24 @@ import {
 } from './ui';
 import { WEEKDAYS, formatScheduleBadge } from '../utils/habitSchedule';
 import { TARGET_CONDITIONS } from '../utils/habitTarget';
+import { HM_UNIT } from '../utils/metricFormat';
 import { COMMON_SPORT_TYPES } from './StravaCriteriaBuilder';
 
 // Habit types: 'boolean' logs a simple done/not-done, the others a value.
+// Duration habits pick a format; HH:MM stores minutes and is entered as time.
+const DURATION_UNITS = [
+  { value: HM_UNIT, label: 'HH:MM' },
+  { value: 'min', label: 'Minuten' },
+  { value: 'h', label: 'Stunden' },
+];
+// When switching TO duration, default to HH:MM unless already a duration unit;
+// switching away from duration clears the unit for free entry.
+function defaultUnitFor(type, current) {
+  if (type === 'duration') return DURATION_UNITS.some(u => u.value === current) ? current : HM_UNIT;
+  if (DURATION_UNITS.some(u => u.value === current)) return '';
+  return current;
+}
+
 const TYPE_OPTIONS = [
   { value: 'amount', label: 'Menge' },
   { value: 'duration', label: 'Dauer' },
@@ -403,16 +418,22 @@ function HabitRow({ def, selected, onToggle, onDelete, onUpdate, triggerSources,
           </Field>
           <div className="grid grid-cols-2 gap-2">
             <Field label="Typ">
-              <Select value={form.type} onChange={e => setForm(f => ({ ...f, type: e.target.value }))}>
+              <Select value={form.type} onChange={e => setForm(f => ({ ...f, type: e.target.value, unitSymbol: defaultUnitFor(e.target.value, f.unitSymbol) }))}>
                 {TYPE_OPTIONS.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
               </Select>
             </Field>
-            {form.type !== 'boolean' && (
+            {form.type === 'duration' ? (
+              <Field label="Format">
+                <Select value={form.unitSymbol} onChange={e => setForm(f => ({ ...f, unitSymbol: e.target.value }))}>
+                  {DURATION_UNITS.map(u => <option key={u.value} value={u.value}>{u.label}</option>)}
+                </Select>
+              </Field>
+            ) : form.type !== 'boolean' && (
               <Field label="Einheit">
                 <Input
                   value={form.unitSymbol}
                   onChange={e => setForm(f => ({ ...f, unitSymbol: e.target.value }))}
-                  placeholder="z.B. min, ml"
+                  placeholder="z.B. ml, g"
                 />
               </Field>
             )}
@@ -620,16 +641,22 @@ export default function ManageHabitsModal({ onSave, onClose, initialShowAdd = fa
               </Field>
               <div className="grid grid-cols-2 gap-2">
                 <Field label="Typ">
-                  <Select value={newHabit.type} onChange={e => setNewHabit(h => ({ ...h, type: e.target.value }))}>
+                  <Select value={newHabit.type} onChange={e => setNewHabit(h => ({ ...h, type: e.target.value, unitSymbol: defaultUnitFor(e.target.value, h.unitSymbol) }))}>
                     {TYPE_OPTIONS.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
                   </Select>
                 </Field>
-                {newHabit.type !== 'boolean' && (
+                {newHabit.type === 'duration' ? (
+                  <Field label="Format">
+                    <Select value={newHabit.unitSymbol || HM_UNIT} onChange={e => setNewHabit(h => ({ ...h, unitSymbol: e.target.value }))}>
+                      {DURATION_UNITS.map(u => <option key={u.value} value={u.value}>{u.label}</option>)}
+                    </Select>
+                  </Field>
+                ) : newHabit.type !== 'boolean' && (
                   <Field label="Einheit">
                     <Input
                       value={newHabit.unitSymbol}
                       onChange={e => setNewHabit(h => ({ ...h, unitSymbol: e.target.value }))}
-                      placeholder="z.B. min, ml, Stück"
+                      placeholder="z.B. ml, g, Stück"
                       required
                     />
                   </Field>

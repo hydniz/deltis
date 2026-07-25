@@ -2,7 +2,7 @@ import { NavLink } from 'react-router-dom';
 import UserMenu from './UserMenu';
 import Logo from './Logo';
 import {
-  LayoutDashboard, Dumbbell, CalendarDays, Sparkles, Scale, Activity, Target,
+  LayoutDashboard, Dumbbell, CalendarDays, Sparkles, Scale, Activity, ListTodo, Target,
 } from 'lucide-react';
 
 // Main navigation shows content pages only. Einstellungen and the admin
@@ -12,6 +12,7 @@ const navItems = [
   { to: '/activities', icon: Dumbbell, label: 'Aktivitäten' },
   { to: '/planner', icon: CalendarDays, label: 'Planer' },
   { to: '/habits', icon: Sparkles, label: 'Gewohnheiten' },
+  { to: '/todos', icon: ListTodo, label: 'Aufgaben' },
   { to: '/weight', icon: Scale, label: 'Gewicht' },
   { to: '/metrics', icon: Activity, label: 'Messwerte' },
   { to: '/goals', icon: Target, label: 'Ziele' },

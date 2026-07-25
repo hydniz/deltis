@@ -54,6 +54,7 @@ function buildApp() {
   app.use('/api/strava', require('../../routes/strava'));
   app.use('/api/health', require('../../routes/health'));
   app.use('/api/metrics', require('../../routes/metrics'));
+  app.use('/api/todos', require('../../routes/todos'));
 
   return app;
 }

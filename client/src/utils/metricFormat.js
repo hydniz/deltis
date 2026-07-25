@@ -34,3 +34,32 @@ export function formatValueUnit(value, { unit = '', decimals = 1 } = {}) {
   if (isHoursUnit(unit)) return { text: formatHoursMinutes(value), unit: '' };
   return { text: formatNumber(value, decimals), unit };
 }
+
+// The special "duration as HH:MM" unit for habits: the value is stored in
+// MINUTES and entered/shown as H:MM.
+export const HM_UNIT = 'HH:MM';
+export function isHmUnit(unit) { return unit === HM_UNIT; }
+
+// Minutes → "1:30" (or "0:05"). Null-safe.
+export function formatHM(minutes) {
+  if (minutes == null || !Number.isFinite(minutes)) return '–';
+  const total = Math.round(minutes);
+  const h = Math.floor(total / 60);
+  const m = total % 60;
+  return `${h}:${String(m).padStart(2, '0')}`;
+}
+
+// "HH:MM" (from a time input) → minutes. Invalid → null.
+export function parseHM(value) {
+  if (typeof value !== 'string') return null;
+  const m = value.match(/^(\d{1,2}):(\d{2})$/);
+  if (!m) return null;
+  return parseInt(m[1], 10) * 60 + parseInt(m[2], 10);
+}
+
+// Minutes → "HH:MM" for a native time input's value.
+export function minutesToTimeInput(minutes) {
+  if (minutes == null || !Number.isFinite(minutes)) return '';
+  const total = Math.round(minutes);
+  return `${String(Math.floor(total / 60)).padStart(2, '0')}:${String(total % 60).padStart(2, '0')}`;
+}

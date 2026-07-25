@@ -138,10 +138,12 @@ router.put('/selection', auth, async (req, res) => {
 // ('before'); habits and activity types support both.
 function sanitizeScheduleTrigger(raw) {
   if (!raw || typeof raw !== 'object') return null;
-  const kind = ['habit', 'activityType', 'stravaSport', 'trainingType'].includes(raw.kind) ? raw.kind : null;
+  const kind = ['habit', 'activityType', 'stravaSport', 'trainingType', 'todo'].includes(raw.kind) ? raw.kind : null;
   if (!kind) return null;
   let direction = raw.direction === 'before' ? 'before' : 'after';
-  if (kind === 'stravaSport') direction = 'after';
+  // A Strava sport or a todo can only have HAPPENED; a training type is only
+  // meaningful as PLANNED.
+  if (kind === 'stravaSport' || kind === 'todo') direction = 'after';
   if (kind === 'trainingType') direction = 'before';
   const offsetDays = Math.min(Math.max(parseInt(raw.offsetDays, 10) || 0, 0), 30);
   if (kind === 'stravaSport') {

@@ -5,7 +5,7 @@ import UserMenu from './UserMenu';
 import Logo from './Logo';
 import DailyCheckin from './DailyCheckin';
 import {
-  LayoutDashboard, Dumbbell, CalendarDays, Sparkles, Scale, Activity, Target,
+  LayoutDashboard, Dumbbell, CalendarDays, Sparkles, Scale, Activity, ListTodo, Target,
   MoreHorizontal,
 } from 'lucide-react';
 
@@ -20,6 +20,7 @@ const mobilePrimary = [
 ];
 
 const mobileMore = [
+  { to: '/todos', icon: ListTodo, label: 'Aufgaben' },
   { to: '/weight', icon: Scale, label: 'Gewicht' },
   { to: '/metrics', icon: Activity, label: 'Messwerte' },
   { to: '/goals', icon: Target, label: 'Ziele' },

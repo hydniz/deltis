@@ -92,7 +92,7 @@ describe('ManageHabitsModal', () => {
 
     await user.click(await screen.findByText('Neue Gewohnheit hinzufügen'));
     await user.type(screen.getByPlaceholderText(/Vitamine, Stretching/), 'Lesen');
-    await user.type(screen.getByPlaceholderText('z.B. min, ml, Stück'), 'min');
+    await user.type(screen.getByPlaceholderText('z.B. ml, g, Stück'), 'min');
     // Schedule fields are right in the create form
     await user.click(screen.getByText('Wochentage'));
     await user.click(screen.getByRole('button', { name: 'Mo' }));

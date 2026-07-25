@@ -104,7 +104,9 @@ export default function DailyCheckin() {
     api.get('/habits/due', { params: { startDate: today, endDate: today } })
       .then(res => {
         if (cancelled) return;
-        const list = res.data || [];
+        // Auto-filled habits (bound to a metric/activity) are managed
+        // automatically and must not appear in the manual check-in.
+        const list = (res.data || []).filter(e => !e.autoFilled);
         const openEntries = list.filter(e => !(e.fulfilled ?? e.logged));
         if (openEntries.length === 0) {
           // Nothing to ask — mark the slot quietly, no dialog.
