@@ -159,7 +159,7 @@ describe('Planner – planned trainings', () => {
     render(<MemoryRouter><Planner /></MemoryRouter>);
 
     await waitFor(() => expect(screen.getAllByLabelText('Plan hinzufügen').length).toBe(7));
-    await user.click(screen.getAllByLabelText('Plan hinzufügen')[0]); // Monday
+    await user.click(screen.getAllByLabelText('Plan hinzufügen')[0]); // today (Wed 15.) leads the week
     await user.click(screen.getByRole('button', { name: 'Training' }));
 
     // Saved type is preselected; submit directly
@@ -167,7 +167,7 @@ describe('Planner – planned trainings', () => {
 
     await waitFor(() => expect(posted).not.toBeNull());
     expect(posted).toMatchObject({
-      scheduledDate: '2026-07-13',
+      scheduledDate: '2026-07-15',
       trainingTypeId: 'tt1',
     });
   });
