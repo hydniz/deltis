@@ -15,6 +15,12 @@ beforeAll(async () => {
 });
 
 afterEach(async () => {
+  // A started update/rollback runs DETACHED — the route answers immediately.
+  // Waiting for it here is what keeps the suite deterministic: otherwise its
+  // late failure path clears `updateInProgress` in the middle of a later test
+  // (reaching GitHub takes however long CI takes), and an assertion that an
+  // update is in progress sees it already finished.
+  await require('../routes/update')._inFlightRun();
   await clearDb();
   require('../routes/update')._resetState();
   require('../utils/config')._resetCache();
