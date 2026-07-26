@@ -43,15 +43,18 @@ pressure systolic + diastolic) render together.
 
 | Method | Path | Notes |
 |---|---|---|
-| `GET` | `/api/metrics/:id/logs` | `?startDate&endDate&limit` (max 1000), returned chronologically. |
+| `GET` | `/api/metrics/:id/series` | **One value per day** → `{ series: [{ date: 'YYYY-MM-DD', value }], truncated }`. `?days=N` (0 = everything, max 3650). Source policy + overlap dedup applied, then the metric's `dayAggregation`. This is what charts, sparklines and statistics read — an interval-backed metric stores hundreds of readings per day, so raw readings are the wrong granularity. `truncated: true` means the range hit the row cap and its oldest (partial) day was dropped. |
+| `GET` | `/api/metrics/:id/logs` | Raw readings. `?startDate&endDate&limit` (max 1000), returned chronologically. Bounded by row count, so for an interval-backed metric prefer `/series`. |
 | `POST` | `/api/metrics/:id/logs` | `{ value, date?, note? }`. Bounds enforced; date defaults to now. |
 | `PUT` | `/api/metrics/logs/:logId` | Edit `value`/`date`/`note`. |
 | `DELETE` | `/api/metrics/logs/:logId` | Remove a reading. |
 
 ## Dashboard
 
-`GET /api/metrics/summary` → one row per metric with its latest value.
-`?dashboard=true` limits to metrics flagged `showOnDashboard`.
+`GET /api/metrics/summary` → one row per metric with its current value — the
+newest **day**'s aggregate, not the newest raw reading (a step count is a day
+total, not the last interval bucket). `?dashboard=true` limits to metrics
+flagged `showOnDashboard`.
 
 ## Health Connect routing
 

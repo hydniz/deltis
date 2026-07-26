@@ -25,6 +25,11 @@
 //      MetricLog): any scalar from Health Connect or hand entry (body fat,
 //      resting HR, sleep, blood pressure, hydration, mood, …). Health Connect
 //      now advertises all metric types and /health/sync accepts `metrics[]`.
+// v17: day-aggregated metric series (GET /api/metrics/:id/series) — the charts
+//      need one value per day, which raw readings cannot express now that
+//      interval-backed metrics store hundreds of time buckets a day.
+//      /health/sync additionally accepts `deletions[]` (Health Connect record
+//      ids removed on the phone), which the incremental companion sync needs.
 //
 // This MUST equal the backend `apiVersion` shipped in the same release: the
 // compatibility check in App.jsx is a strict equality (`backendV ===
@@ -32,4 +37,4 @@
 // raises the amber version-conflict banner for every user of that build.
 // Frontend and backend ship together, so bump this in lockstep with
 // `apiVersion` in the root package.json.
-export const REQUIRED_API_VERSION = 16;
+export const REQUIRED_API_VERSION = 17;

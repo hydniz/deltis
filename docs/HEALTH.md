@@ -58,8 +58,58 @@ Ingestion is an upsert on that key, so:
 - an edited record (corrected distance) overwrites the stored one, because
   `lastModifiedTime` moves forward while `metadata.id` stays put.
 
-This makes the upload endpoint safely repeatable, which in turn lets the app be
-dumb about what it has already sent — it just re-sends the window.
+This makes the upload endpoint safely repeatable, which is what lets the app
+re-read a window whenever it is unsure — a replay can never duplicate.
+
+## Incremental sync
+
+The companion does **not** re-send its whole window on every run. Health Connect
+keeps a change stream per set of record types; the app holds a token into it and
+each sync uploads only what was added, edited or deleted since the last one.
+
+Re-sending everything was affordable while a metric was one daily aggregate, but
+interval readings (see below) turned a single sync into thousands of records.
+
+A full window read still happens in three cases, all of them idempotent:
+
+- the **first** sync, over the user's chosen backfill window,
+- whenever the set of synced data types **changes** — a token only covers the
+  types it was issued for, so the new type needs a backfill,
+- once a **day**, over the last few days, as a safety net.
+
+The token is always taken *before* the read it accompanies, so a record written
+while the read runs lands in the next incremental batch instead of the gap
+between the two.
+
+### Deletions
+
+An incremental sync never re-sends a record it already sent, so a reading the
+user deletes on their phone would otherwise count on the server forever. The app
+therefore posts the removed record ids as `deletions[]`, and `/health/sync`
+drops what was imported from them.
+
+Some readings carry a **derived** source id — one sleep session fans out into
+`<sessionId>-sleepDeep`, `<sessionId>-sleepRem`, … and one nutrition record into
+one id per nutrient. A deletion matches the id itself *or* anything prefixed with
+`<id>-`, so deleting the source record removes everything it produced.
+
+Deletions are applied after the upserts of the same batch, matching the order of
+the change stream. Hand-entered readings are never touched — only rows with
+`source: 'health'` and a matching `sourceId` are removed.
+
+### Interval readings
+
+Steps, distance, calories, hydration and nutrition are stored at the raw
+granularity Health Connect records them in — one row per time bucket, carrying
+`endTime` and the writing app — rather than as one total per day. That is what
+lets several platforms be merged without double-counting the minutes they both
+covered (`services/metricSources.resolveLogs`).
+
+The consequence for every read path: a day is **many rows**, not one. Anything
+that loads readings must bound them by **date**, never by row count, or it will
+silently report a fraction of a day. `GET /api/metrics/:id/series` exists for
+exactly this reason — it returns one aggregated value per day, which is what
+charts and cards actually want.
 
 ## Layer 3 — cross-source reconciliation on the server
 

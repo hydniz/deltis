@@ -162,6 +162,125 @@ describe('PUT /api/health/config', () => {
   });
 });
 
+// An incremental sync never re-sends a record it already sent, so a reading the
+// user deletes on their phone would otherwise keep counting on the server
+// forever. The companion reports the deleted ids instead.
+describe('POST /api/health/sync — deletions', () => {
+  const stepsSetup = async (token, user) => {
+    await connect(token, { enabledTypes: ['exercise', 'weight', 'steps'] });
+    const def = await MetricDefinition.findOne({ userId: user._id, healthType: 'steps' });
+    await request(app).post('/api/health/sync').set(authHeader(token)).send({
+      metrics: [
+        { type: 'steps', id: 'rec-a', time: '2026-05-01T08:00:00.000Z', endTime: '2026-05-01T09:00:00.000Z', value: 2000 },
+        { type: 'steps', id: 'rec-b', time: '2026-05-01T10:00:00.000Z', endTime: '2026-05-01T11:00:00.000Z', value: 500 },
+      ],
+    });
+    return def;
+  };
+
+  it('removes the readings imported from a deleted record', async () => {
+    const { token, user } = await createUser();
+    const def = await stepsSetup(token, user);
+    expect(await MetricLog.countDocuments({ userId: user._id, metricId: def._id })).toBe(2);
+
+    const res = await request(app).post('/api/health/sync').set(authHeader(token))
+      .send({ deletions: ['rec-a'] });
+
+    expect(res.status).toBe(200);
+    expect(res.body.deleted.metrics).toBe(1);
+    const left = await MetricLog.find({ userId: user._id, metricId: def._id });
+    expect(left.map(l => l.sourceId)).toEqual(['rec-b']);
+  });
+
+  it('removes readings whose id is DERIVED from the deleted record', async () => {
+    const { token, user } = await createUser();
+    await connect(token, { enabledTypes: ['exercise', 'weight', 'sleepDeep'] });
+    const def = await MetricDefinition.findOne({ userId: user._id, healthType: 'sleepDeep' });
+    await request(app).post('/api/health/sync').set(authHeader(token)).send({
+      metrics: [{ type: 'sleepDeep', id: 'sess-1-sleepDeep', time: '2026-05-02T06:00:00.000Z', value: 1.5 }],
+    });
+    expect(await MetricLog.countDocuments({ userId: user._id, metricId: def._id })).toBe(1);
+
+    // The phone deletes the SESSION; the reading's id is "<session>-sleepDeep".
+    const res = await request(app).post('/api/health/sync').set(authHeader(token))
+      .send({ deletions: ['sess-1'] });
+
+    expect(res.body.deleted.metrics).toBe(1);
+    expect(await MetricLog.countDocuments({ userId: user._id, metricId: def._id })).toBe(0);
+  });
+
+  it('removes a deleted activity and weight', async () => {
+    const { token, user } = await createUser();
+    await connect(token);
+    await request(app).post('/api/health/sync').set(authHeader(token)).send({
+      activities: [session({ id: 'act-1' })],
+      weights: [{ id: 'w-1', time: '2026-05-01T07:00:00.000Z', weightKg: 80 }],
+    });
+    expect(await HealthActivity.countDocuments({ userId: user._id })).toBe(1);
+    expect(await WeightLog.countDocuments({ userId: user._id, source: 'health' })).toBe(1);
+
+    const res = await request(app).post('/api/health/sync').set(authHeader(token))
+      .send({ deletions: ['act-1', 'w-1'] });
+
+    expect(res.body.deleted).toMatchObject({ activities: 1, weights: 1 });
+    expect(await HealthActivity.countDocuments({ userId: user._id })).toBe(0);
+    expect(await WeightLog.countDocuments({ userId: user._id, source: 'health' })).toBe(0);
+  });
+
+  it('never touches hand-entered readings', async () => {
+    const { token, user } = await createUser();
+    const def = await stepsSetup(token, user);
+    await MetricLog.create({
+      userId: user._id, metricId: def._id, date: new Date('2026-05-01T12:00:00Z'),
+      value: 111, source: 'manual',
+    });
+
+    await request(app).post('/api/health/sync').set(authHeader(token))
+      .send({ deletions: ['rec-a', 'rec-b'] });
+
+    const left = await MetricLog.find({ userId: user._id, metricId: def._id });
+    expect(left.length).toBe(1);
+    expect(left[0].source).toBe('manual');
+  });
+
+  it('does not reach into another user\'s data', async () => {
+    const { token } = await createUser();
+    const { token: otherToken, user: other } = await createUser({ name: 'Other' });
+    await connect(otherToken);
+    await request(app).post('/api/health/sync').set(authHeader(otherToken))
+      .send({ activities: [session({ id: 'act-1' })] });
+
+    await connect(token);
+    const res = await request(app).post('/api/health/sync').set(authHeader(token))
+      .send({ deletions: ['act-1'] });
+
+    expect(res.body.deleted.activities).toBe(0);
+    expect(await HealthActivity.countDocuments({ userId: other._id })).toBe(1);
+  });
+
+  it('treats an id with regex characters literally', async () => {
+    const { token, user } = await createUser();
+    const def = await stepsSetup(token, user);
+
+    const res = await request(app).post('/api/health/sync').set(authHeader(token))
+      .send({ deletions: ['rec-.*'] });
+
+    expect(res.body.deleted.metrics).toBe(0);
+    expect(await MetricLog.countDocuments({ userId: user._id, metricId: def._id })).toBe(2);
+  });
+
+  it('ignores an empty or absent deletion list', async () => {
+    const { token, user } = await createUser();
+    const def = await stepsSetup(token, user);
+
+    const res = await request(app).post('/api/health/sync').set(authHeader(token))
+      .send({ deletions: ['', null] });
+
+    expect(res.body.deleted).toEqual({ metrics: 0, activities: 0, weights: 0 });
+    expect(await MetricLog.countDocuments({ userId: user._id, metricId: def._id })).toBe(2);
+  });
+});
+
 describe('POST /api/health/sync', () => {
   it('stores an exercise session', async () => {
     const { token, user } = await createUser();

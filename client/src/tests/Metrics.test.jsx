@@ -19,8 +19,11 @@ const metric = (over = {}) => ({
 function mockMetrics(list) {
   server.use(http.get('/api/metrics', () => HttpResponse.json(list)));
 }
-function mockLogs(id, logs) {
-  server.use(http.get(`/api/metrics/${id}/logs`, () => HttpResponse.json(logs)));
+// The card and the detail modal read the DAY SERIES, not raw readings — an
+// interval-backed metric has hundreds of readings per day.
+function mockLogs(id, series) {
+  server.use(http.get(`/api/metrics/${id}/series`, () =>
+    HttpResponse.json({ series, truncated: false })));
 }
 
 const renderPage = () => render(<MemoryRouter><Metrics /></MemoryRouter>);
@@ -73,18 +76,18 @@ describe('Metrics page', () => {
     const card = await screen.findByTestId('metric-card');
     expect(within(card).getByText('Ruhepuls')).toBeInTheDocument();
     expect(within(card).getByText('52')).toBeInTheDocument();
-    await waitFor(() => expect(card).toHaveTextContent('2 Einträge'));
+    await waitFor(() => expect(card).toHaveTextContent('2 Tage'));
   });
 
   it('adds a reading and refreshes', async () => {
     mockMetrics([metric()]);
-    let logs = [{ _id: 'l1', date: '2026-05-02T06:00:00Z', value: 52 }];
+    let series = [{ date: '2026-05-02T06:00:00Z', value: 52 }];
     server.use(
-      http.get('/api/metrics/m1/logs', () => HttpResponse.json(logs)),
+      http.get('/api/metrics/m1/series', () => HttpResponse.json({ series, truncated: false })),
       http.post('/api/metrics/m1/logs', async ({ request }) => {
         const body = await request.json();
-        logs = [...logs, { _id: 'l2', date: new Date().toISOString(), value: body.value }];
-        return HttpResponse.json(logs[logs.length - 1], { status: 201 });
+        series = [...series, { date: new Date().toISOString(), value: body.value }];
+        return HttpResponse.json(series[series.length - 1], { status: 201 });
       }),
     );
     const user = userEvent.setup();
@@ -94,7 +97,7 @@ describe('Metrics page', () => {
     await user.type(within(card).getByLabelText('Ruhepuls eintragen'), '50');
     await user.click(within(card).getByRole('button', { name: /Eintragen/ }));
 
-    await waitFor(() => expect(card).toHaveTextContent('2 Einträge'));
+    await waitFor(() => expect(card).toHaveTextContent('2 Tage'));
   });
 
   it('surfaces a save error from the server', async () => {

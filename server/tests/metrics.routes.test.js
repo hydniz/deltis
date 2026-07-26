@@ -94,7 +94,54 @@ describe('GET /api/metrics', () => {
     const res = await request(app).get('/api/metrics').set(authHeader(token));
     expect(res.status).toBe(200);
     expect(res.body[0].latest.value).toBe(52);
-    expect(res.body[0].count).toBe(2);
+    // `count` is the readings behind the CURRENT value, i.e. the newest day's.
+    expect(res.body[0].count).toBe(1);
+  });
+
+  // Interval-backed metrics (steps) store many readings per day. The value has
+  // to be the whole day, however many rows that takes — a row limit used to cut
+  // the day off in the middle and report a fraction of the real total.
+  it('sums every reading of the day for an interval metric', async () => {
+    const { token, user } = await createUser();
+    const def = await MetricDefinition.create({
+      userId: user._id, key: 'steps', name: 'Schritte', healthType: 'steps', dayAggregation: 'sum',
+    });
+    const day = new Date().toISOString().slice(0, 10);
+    const logs = Array.from({ length: 300 }, (_, i) => ({
+      userId: user._id, metricId: def._id,
+      date: new Date(`${day}T${String(Math.floor(i / 15)).padStart(2, '0')}:${String((i % 15) * 4).padStart(2, '0')}:00Z`),
+      endTime: new Date(`${day}T${String(Math.floor(i / 15)).padStart(2, '0')}:${String((i % 15) * 4 + 3).padStart(2, '0')}:00Z`),
+      value: 40, source: 'health', sourceId: `s${i}`, origin: 'com.sec.android.app.shealth',
+    }));
+    await MetricLog.insertMany(logs);
+
+    const res = await request(app).get('/api/metrics').set(authHeader(token));
+    expect(res.body[0].latest.value).toBe(12000);
+    expect(res.body[0].todayValue).toBe(12000);
+    expect(res.body[0].count).toBe(300);
+  });
+
+  it('reports a metric last recorded weeks ago instead of dropping it', async () => {
+    const { token, user } = await createUser();
+    const def = await MetricDefinition.create({ userId: user._id, key: 'w', name: 'Gewicht' });
+    await MetricLog.create({
+      userId: user._id, metricId: def._id,
+      date: new Date(Date.now() - 40 * 86400000), value: 81.5,
+    });
+
+    const res = await request(app).get('/api/metrics').set(authHeader(token));
+    expect(res.body[0].latest.value).toBe(81.5);
+    expect(res.body[0].todayValue).toBeNull();
+  });
+
+  it('returns no value for a metric without readings', async () => {
+    const { token, user } = await createUser();
+    await MetricDefinition.create({ userId: user._id, key: 'leer', name: 'Leer' });
+
+    const res = await request(app).get('/api/metrics').set(authHeader(token));
+    expect(res.body[0].latest).toBeNull();
+    expect(res.body[0].todayValue).toBeNull();
+    expect(res.body[0].count).toBe(0);
   });
 
   it('does not leak another user\'s metrics', async () => {
@@ -406,8 +453,147 @@ describe('GET /api/metrics/summary', () => {
     expect(dash.body[0].value).toBe(19);
   });
 
+  it('shows the day total, not the last interval bucket', async () => {
+    const { token, user } = await createUser();
+    const def = await MetricDefinition.create({
+      userId: user._id, key: 'steps', name: 'Schritte', healthType: 'steps',
+      dayAggregation: 'sum', showOnDashboard: true,
+    });
+    const day = new Date().toISOString().slice(0, 10);
+    await MetricLog.insertMany([
+      { userId: user._id, metricId: def._id, date: new Date(`${day}T08:00:00Z`), endTime: new Date(`${day}T09:00:00Z`), value: 3000, source: 'health', sourceId: 'a' },
+      { userId: user._id, metricId: def._id, date: new Date(`${day}T18:00:00Z`), endTime: new Date(`${day}T18:05:00Z`), value: 120, source: 'health', sourceId: 'b' },
+    ]);
+
+    const res = await request(app).get('/api/metrics/summary?dashboard=true').set(authHeader(token));
+    expect(res.body[0].value).toBe(3120);
+  });
+
   it('requires authentication', async () => {
     expect((await request(app).get('/api/metrics/summary')).status).toBe(401);
+  });
+});
+
+describe('GET /api/metrics/:id/series', () => {
+  const seedSteps = async (user, def, entries) =>
+    MetricLog.insertMany(entries.map(([date, value], i) => ({
+      userId: user._id, metricId: def._id,
+      date: new Date(date), endTime: new Date(new Date(date).getTime() + 300000),
+      value, source: 'health', sourceId: `s${i}`, origin: 'com.sec.android.app.shealth',
+    })));
+
+  const stepsMetric = user => MetricDefinition.create({
+    userId: user._id, key: 'steps', name: 'Schritte', healthType: 'steps', dayAggregation: 'sum',
+  });
+
+  it('returns one aggregated value per day', async () => {
+    const { token, user } = await createUser();
+    const def = await stepsMetric(user);
+    await seedSteps(user, def, [
+      ['2026-05-01T08:00:00Z', 2000], ['2026-05-01T12:00:00Z', 3000], ['2026-05-01T19:00:00Z', 1500],
+      ['2026-05-02T09:00:00Z', 4000],
+    ]);
+
+    const res = await request(app).get(`/api/metrics/${def._id}/series`).set(authHeader(token));
+    expect(res.status).toBe(200);
+    expect(res.body.truncated).toBe(false);
+    expect(res.body.series).toEqual([
+      { date: '2026-05-01', value: 6500 },
+      { date: '2026-05-02', value: 4000 },
+    ]);
+  });
+
+  it('honours the metric day aggregation', async () => {
+    const { token, user } = await createUser();
+    const def = await MetricDefinition.create({
+      userId: user._id, key: 'rhr', name: 'Ruhepuls', dayAggregation: 'min',
+    });
+    await MetricLog.insertMany([
+      { userId: user._id, metricId: def._id, date: new Date('2026-05-01T06:00:00Z'), value: 58 },
+      { userId: user._id, metricId: def._id, date: new Date('2026-05-01T22:00:00Z'), value: 51 },
+    ]);
+
+    const res = await request(app).get(`/api/metrics/${def._id}/series`).set(authHeader(token));
+    expect(res.body.series).toEqual([{ date: '2026-05-01', value: 51 }]);
+  });
+
+  it('limits the range with days', async () => {
+    const { token, user } = await createUser();
+    const def = await stepsMetric(user);
+    const iso = d => new Date(Date.now() - d * 86400000).toISOString();
+    await seedSteps(user, def, [[iso(20), 1000], [iso(2), 2000]]);
+
+    const res = await request(app).get(`/api/metrics/${def._id}/series?days=5`).set(authHeader(token));
+    expect(res.body.series.length).toBe(1);
+    expect(res.body.series[0].value).toBe(2000);
+  });
+
+  it('clamps an absurd range instead of trusting it', async () => {
+    const { token, user } = await createUser();
+    const def = await stepsMetric(user);
+    await seedSteps(user, def, [[new Date(Date.now() - 86400000).toISOString(), 700]]);
+
+    const res = await request(app).get(`/api/metrics/${def._id}/series?days=99999`).set(authHeader(token));
+    expect(res.status).toBe(200);
+    expect(res.body.series[0].value).toBe(700);
+  });
+
+  it('applies the source policy before aggregating', async () => {
+    const { token, user } = await createUser();
+    const def = await MetricDefinition.create({
+      userId: user._id, key: 'steps', name: 'Schritte', healthType: 'steps', dayAggregation: 'sum',
+      sourcePolicy: { mode: 'selected', sources: [{ deviceId: '', app: 'com.sec.android.app.shealth' }] },
+    });
+    await MetricLog.insertMany([
+      { userId: user._id, metricId: def._id, date: new Date('2026-05-01T08:00:00Z'), endTime: new Date('2026-05-01T09:00:00Z'), value: 2000, source: 'health', sourceId: 'a', origin: 'com.sec.android.app.shealth' },
+      { userId: user._id, metricId: def._id, date: new Date('2026-05-01T14:00:00Z'), endTime: new Date('2026-05-01T15:00:00Z'), value: 900, source: 'health', sourceId: 'b', origin: 'com.google.android.apps.fitness' },
+    ]);
+
+    const res = await request(app).get(`/api/metrics/${def._id}/series`).set(authHeader(token));
+    expect(res.body.series).toEqual([{ date: '2026-05-01', value: 2000 }]);
+  });
+
+  // Past the row cap the oldest day in the response is only half-read, and a
+  // half-summed day is worse than a missing one — it must be dropped, and the
+  // caller told the range is incomplete.
+  it('drops the oldest day when the row cap truncates it', async () => {
+    const { token, user } = await createUser();
+    const def = await stepsMetric(user);
+
+    const row = (date, value, i) => ({
+      date: new Date(date), endTime: new Date(new Date(date).getTime() + 60000),
+      value, source: 'health', sourceId: `s${i}`, origin: 'com.sec.android.app.shealth',
+    });
+    // Newest first, one row past the cap.
+    const rows = [
+      row('2026-05-03T08:00:00Z', 10, 0),
+      ...Array.from({ length: 50000 }, (_, i) => row('2026-05-02T08:00:00Z', 1, i + 1)),
+    ];
+    const chain = {
+      sort: () => chain, limit: () => chain, select: () => chain, lean: async () => rows,
+    };
+    jest.spyOn(MetricLog, 'find').mockReturnValueOnce(chain);
+
+    const res = await request(app).get(`/api/metrics/${def._id}/series`).set(authHeader(token));
+    expect(res.body.truncated).toBe(true);
+    expect(res.body.series).toEqual([{ date: '2026-05-03', value: 10 }]);
+    jest.restoreAllMocks();
+  });
+
+  it('404s for another user\'s metric and requires auth', async () => {
+    const { token } = await createUser();
+    const { user: other } = await createUser({ name: 'Other' });
+    const def = await MetricDefinition.create({ userId: other._id, key: 'x', name: 'X' });
+    expect((await request(app).get(`/api/metrics/${def._id}/series`).set(authHeader(token))).status).toBe(404);
+    expect((await request(app).get(`/api/metrics/${def._id}/series`)).status).toBe(401);
+  });
+
+  it('500s when the series query fails', async () => {
+    const { token, user } = await createUser();
+    const def = await stepsMetric(user);
+    jest.spyOn(MetricLog, 'find').mockImplementationOnce(() => { throw new Error('db'); });
+    expect((await request(app).get(`/api/metrics/${def._id}/series`).set(authHeader(token))).status).toBe(500);
+    jest.restoreAllMocks();
   });
 });
 

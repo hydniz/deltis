@@ -18,12 +18,15 @@ import { formatNumber, formatValueUnit, isHoursUnit, formatHoursMinutes } from '
 // the LATEST reading, which may be days old and easy to misread as current.
 function freshnessOf(date) {
   if (!date) return null;
-  const daysAgo = differenceInCalendarDays(new Date(), new Date(date));
+  // Day series entries are plain "YYYY-MM-DD"; parseISO reads those as LOCAL
+  // midnight, so today's value never reads as "gestern" west of UTC.
+  const when = typeof date === 'string' && date.length === 10 ? parseISO(date) : new Date(date);
+  const daysAgo = differenceInCalendarDays(new Date(), when);
   const stale = daysAgo >= 1;
   const label = daysAgo <= 0 ? 'heute'
     : daysAgo === 1 ? 'gestern'
     : daysAgo < 7 ? `vor ${daysAgo} Tagen`
-    : `vom ${format(new Date(date), 'd. MMM yyyy', { locale: de })}`;
+    : `vom ${format(when, 'd. MMM yyyy', { locale: de })}`;
   return { label, stale };
 }
 
@@ -68,10 +71,13 @@ function MetricCard({ metric, allMetrics = [], onChanged }) {
   const [error, setError] = useState('');
   const [detail, setDetail] = useState(false);
 
+  // Daily values, aggregated server-side. The card shows a day's value (a step
+  // count is the day's total, not the last interval bucket Health Connect
+  // wrote), so raw readings are the wrong granularity here.
   const loadLogs = useCallback(async () => {
     try {
-      const res = await api.get(`/metrics/${metric._id}/logs`, { params: { limit: 60 } });
-      setLogs(res.data);
+      const res = await api.get(`/metrics/${metric._id}/series`, { params: { days: 60 } });
+      setLogs(res.data.series);
     } catch {
       setLogs([]);
     }
@@ -197,7 +203,7 @@ function MetricCard({ metric, allMetrics = [], onChanged }) {
       </form>
       {error && <p className="text-xs text-rose-500">{error}</p>}
       {logs && logs.length > 0 && (
-        <p className="text-[11px] text-ink-300">{logs.length} Einträge</p>
+        <p className="text-[11px] text-ink-300">{logs.length} Tage</p>
       )}
 
       {detail && (
