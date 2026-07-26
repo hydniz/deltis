@@ -101,12 +101,30 @@ The upload. **Idempotent** — safe to replay any window.
   ],
   "weights": [
     { "id": "weight-record-uuid", "time": "2026-05-01T06:00:00.000Z", "weightKg": 78.4 }
-  ]
+  ],
+  "metrics": [
+    {
+      "type": "steps",
+      "id": "steps-record-uuid",
+      "time": "2026-05-01T08:00:00.000Z",
+      "endTime": "2026-05-01T08:15:00.000Z",
+      "value": 1240,
+      "dataOrigin": "com.sec.android.app.shealth"
+    }
+  ],
+  "deletions": ["record-uuid-the-user-deleted"],
+  "deviceId": "per-install-uuid"
 }
 ```
 
 Only `id`, `startTime` and `endTime` are required per activity; `endTime` must
 not precede `startTime`. Invalid records are skipped silently.
+
+`deletions` carries Health Connect record ids the user removed on their phone.
+An incremental sync never re-sends a deleted record, so without this its
+readings would count forever. Ids match exactly **or** by `<id>-` prefix, which
+is how one deleted sleep session removes all the stage readings derived from it.
+Hand-entered readings are never affected.
 
 **200**
 
@@ -116,6 +134,8 @@ not precede `startTime`. Invalid records are skipped silently.
   "activities": 1,
   "rejectedOrigins": 0,
   "weights": { "imported": 1, "skipped": 0, "collapsed": 0 },
+  "metrics": { "imported": 1, "skipped": 0, "collapsed": 0, "unmapped": {} },
+  "deleted": { "metrics": 0, "activities": 0, "weights": 0 },
   "merge": { "checked": 1, "superseded": 0, "promoted": 0 }
 }
 ```
@@ -125,6 +145,7 @@ not precede `startTime`. Invalid records are skipped silently.
 - `weights.collapsed` — same-day health readings reduced to the latest.
 - `merge.superseded` — sessions flagged as duplicates of a Strava activity or
   a better health record.
+- `deleted` — rows removed for the ids in `deletions`.
 
 **Errors** — `404` not connected, `413` more than 500 records in one request
 (page through longer backfills), `400` on storage failure.

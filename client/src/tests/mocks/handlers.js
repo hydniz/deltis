@@ -45,6 +45,7 @@ export const handlers = [
   http.get('/api/metrics/catalog', () => HttpResponse.json([])),
   http.get('/api/metrics/summary', () => HttpResponse.json([])),
   http.get('/api/metrics/:id/logs', () => HttpResponse.json([])),
+  http.get('/api/metrics/:id/series', () => HttpResponse.json({ series: [], truncated: false })),
   http.get('/api/metrics/:id/sources', () => HttpResponse.json({ policy: { mode: 'all', sources: [] }, sources: [] })),
   http.get('/api/health/activities', () => HttpResponse.json([])),
   http.get('/api/todos', () => HttpResponse.json([])),

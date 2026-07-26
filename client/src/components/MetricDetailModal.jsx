@@ -62,28 +62,32 @@ export default function MetricDetailModal({ metric, allMetrics = [], onClose }) 
   const [overlayId, setOverlayId] = useState('');
   const [logsA, setLogsA] = useState(null);
   const [logsB, setLogsB] = useState([]);
+  const [truncated, setTruncated] = useState(false);
 
   const overlayMetric = allMetrics.find(m => m._id === overlayId) || null;
   const others = allMetrics.filter(m => m._id !== metric._id);
 
-  // Primary series: fetched once (a generous window), then sliced by range.
+  // One point PER DAY, aggregated server-side. Raw readings would not do: a
+  // Health-Connect-backed metric like steps stores hundreds of interval buckets
+  // per day, so a raw fetch returned a day or two of buckets rather than a
+  // history. Refetched per range so the server only aggregates what is shown.
   useEffect(() => {
     let alive = true;
-    api.get(`/metrics/${metric._id}/logs`, { params: { limit: 400 } })
-      .then(r => { if (alive) setLogsA(r.data); })
-      .catch(() => { if (alive) setLogsA([]); });
+    api.get(`/metrics/${metric._id}/series`, { params: { days: range } })
+      .then(r => { if (!alive) return; setLogsA(r.data.series); setTruncated(!!r.data.truncated); })
+      .catch(() => { if (alive) { setLogsA([]); setTruncated(false); } });
     return () => { alive = false; };
-  }, [metric._id]);
+  }, [metric._id, range]);
 
   // Overlay series: (re)fetched whenever the chosen metric changes.
   useEffect(() => {
     if (!overlayId) { setLogsB([]); return; }
     let alive = true;
-    api.get(`/metrics/${overlayId}/logs`, { params: { limit: 400 } })
-      .then(r => { if (alive) setLogsB(r.data); })
+    api.get(`/metrics/${overlayId}/series`, { params: { days: range } })
+      .then(r => { if (alive) setLogsB(r.data.series); })
       .catch(() => { if (alive) setLogsB([]); });
     return () => { alive = false; };
-  }, [overlayId]);
+  }, [overlayId, range]);
 
   const inRange = useMemo(() => {
     const filter = (logs) => {
@@ -210,8 +214,13 @@ export default function MetricDetailModal({ metric, allMetrics = [], onClose }) 
               <StatTile label="Maximum" value={labelValue(stats.max, metric)} />
             </div>
             <p className="text-[11px] text-ink-300 mt-2">
-              {stats.count} Einträge · {tickDate(stats.first)} – {tickDate(stats.last)}
+              {stats.count} Tage · {tickDate(stats.first)} – {tickDate(stats.last)}
             </p>
+            {truncated && (
+              <p className="text-[11px] text-amber-600 mt-1">
+                Sehr viele Einzelmessungen — ältere Tage fehlen in diesem Zeitraum.
+              </p>
+            )}
           </div>
         )}
       </div>

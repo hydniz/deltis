@@ -265,6 +265,33 @@ function toActivityDoc(userId, record, deviceId) {
   return doc;
 }
 
+// Removes everything that was imported from the given Health Connect record
+// ids. The companion sends these when Health Connect reports a record as
+// deleted; without it a reading the user removed on their phone would inflate
+// Deltis forever, because an incremental sync never re-sends it.
+//
+// Some readings carry a DERIVED source id (`<sessionId>-sleepDeep`,
+// `<recordId>-protein`): one source record fans out into several metrics. So a
+// deletion matches the id itself or anything prefixed with `<id>-`.
+async function deleteImported(userId, ids) {
+  if (ids.length === 0) return { metrics: 0, activities: 0, weights: 0 };
+  const MetricLog = require('../models/MetricLog');
+  const WeightLog = require('../models/WeightLog');
+  const escape = s => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const match = { $in: ids.flatMap(id => [id, new RegExp(`^${escape(id)}-`)]) };
+
+  const [metrics, weights, activities] = await Promise.all([
+    MetricLog.deleteMany({ userId, source: 'health', sourceId: match }),
+    WeightLog.deleteMany({ userId, source: 'health', sourceId: match }),
+    HealthActivity.deleteMany({ userId, healthId: { $in: ids } }),
+  ]);
+  return {
+    metrics: metrics.deletedCount,
+    weights: weights.deletedCount,
+    activities: activities.deletedCount,
+  };
+}
+
 function isValidRecord(record) {
   if (!record || !record.id) return false;
   const start = new Date(record.startTime).getTime();
@@ -283,6 +310,9 @@ router.post('/sync', auth, async (req, res) => {
     const activities = Array.isArray(req.body.activities) ? req.body.activities : [];
     const weights = Array.isArray(req.body.weights) ? req.body.weights : [];
     const metrics = Array.isArray(req.body.metrics) ? req.body.metrics : [];
+    // Record ids Health Connect reports as deleted (incremental sync).
+    const deletions = (Array.isArray(req.body.deletions) ? req.body.deletions : [])
+      .map(id => String(id || '')).filter(Boolean).slice(0, MAX_RECORDS_PER_SYNC);
     if (activities.length + weights.length + metrics.length > MAX_RECORDS_PER_SYNC) {
       return res.status(413).json({
         error: `Zu viele Datensätze pro Anfrage (max. ${MAX_RECORDS_PER_SYNC}).`,
@@ -326,6 +356,12 @@ router.post('/sync', auth, async (req, res) => {
     const metricResult = await healthMetrics.mergeMetricRecords(
       req.user._id, metrics, definitions, { deviceId: connection.deviceId });
 
+    // Applied after the upserts, matching the order of the Health Connect
+    // change stream: an id that was upserted and then deleted in the same batch
+    // must end up gone. Record ids are never reused, so this cannot delete a
+    // record that was legitimately re-added.
+    const removed = await deleteImported(req.user._id, deletions);
+
     // Write auto-filled habit values for the touched days so a habit bound to a
     // metric/activity actually shows its value (not just in the due engine).
     // Best-effort — a failure here must not fail the upload.
@@ -355,6 +391,7 @@ router.post('/sync', auth, async (req, res) => {
       rejectedOrigins: rejected,
       weights: weightResult,
       metrics: metricResult,
+      deleted: removed,
       merge,
     };
     connection.lastSyncAt = new Date();

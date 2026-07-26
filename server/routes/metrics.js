@@ -8,7 +8,7 @@ const auth = require('../middleware/auth');
 const MetricDefinition = require('../models/MetricDefinition');
 const MetricLog = require('../models/MetricLog');
 const catalog = require('../services/metricCatalog');
-const { latestValue, dailySeries } = require('../services/metricAggregate');
+const { dailySeries } = require('../services/metricAggregate');
 const { resolveLogs, distinctSources, appLabel } = require('../services/metricSources');
 const HealthConnection = require('../models/HealthConnection');
 
@@ -94,23 +94,58 @@ function sanitizeDefinition(body) {
   return { out, errors };
 }
 
+// Loads the readings needed to know a metric's CURRENT value: everything from
+// the newest reading's day plus everything from today.
+//
+// Bounded by DATE, never by row count. Interval-backed metrics (steps,
+// distance, calories) store hundreds of rows per day since the readings became
+// time buckets, so a `.limit(n)` silently cut a day off in the middle and made
+// the displayed total a fraction of the real one.
+async function currentDayLogs(def, userId) {
+  const newest = await MetricLog.find({ userId, metricId: def._id })
+    .sort({ date: -1 }).limit(1).select('date').lean();
+  if (newest.length === 0) return [];
+
+  // Start of the newest reading's day, or of today if that is older — so a
+  // metric last recorded weeks ago still reports its value, and a metric
+  // recorded today reports the complete day.
+  const dayStart = d => new Date(`${new Date(d).toISOString().slice(0, 10)}T00:00:00.000Z`);
+  const since = new Date(Math.min(dayStart(newest[0].date).getTime(), dayStart(new Date()).getTime()));
+
+  const raw = await MetricLog.find({ userId, metricId: def._id, date: { $gte: since } })
+    .sort({ date: 1 }).select('date endTime value source origin deviceId').lean();
+  // Only readings the source policy admits + overlap-deduped for sum metrics.
+  return resolveLogs(raw, def).sort((a, b) => new Date(a.date) - new Date(b.date));
+}
+
+// The metric's value as a user reads it: the newest DAY's aggregated value, not
+// the newest raw reading. For a sum metric one raw reading is a single interval
+// bucket ("23 Schritte"), which is meaningless on its own.
+function currentValue(logs, def) {
+  if (logs.length === 0) return { value: null, date: null, source: null };
+  const series = dailySeries(logs, def.dayAggregation);
+  const newest = logs[logs.length - 1];
+  // The newest reading's day is always a key of its own series.
+  const day = newest.date.toISOString().slice(0, 10);
+  return { value: series.get(day), date: newest.date, source: newest.source, day };
+}
+
 // Enriches a definition with the current value and a light recent history for
 // the list/dashboard, mirroring how /habits/definitions enriches.
 async function enrich(def, userId) {
-  const raw = await MetricLog.find({ userId, metricId: def._id })
-    .sort({ date: -1 }).limit(120).select('date endTime value source origin deviceId').lean();
-  // Only readings the source policy admits + overlap-deduped for sum metrics.
-  const logs = resolveLogs(raw, def).sort((a, b) => new Date(b.date) - new Date(a.date));
-  const chronological = [...logs].reverse();
+  const logs = await currentDayLogs(def, userId);
+  const current = currentValue(logs, def);
   const today = new Date().toISOString().slice(0, 10);
-  const todayMap = dailySeries(chronological.filter(l => l.date.toISOString().slice(0, 10) === today), def.dayAggregation);
   return {
     ...def,
     // Original source name + explanation for a metric seeded from a template,
     // so a renamed metric still reveals what value actually sits behind it.
     source: catalog.templateInfo(def.builtin || def.healthType),
-    latest: logs[0] ? { value: logs[0].value, date: logs[0].date, source: logs[0].source } : null,
-    todayValue: todayMap.get(today) ?? null,
+    latest: current.value == null ? null
+      : { value: current.value, date: current.date, source: current.source },
+    todayValue: current.day === today ? current.value : null,
+    // How many readings back that value — one for a hand-typed metric, many for
+    // an interval-backed one whose day is assembled from time buckets.
     count: logs.length,
   };
 }
@@ -135,14 +170,15 @@ router.get('/summary', auth, async (req, res) => {
     if (req.query.dashboard === 'true') query.showOnDashboard = true;
     const defs = await MetricDefinition.find(query).sort({ order: 1, createdAt: 1 }).lean();
     const rows = await Promise.all(defs.map(async def => {
-      const raw = await MetricLog.find({ userId: req.user._id, metricId: def._id })
-        .sort({ date: -1 }).limit(60).select('date endTime value source origin deviceId').lean();
-      const logs = resolveLogs(raw, def).sort((a, b) => new Date(b.date) - new Date(a.date));
+      // The dashboard shows the newest DAY's value (a step count is a day
+      // total, not the last interval bucket) over a date-bounded read.
+      const logs = await currentDayLogs(def, req.user._id);
+      const current = currentValue(logs, def);
       return {
         metricId: String(def._id), key: def.key, name: def.name, unit: def.unit,
         icon: def.icon, color: def.color, direction: def.direction,
         groupKey: def.groupKey, decimals: def.decimals,
-        value: latestValue(logs), date: logs[0]?.date || null,
+        value: current.value, date: current.date,
       };
     }));
     res.json(rows);
@@ -290,6 +326,51 @@ router.get('/:id/sources', auth, async (req, res) => {
       deviceName: deviceName.get(s.deviceId) || '',
     }));
     res.json({ policy: def.sourcePolicy || { mode: 'all', sources: [] }, sources });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// One value PER DAY — what every chart, sparkline and statistic actually wants.
+//
+// Raw readings are not a day series: an interval-backed metric writes hundreds
+// of time buckets a day, so a client that fetched `/logs` and keyed them by day
+// both ran out of rows after a day or two AND showed a single bucket's value
+// instead of the day's aggregate. Aggregating here (after the source policy and
+// the overlap dedup have had their say) is the only place it can be correct.
+//
+// `days=0` means "everything". The row cap only bites on absurdly dense data;
+// when it does we drop the oldest day, which would otherwise be a partial sum,
+// and report it so the caller can say the range is incomplete.
+const SERIES_ROW_CAP = 50000;
+
+router.get('/:id/series', auth, async (req, res) => {
+  try {
+    const def = await MetricDefinition.findOne({ _id: req.params.id, userId: req.user._id });
+    if (!def) return res.status(404).json({ error: 'Messwert nicht gefunden.' });
+
+    const days = Math.min(Math.max(+req.query.days || 0, 0), 3650);
+    const query = { userId: req.user._id, metricId: def._id };
+    if (days > 0) query.date = { $gte: new Date(Date.now() - days * 86400000) };
+
+    // Newest-first so the cap drops the OLDEST rows: a truncated old day is
+    // recoverable by asking for a shorter range, a truncated recent day is the
+    // very bug this endpoint exists to fix.
+    const raw = await MetricLog.find(query)
+      .sort({ date: -1 }).limit(SERIES_ROW_CAP + 1)
+      .select('date endTime value source origin deviceId').lean();
+    const truncated = raw.length > SERIES_ROW_CAP;
+    const rows = truncated ? raw.slice(0, SERIES_ROW_CAP) : raw;
+
+    const logs = resolveLogs(rows, def).sort((a, b) => new Date(a.date) - new Date(b.date));
+    const series = [...dailySeries(logs, def.dayAggregation)]
+      .map(([date, value]) => ({ date, value }))
+      .sort((a, b) => a.date.localeCompare(b.date));
+    // The oldest day is cut off mid-day when the cap hit; a partial sum is
+    // worse than no value.
+    if (truncated) series.shift();
+
+    res.json({ series, truncated });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
