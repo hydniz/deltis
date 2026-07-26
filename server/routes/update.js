@@ -40,6 +40,9 @@ const MAIN_BRANCH = appConfig.MAIN_BRANCH;
 
 // Module-level update state
 let updateInProgress = false;
+// The currently detached update/rollback pipeline, if any. Only ever read by
+// tests (router._inFlightRun) — production never awaits it.
+let inFlightRun = null;
 const logBuffer = [];
 const MAX_LOG_LINES = 400;
 const sseClients = new Set();
@@ -469,7 +472,10 @@ router.post('/start', auth, adminOnly, async (req, res) => {
   logBuffer.length = 0;
   res.json({ ok: true, mode });
 
-  runUpdate(mode).catch(err => {
+  // Detached on purpose — the response already went out. Kept on the router so
+  // tests can await the pipeline instead of letting it settle mid-test and
+  // clear `updateInProgress` out from under whatever runs next.
+  inFlightRun = runUpdate(mode).catch(err => {
     ulog.log(`✗ Unerwarteter Fehler: ${err.message}`);
     updateState.write({ phase: 'failed', error: err.message, recovered: null });
     updateInProgress = false;
@@ -495,7 +501,7 @@ router.post('/rollback', auth, adminOnly, async (req, res) => {
   logBuffer.length = 0;
   res.json({ ok: true });
 
-  runRollback(st, restoreDb).catch(err => {
+  inFlightRun = runRollback(st, restoreDb).catch(err => {
     ulog.log(`✗ Rollback-Fehler: ${err.message}`);
     updateState.write({ phase: 'failed', error: `Rollback: ${err.message}` });
     updateInProgress = false;
@@ -862,6 +868,9 @@ router._resetState = () => {
   ulog.addSink(ssePush);
 };
 router._setInProgress = (v) => { updateInProgress = v; };
+// Lets a test wait for a detached pipeline to settle, so it cannot flip
+// module state in the middle of the next one.
+router._inFlightRun = () => inFlightRun;
 router._createPreUpdateBackup = createPreUpdateBackup;
 router._PRE_UPDATE_BACKUP_DIR = PRE_UPDATE_BACKUP_DIR;
 router._computeUpdateAvailable = computeUpdateAvailable;
